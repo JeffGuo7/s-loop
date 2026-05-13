@@ -1,65 +1,73 @@
-import { useState } from 'react';
-import { useAppStore } from '../../stores';
-import { useAI } from '../../hooks';
-import { Send, Loader2, Square, AlertCircle } from 'lucide-react';
-import type { ChatMessage } from '../../utils/ai';
+import { useState, useEffect } from 'react'
+import { useAppStore } from '../../stores'
+import { useKiloSession } from '../../hooks'
+import { Send, Loader2, Square, AlertCircle, Wifi, WifiOff, Server, Cpu } from 'lucide-react'
 
 export function ChatView() {
-  const { activeSessionId, sessionMessages, addMessage, providerConfigs, activeProvider } = useAppStore();
-  const [input, setInput] = useState('');
-  const { sendMessage, abort, isStreaming, streamingContent, error } = useAI();
+  const { activeSessionId, sessionMessages, providerConfigs, activeProvider, providerList } = useAppStore()
+  const [input, setInput] = useState('')
+  const {
+    sendMessage,
+    abort,
+    isStreaming,
+    streamingContent,
+    error,
+    serverOnline,
+    checkHealth,
+  } = useKiloSession()
 
-  const messages = activeSessionId ? sessionMessages[activeSessionId] || [] : [];
+  const messages = activeSessionId ? sessionMessages[activeSessionId] || [] : []
+
+  useEffect(() => {
+    checkHealth()
+    const interval = setInterval(checkHealth, 30000)
+    return () => clearInterval(interval)
+  }, [checkHealth])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isStreaming) return;
+    e.preventDefault()
+    if (!input.trim() || isStreaming) return
 
-    const userContent = input.trim();
-    setInput('');
-
-    // Add user message
-    if (activeSessionId) {
-      addMessage(activeSessionId, {
-        id: Math.random().toString(36).substring(2, 15),
-        role: 'user',
-        content: userContent,
-        timestamp: Date.now(),
-      });
-    }
-
-    // Convert session messages to ChatMessage format for context
-    const conversationHistory: ChatMessage[] = messages.map((msg) => ({
-      role: msg.role as 'user' | 'assistant',
-      content: msg.content,
-    }));
-
-    await sendMessage(userContent, conversationHistory);
-  };
+    const content = input.trim()
+    setInput('')
+    await sendMessage(content)
+  }
 
   if (!activeSessionId) {
     return (
       <div className="flex-1 flex items-center justify-center bg-[var(--color-background)]">
-        <div className="text-center max-w-md">
-          <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2">
+        <div className="text-center max-w-md space-y-4">
+          <Server size={48} className="mx-auto text-[var(--color-text-secondary)] opacity-50" />
+          <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">
             Welcome to Snotra
           </h2>
-          <p className="text-[var(--color-text-secondary)] mb-4">
+          <p className="text-[var(--color-text-secondary)]">
             Start a new conversation to begin
           </p>
-          {!providerConfigs[activeProvider].apiKey && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--color-warning)]/10 text-[var(--color-warning)] text-sm">
-              <AlertCircle size={16} />
-              <span>Please configure your API key in Settings</span>
-            </div>
-          )}
+          <ServerStatus online={serverOnline} />
         </div>
       </div>
-    );
+    )
   }
 
   return (
     <div className="flex-1 flex flex-col bg-[var(--color-background)]">
+      {/* Server status bar */}
+      <div
+        className={`px-4 py-1.5 text-xs flex items-center gap-2 border-b ${
+          serverOnline
+            ? 'bg-green-500/10 text-green-600 border-green-500/20'
+            : 'bg-red-500/10 text-red-500 border-red-500/20'
+        }`}
+      >
+        {serverOnline ? (
+          <Wifi size={12} />
+        ) : (
+          <WifiOff size={12} />
+        )}
+        {serverOnline ? 'Kilo connected' : 'Kilo offline — start with `kilo serve`'}
+      </div>
+
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4">
         {messages.length === 0 && !isStreaming && (
@@ -72,9 +80,7 @@ export function ChatView() {
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`mb-4 ${
-              msg.role === 'user' ? 'flex justify-end' : ''
-            }`}
+            className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : ''}`}
           >
             <div
               className={`max-w-[80%] px-4 py-3 rounded-lg ${
@@ -143,10 +149,26 @@ export function ChatView() {
             </button>
           )}
         </form>
-        <p className="mt-2 text-xs text-[var(--color-text-secondary)] text-center">
-          Using {providerConfigs[activeProvider].model} ({activeProvider})
+        <p className="mt-2 text-xs text-[var(--color-text-secondary)] text-center flex items-center justify-center gap-1">
+          <Cpu size={10} />
+          {providerConfigs[activeProvider]?.model || 'No model'} via {providerList.find(p => p.id === activeProvider)?.name || activeProvider}
         </p>
       </div>
     </div>
-  );
+  )
+}
+
+function ServerStatus({ online }: { online: boolean }) {
+  return (
+    <div
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs ${
+        online
+          ? 'bg-green-500/10 text-green-600'
+          : 'bg-red-500/10 text-red-500'
+      }`}
+    >
+      {online ? <Wifi size={12} /> : <WifiOff size={12} />}
+      {online ? 'Kilo Connected' : 'Kilo Offline'}
+    </div>
+  )
 }

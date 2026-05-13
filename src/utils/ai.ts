@@ -15,7 +15,7 @@ export interface AIProvider {
 }
 
 export function createProvider(
-  provider: 'anthropic' | 'openai',
+  provider: string,
   config: { apiKey: string; model: string; baseUrl?: string }
 ): AIProvider {
   if (provider === 'anthropic') {

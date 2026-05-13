@@ -25,6 +25,7 @@ dist-ssr
 
 # Claude memory
 .claude/
+CLAUDE.md
 
 # Environment files
 .env
