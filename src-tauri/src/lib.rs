@@ -29,35 +29,7 @@ fn do_start_kilo(state: &KiloState, project_dir: &str) -> Result<String, String>
         return Ok(url);
     }
 
-    let kilo_repo = std::env::var("KILO_DEV_REPO").unwrap_or_else(|_| {
-        std::env::current_dir()
-            .map(|d| {
-                d.join("..")
-                    .join("..")
-                    .join("kilocode-main")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .unwrap_or_else(|_| "../kilocode-main".into())
-    });
-
-    let bun_path = std::env::var("BUN_PATH").unwrap_or_else(|_| {
-        // Try known bun install paths
-        let candidates = [
-            "D:\\Program Files\\nodejs\\node_cache\\node_modules\\bun\\bin\\bun.exe",
-            "C:\\Users\\tszyk\\.bun\\bin\\bun.exe",
-            "C:\\Users\\tszyk\\AppData\\Roaming\\npm\\bun.cmd",
-            "C:\\Program Files\\bun\\bun.exe",
-        ];
-        for path in &candidates {
-            if std::path::Path::new(path).exists() {
-                return path.to_string();
-            }
-        }
-        "bun".into() // fallback to PATH
-    });
-
-    let proc = KiloProcess::start(&kilo_repo, project_dir, KILO_PORT, &bun_path)?;
+    let proc = KiloProcess::start(project_dir, KILO_PORT)?;
     let url = proc.url.clone();
     *guard = Some(proc);
     Ok(url)
