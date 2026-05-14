@@ -75,12 +75,24 @@ async function get(paths: string) {
   return res
 }
 
+async function getJson<T>(paths: string): Promise<T> {
+  const res = await get(paths)
+  const text = await res.text()
+  if (!text || text.trim() === '') {
+    throw new Error(`Empty response from ${paths}`)
+  }
+  try {
+    return JSON.parse(text) as T
+  } catch (e) {
+    throw new Error(`Failed to parse JSON from ${paths}: ${text.slice(0, 100)}`)
+  }
+}
+
 // ----- Health -----
 
 export async function health(): Promise<boolean> {
   try {
-    const res = await get('/global/health')
-    const data = await res.json()
+    const data = await getJson<{ healthy: boolean }>('/global/health')
     return data.healthy === true
   } catch {
     return false
@@ -100,12 +112,15 @@ export async function createSession(title?: string): Promise<KiloSession> {
   const body: Record<string, unknown> = {}
   if (title) body.title = title
   const res = await post('/session', body)
-  return res.json()
+  const text = await res.text()
+  if (!text || text.trim() === '') {
+    throw new Error('Empty response from /session')
+  }
+  return JSON.parse(text)
 }
 
 export async function listSessions(): Promise<KiloSession[]> {
-  const res = await get('/session')
-  return res.json()
+  return getJson<KiloSession[]>('/session')
 }
 
 export async function deleteSession(id: string): Promise<void> {
@@ -115,10 +130,9 @@ export async function deleteSession(id: string): Promise<void> {
 // ----- Messages -----
 
 export async function getMessages(sessionId: string): Promise<KiloMessage[]> {
-  const res = await get(`/session/${sessionId}/message`)
-  const data = await res.json()
+  const data = await getJson<{ info: MessageInfo; parts: MessagePart[] }[]>(`/session/${sessionId}/message`)
   // Convert to our format
-  return data.map((msg: { info: MessageInfo; parts: MessagePart[] }) => ({
+  return data.map((msg) => ({
     info: msg.info,
     parts: msg.parts || [],
   }))
@@ -193,7 +207,17 @@ export async function prompt(
 
     // Handle direct JSON response (non-streaming)
     if (contentType.includes('application/json')) {
-      const data = await res.json()
+      const text = await res.text()
+      if (!text || text.trim() === '') {
+        throw new Error('Empty response from Kilo API')
+      }
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (e) {
+        console.error('[kiloClient] Failed to parse JSON:', text.slice(0, 200))
+        throw new Error(`Failed to parse JSON response: ${text.slice(0, 100)}`)
+      }
       if (data.info?.id) {
         messageID = data.info.id
         // Process all parts
@@ -288,17 +312,15 @@ export interface KiloProvider {
 }
 
 export async function listProviders(): Promise<KiloProvider[]> {
-  const res = await get('/provider')
-  const data = await res.json()
+  const data = await getJson<{ all?: KiloProvider[] } | KiloProvider[]>('/provider')
   if (data && typeof data === 'object' && 'all' in data) {
-    return data.all
+    return data.all ?? []
   }
-  return data
+  return data as KiloProvider[]
 }
 
 export async function getConfig(): Promise<Record<string, unknown>> {
-  const res = await get('/config')
-  return res.json()
+  return getJson<Record<string, unknown>>('/config')
 }
 
 export async function updateConfig(config: Record<string, unknown>): Promise<void> {
@@ -332,8 +354,7 @@ export interface MCPServerInfo {
 }
 
 export async function getMCPServers(): Promise<MCPServerInfo[]> {
-  const res = await get('/mcp')
-  return res.json()
+  return getJson<MCPServerInfo[]>('/mcp')
 }
 
 export async function addMCPServer(config: {
