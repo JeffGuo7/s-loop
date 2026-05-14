@@ -24,8 +24,17 @@ export function useTaskScheduler() {
         const session = await Kilo.createSession(`Task: ${task.name}`)
 
         await Kilo.prompt(session.id, task.prompt, {
-          onToken: (token) => {
-            output += token
+          onPartUpdated: (_sessionID, _messageID, _partID, part) => {
+            // Collect text from text parts
+            if (part.type === 'text') {
+              output += part.text
+            }
+          },
+          onPartDelta: (_sessionID, _messageID, _partID, delta) => {
+            output += delta
+          },
+          onMessageUpdated: () => {
+            // Could update metadata here
           },
           onComplete: () => {
             updateExecution(exec.id, {
@@ -42,7 +51,7 @@ export function useTaskScheduler() {
               error: err.message,
             })
           },
-        })
+        }, undefined) // No model specified, use default
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         updateExecution(exec.id, {

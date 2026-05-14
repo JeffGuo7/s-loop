@@ -10,23 +10,41 @@ pub struct KiloProcess {
 pub struct KiloState(pub Mutex<Option<KiloProcess>>);
 
 impl KiloProcess {
-    pub fn start(kilo_repo: &str, port: u16, bun_path: &str) -> Result<Self, String> {
-        let cwd = format!(
+    /// Start Kilo server
+    /// - kilo_repo: path to kilocode-main repository (where Kilo source code lives)
+    /// - project_dir: path to the project directory that Kilo should work with
+    /// - port: port to listen on
+    /// - bun_path: path to bun executable
+    pub fn start(kilo_repo: &str, project_dir: &str, port: u16, bun_path: &str) -> Result<Self, String> {
+        // The cwd for bun run is the Kilo source directory
+        let kilo_cwd = format!(
             "{}/packages/opencode",
             kilo_repo.trim_end_matches('/').trim_end_matches('\\')
         );
+
+        // Verify paths exist
+        if !std::path::Path::new(&kilo_cwd).exists() {
+            return Err(format!("Kilo source directory not found: {}", kilo_cwd));
+        }
+        if !std::path::Path::new(project_dir).exists() {
+            return Err(format!("Project directory not found: {}", project_dir));
+        }
 
         let mut cmd = Command::new(bun_path);
         cmd.args([
             "run",
             "--cwd",
-            &cwd,
+            &kilo_cwd,
             "--conditions=browser",
             "src/index.ts",
             "serve",
             &format!("--port={port}"),
             "--hostname=127.0.0.1",
         ]);
+
+        // Set the working directory to the project directory
+        // This makes Kilo use this directory as its project root
+        cmd.current_dir(project_dir);
 
         // Windows: hide console window for the child process
         #[cfg(windows)]

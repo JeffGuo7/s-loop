@@ -1,17 +1,24 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Session, Message, ProviderConfig, Companion, ProviderInfo } from '../types'
+import type { Session, ProviderConfig, Companion, ProviderInfo, KiloMessage, MessagePart, MessageInfo } from '../types'
 
 interface AppState {
   // Sessions
   sessions: Session[]
   activeSessionId: string | null
-  sessionMessages: Record<string, Message[]>
+  sessionMessages: Record<string, KiloMessage[]>
+
+  // Streaming state
+  streamingMessage: Record<string, {
+    messageID: string
+    parts: MessagePart[]
+    isStreaming: boolean
+  }>
 
   // Provider — now dynamic (any Kilo provider ID)
   activeProvider: string
   providerConfigs: Record<string, ProviderConfig>
-  providerList: ProviderInfo[] // from Kilo /provider API
+  providerList: ProviderInfo[]
 
   // UI
   theme: 'light' | 'dark'
@@ -20,20 +27,34 @@ interface AppState {
   // Companion (pet)
   companion: Companion | null
 
-  // Actions
+  // Actions - Sessions
   createSession: () => string
   deleteSession: (id: string) => void
   setActiveSession: (id: string | null) => void
-  addMessage: (sessionId: string, message: Message) => void
   updateSessionTitle: (id: string, title: string) => void
 
+  // Actions - Messages
+  addMessage: (sessionId: string, message: KiloMessage) => void
+  updateMessagePart: (sessionId: string, messageID: string, partID: string, part: MessagePart) => void
+  appendPartDelta: (sessionId: string, messageID: string, partID: string, delta: string) => void
+  updateMessageInfo: (sessionId: string, messageID: string, info: MessageInfo) => void
+
+  // Actions - Streaming
+  startStreaming: (sessionId: string, messageID: string) => void
+  updateStreamingPart: (sessionId: string, partID: string, part: MessagePart) => void
+  appendStreamingDelta: (sessionId: string, partID: string, delta: string) => void
+  finishStreaming: (sessionId: string) => void
+
+  // Actions - Provider
   setActiveProvider: (id: string) => void
   setProviderConfig: (id: string, config: Partial<ProviderConfig>) => void
   setProviderList: (list: ProviderInfo[]) => void
 
+  // Actions - UI
   setTheme: (theme: 'light' | 'dark') => void
   toggleSidebar: () => void
 
+  // Actions - Companion
   setCompanion: (companion: Companion | null) => void
 }
 
@@ -50,6 +71,7 @@ export const useAppStore = create<AppState>()(
       sessions: [],
       activeSessionId: null,
       sessionMessages: {},
+      streamingMessage: {},
 
       activeProvider: 'anthropic',
       providerConfigs: DEFAULT_CONFIGS,
@@ -59,6 +81,7 @@ export const useAppStore = create<AppState>()(
       sidebarCollapsed: false,
       companion: null,
 
+      // Session actions
       createSession: () => {
         const id = generateId()
         const now = Date.now()
@@ -75,24 +98,18 @@ export const useAppStore = create<AppState>()(
           const all = state.sessions.filter((s) => s.id !== id)
           const msgs = { ...state.sessionMessages }
           delete msgs[id]
+          const streaming = { ...state.streamingMessage }
+          delete streaming[id]
           return {
             sessions: all,
             activeSessionId: state.activeSessionId === id ? all[0]?.id ?? null : state.activeSessionId,
             sessionMessages: msgs,
+            streamingMessage: streaming,
           }
         })
       },
 
       setActiveSession: (id) => set({ activeSessionId: id }),
-
-      addMessage: (sessionId, message) => {
-        set((state) => ({
-          sessionMessages: {
-            ...state.sessionMessages,
-            [sessionId]: [...(state.sessionMessages[sessionId] || []), message],
-          },
-        }))
-      },
 
       updateSessionTitle: (id, title) => {
         set((state) => ({
@@ -102,6 +119,147 @@ export const useAppStore = create<AppState>()(
         }))
       },
 
+      // Message actions
+      addMessage: (sessionId, message) => {
+        set((state) => ({
+          sessionMessages: {
+            ...state.sessionMessages,
+            [sessionId]: [...(state.sessionMessages[sessionId] || []), message],
+          },
+        }))
+      },
+
+      updateMessagePart: (sessionId, messageID, partID, part) => {
+        set((state) => {
+          const messages = state.sessionMessages[sessionId] || []
+          const updated = messages.map((msg) => {
+            if (msg.info.id !== messageID) return msg
+            const parts = msg.parts.map((p) => (p.id === partID ? part : p))
+            // Add new part if not found
+            if (!parts.find((p) => p.id === partID)) {
+              parts.push(part)
+            }
+            return { ...msg, parts }
+          })
+          return {
+            sessionMessages: { ...state.sessionMessages, [sessionId]: updated },
+          }
+        })
+      },
+
+      appendPartDelta: (sessionId, messageID, partID, delta) => {
+        set((state) => {
+          const messages = state.sessionMessages[sessionId] || []
+          const updated = messages.map((msg) => {
+            if (msg.info.id !== messageID) return msg
+            const parts = msg.parts.map((p) => {
+              if (p.id !== partID) return p
+              if (p.type === 'text' || p.type === 'reasoning') {
+                return { ...p, text: p.text + delta }
+              }
+              return p
+            })
+            return { ...msg, parts }
+          })
+          return {
+            sessionMessages: { ...state.sessionMessages, [sessionId]: updated },
+          }
+        })
+      },
+
+      updateMessageInfo: (sessionId, messageID, info) => {
+        set((state) => {
+          const messages = state.sessionMessages[sessionId] || []
+          const updated = messages.map((msg) => {
+            if (msg.info.id !== messageID) return msg
+            return { ...msg, info: { ...msg.info, ...info } }
+          })
+          return {
+            sessionMessages: { ...state.sessionMessages, [sessionId]: updated },
+          }
+        })
+      },
+
+      // Streaming actions
+      startStreaming: (sessionId, messageID) => {
+        set((state) => ({
+          streamingMessage: {
+            ...state.streamingMessage,
+            [sessionId]: { messageID, parts: [], isStreaming: true },
+          },
+        }))
+      },
+
+      updateStreamingPart: (sessionId, partID, part) => {
+        set((state) => {
+          const streaming = state.streamingMessage[sessionId]
+          if (!streaming) return state
+          const parts = [...streaming.parts]
+          const idx = parts.findIndex((p) => p.id === partID)
+          if (idx >= 0) {
+            parts[idx] = part
+          } else {
+            parts.push(part)
+          }
+          return {
+            streamingMessage: {
+              ...state.streamingMessage,
+              [sessionId]: { ...streaming, parts },
+            },
+          }
+        })
+      },
+
+      appendStreamingDelta: (sessionId, partID, delta) => {
+        set((state) => {
+          const streaming = state.streamingMessage[sessionId]
+          if (!streaming) return state
+          const parts = streaming.parts.map((p) => {
+            if (p.id !== partID) return p
+            if (p.type === 'text' || p.type === 'reasoning') {
+              return { ...p, text: p.text + delta }
+            }
+            return p
+          })
+          return {
+            streamingMessage: {
+              ...state.streamingMessage,
+              [sessionId]: { ...streaming, parts },
+            },
+          }
+        })
+      },
+
+      finishStreaming: (sessionId) => {
+        set((state) => {
+          const streaming = state.streamingMessage[sessionId]
+          if (!streaming) return state
+
+          // Move streaming message to sessionMessages
+          const newMessage: KiloMessage = {
+            info: {
+              id: streaming.messageID,
+              sessionID: sessionId,
+              role: 'assistant',
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: streaming.parts,
+          }
+
+          const updated = { ...state.streamingMessage }
+          delete updated[sessionId]
+
+          return {
+            sessionMessages: {
+              ...state.sessionMessages,
+              [sessionId]: [...(state.sessionMessages[sessionId] || []), newMessage],
+            },
+            streamingMessage: updated,
+          }
+        })
+      },
+
+      // Provider actions
       setActiveProvider: (id) => set({ activeProvider: id }),
 
       setProviderConfig: (id, config) => {
@@ -115,6 +273,7 @@ export const useAppStore = create<AppState>()(
 
       setProviderList: (list) => set({ providerList: list }),
 
+      // UI actions
       setTheme: (theme) => {
         set({ theme })
         document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -122,6 +281,7 @@ export const useAppStore = create<AppState>()(
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
+      // Companion actions
       setCompanion: (companion) => set({ companion }),
     }),
     {

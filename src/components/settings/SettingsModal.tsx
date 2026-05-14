@@ -44,9 +44,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         list.map((p) => ({
           id: p.id,
           name: p.name,
-          env: (p as unknown as Record<string, unknown>).env as string || '',
-          models: (p as unknown as Record<string, unknown>).models as Record<string, string> || {},
-          source: (p as unknown as Record<string, unknown>).source as string || '',
+          env: Array.isArray(p.env) ? p.env[0] || '' : '',
+          models: p.models || {},
+          source: p.source || '',
         })),
       )
     } catch {
@@ -78,14 +78,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
     // Sync to Kilo backend
     setSaving(true)
-    const kiloConfig: Record<string, { apiKey: string }> = {}
-    for (const [id, cfg] of Object.entries(localConfigs)) {
-      if (cfg.apiKey) {
-        kiloConfig[id] = { apiKey: cfg.apiKey }
-      }
-    }
     try {
-      await Kilo.updateConfig({ provider: kiloConfig })
+      for (const [id, cfg] of Object.entries(localConfigs)) {
+        if (cfg.apiKey) {
+          await Kilo.setProviderApiKey(id, cfg.apiKey)
+        }
+      }
     } catch {
       // Kilo might not be running
     }

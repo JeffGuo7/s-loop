@@ -39,6 +39,13 @@ function App() {
       }
     }
     initKiloUrl()
+
+    // Set project directory for Kilo
+    // Use SNOTRA_PROJECT_DIR env var, or user's home directory as default
+    const projectDir = import.meta.env.VITE_KILO_PROJECT_DIR || null
+    if (projectDir) {
+      Kilo.setProjectDir(projectDir)
+    }
   }, [])
 
   return (
