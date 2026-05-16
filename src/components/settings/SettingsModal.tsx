@@ -191,7 +191,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           }`}
                         >
                           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            isActive ? 'bg-green-500' : isConfigured ? 'bg-yellow-500' : 'bg-gray-400'
+                            isActive ? 'bg-[var(--color-success)]' : isConfigured ? 'bg-yellow-500' : 'bg-gray-400'
                           }`} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
@@ -297,7 +297,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-surface-dim)]">
           <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-            {providerList.length > 0 ? <Wifi size={12} className="text-green-500" /> : <WifiOff size={12} className="text-red-500" />}
+            {providerList.length > 0 ? <Wifi size={12} className="text-[var(--color-success)]" /> : <WifiOff size={12} className="text-[var(--color-error)]" />}
             {providerList.length > 0 ? 'Connected to Kilo' : 'Kilo not connected'}
           </div>
           <div className="flex items-center gap-3">

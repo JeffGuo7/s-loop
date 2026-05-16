@@ -38,7 +38,7 @@ export function MCPSettings() {
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md hover:bg-blue-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Server
@@ -96,9 +96,9 @@ function MCPServerCard({
   onRefresh,
 }: MCPServerCardProps) {
   const statusColors: Record<string, string> = {
-    connected: 'bg-green-500',
+    connected: 'bg-[var(--color-success)]',
     connecting: 'bg-yellow-500',
-    error: 'bg-red-500',
+    error: 'bg-[var(--color-error)]',
     disabled: 'bg-gray-400',
   };
 
@@ -132,7 +132,7 @@ function MCPServerCard({
             {server.disabled ? (
               <PowerOff className="w-4 h-4 text-gray-400" />
             ) : (
-              <Power className="w-4 h-4 text-green-500" />
+              <Power className="w-4 h-4 text-[var(--color-success)]" />
             )}
           </button>
           <button
@@ -153,7 +153,7 @@ function MCPServerCard({
             className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
             title="Remove"
           >
-            <Trash2 className="w-4 h-4 text-red-500" />
+            <Trash2 className="w-4 h-4 text-[var(--color-error)]" />
           </button>
         </div>
       </div>
@@ -182,7 +182,7 @@ function MCPServerCard({
           )}
 
           {status?.error && (
-            <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+            <div className="text-sm text-[var(--color-error)] bg-red-50 dark:bg-red-900/20 p-2 rounded">
               {status.error}
             </div>
           )}
@@ -336,7 +336,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+              className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-md hover:bg-blue-600 transition-colors"
             >
               Add Server
             </button>

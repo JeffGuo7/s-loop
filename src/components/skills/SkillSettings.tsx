@@ -40,7 +40,7 @@ export function SkillSettings() {
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md hover:bg-blue-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Skill
@@ -100,7 +100,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
           ) : (
             <ChevronRight className="w-4 h-4 text-gray-500" />
           )}
-          <Sparkles className={`w-4 h-4 ${skill.enabled ? 'text-blue-500' : 'text-gray-400'}`} />
+          <Sparkles className={`w-4 h-4 ${skill.enabled ? 'text-[var(--color-primary)]' : 'text-gray-400'}`} />
           <span className="font-medium">{skill.name}</span>
           {skill.location === 'builtin' && (
             <span className="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
@@ -118,7 +118,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
             title={skill.enabled ? 'Disable' : 'Enable'}
           >
             {skill.enabled ? (
-              <Power className="w-4 h-4 text-green-500" />
+              <Power className="w-4 h-4 text-[var(--color-success)]" />
             ) : (
               <PowerOff className="w-4 h-4 text-gray-400" />
             )}
@@ -132,7 +132,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
               className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
               title="Remove"
             >
-              <Trash2 className="w-4 h-4 text-red-500" />
+              <Trash2 className="w-4 h-4 text-[var(--color-error)]" />
             </button>
           )}
         </div>
@@ -262,7 +262,7 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+              className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-md hover:bg-blue-600 transition-colors"
             >
               Add Skill
             </button>
@@ -319,7 +319,7 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
                   onClick={() => removePath(path)}
                   className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
                 >
-                  <Trash2 className="w-4 h-4 text-red-500" />
+                  <Trash2 className="w-4 h-4 text-[var(--color-error)]" />
                 </button>
               </div>
             ))
@@ -336,7 +336,7 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
           />
           <button
             type="submit"
-            className="px-3 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+            className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-md hover:bg-blue-600 transition-colors"
           >
             Add
           </button>

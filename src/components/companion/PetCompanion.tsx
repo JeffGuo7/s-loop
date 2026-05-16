@@ -188,7 +188,7 @@ export function PetCompanion() {
           <div className="flex items-center gap-1 mt-2 pt-2 border-t border-[var(--color-border)]">
             <Heart
               size={12}
-              className={pet.mood === 'happy' ? 'text-red-500 fill-red-500' : 'text-[var(--color-text-secondary)]'}
+              className={pet.mood === 'happy' ? 'text-[var(--color-error)] fill-red-500' : 'text-[var(--color-text-secondary)]'}
             />
             <span className="text-xs capitalize">{pet.mood}</span>
           </div>

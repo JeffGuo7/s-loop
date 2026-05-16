@@ -9,15 +9,15 @@ interface StatusIndicatorProps {
 export function StatusIndicator({ state, size = 14 }: StatusIndicatorProps) {
   switch (state) {
     case 'pending':
-      return <Clock size={size} className="text-yellow-500" />
+      return <Clock size={size} className="text-[var(--color-warning)]" />
     case 'running':
-      return <Loader2 size={size} className="text-blue-500 animate-spin" />
+      return <Loader2 size={size} className="text-[var(--color-primary)] animate-spin" />
     case 'completed':
-      return <CheckCircle size={size} className="text-green-500" />
+      return <CheckCircle size={size} className="text-[var(--color-success)]" />
     case 'error':
-      return <XCircle size={size} className="text-red-500" />
+      return <XCircle size={size} className="text-[var(--color-error)]" />
     case 'streaming':
-      return <span className="inline-block w-2 h-4 bg-[var(--color-primary)] animate-pulse" />
+      return <span className="shimmer-cursor" />
     default:
       return null
   }

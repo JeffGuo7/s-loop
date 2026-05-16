@@ -62,30 +62,26 @@ export interface ReasoningPart {
 }
 
 /** Tool invocation part */
-export interface ToolPart {
+export interface ToolCallPart {
   id: string
   type: 'tool'
   callID: string
-  tool: string
+  name: string
   state: ToolState
   input?: Record<string, unknown>
-  output?: string
+  output?: unknown
   error?: string
   title?: string
   time?: { start?: number; end?: number }
 }
 
-/** Step start marker */
-export interface StepStartPart {
+/** Step part (start, running, completed, error) */
+export interface StepPart {
   id: string
-  type: 'step-start'
-}
-
-/** Step finish marker */
-export interface StepFinishPart {
-  id: string
-  type: 'step-finish'
-  reason: string
+  type: 'step-start' | 'step-finish'
+  state: 'running' | 'completed' | 'error' | 'pending'
+  name?: string
+  text?: string
   tokens?: {
     input: number
     output: number
@@ -105,7 +101,7 @@ export interface FilePart {
 }
 
 /** Union of all message part types */
-export type MessagePart = TextPart | ReasoningPart | ToolPart | StepStartPart | StepFinishPart | FilePart
+export type MessagePart = TextPart | ReasoningPart | ToolCallPart | StepPart | FilePart
 
 /** Message metadata */
 export interface MessageInfo {

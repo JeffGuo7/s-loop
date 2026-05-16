@@ -40,11 +40,11 @@ export function TaskList({ onCreateTask }: TaskListProps) {
   const getStatusColor = (status: ScheduledTask['status']) => {
     switch (status) {
       case 'running':
-        return 'text-blue-500';
+        return 'text-[var(--color-primary)]';
       case 'completed':
-        return 'text-green-500';
+        return 'text-[var(--color-success)]';
       case 'failed':
-        return 'text-red-500';
+        return 'text-[var(--color-error)]';
       case 'cancelled':
         return 'text-gray-400';
       default:
@@ -121,7 +121,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                     <span className={`
                       text-xs px-2 py-0.5 rounded-full
                       ${task.frequency === 'once'
-                        ? 'bg-blue-500/10 text-blue-500'
+                        ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
                         : 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
                       }
                     `}>
@@ -147,7 +147,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => deleteTask(task.id)}
-                    className="p-2 rounded-lg hover:bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)] hover:text-red-500 transition-colors"
+                    className="p-2 rounded-lg hover:bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)] hover:text-[var(--color-error)] transition-colors"
                   >
                     <Trash2 size={16} />
                   </button>

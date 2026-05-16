@@ -35,15 +35,19 @@ fn do_start_kilo(state: &KiloState, project_dir: &str) -> Result<String, String>
     Ok(url)
 }
 
+/// Resolve the Snotra project directory (where node_modules/@kilocode/cli lives)
+fn resolve_project_dir() -> String {
+    std::env::var("SNOTRA_PROJECT_DIR").unwrap_or_else(|_| {
+        // During tauri dev, current_dir is src-tauri/, parent is Snotra root
+        std::env::current_dir()
+            .map(|d| d.join("..").to_string_lossy().into_owned())
+            .unwrap_or_else(|_| ".".into())
+    })
+}
+
 #[tauri::command]
 fn start_kilo(state: tauri::State<KiloState>) -> Result<String, String> {
-    // Use SNOTRA_PROJECT_DIR or user home as project directory
-    let project_dir = std::env::var("SNOTRA_PROJECT_DIR")
-        .unwrap_or_else(|_| {
-            std::env::var("USERPROFILE")
-                .or_else(|_| std::env::var("HOME"))
-                .unwrap_or_else(|_| ".".into())
-        });
+    let project_dir = resolve_project_dir();
     do_start_kilo(&state, &project_dir)
 }
 
@@ -70,16 +74,9 @@ fn get_kilo_url(state: tauri::State<KiloState>) -> Result<Option<String>, String
 pub fn run() {
     let state = KiloState(Mutex::new(None));
 
-    // Get project directory once
-    let project_dir = std::env::var("SNOTRA_PROJECT_DIR")
-        .unwrap_or_else(|_| {
-            std::env::var("USERPROFILE")
-                .or_else(|_| std::env::var("HOME"))
-                .unwrap_or_else(|_| ".".into())
-        });
-
     // Start Kilo in background
     let state_for_setup = KiloState(Mutex::new(None));
+    let project_dir = resolve_project_dir();
     let project_dir_clone = project_dir.clone();
 
     tauri::Builder::default()

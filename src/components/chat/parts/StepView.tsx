@@ -1,39 +1,38 @@
-import { StepStartPart, StepFinishPart } from '../../../types'
-import { Zap, Coins } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import type { StepPart } from '../../../types'
 
 interface StepViewProps {
-  part: StepStartPart | StepFinishPart
+  part: StepPart
 }
 
 export function StepView({ part }: StepViewProps) {
-  if (part.type === 'step-start') {
-    return (
-      <div className="flex items-center gap-2 px-2 py-1 text-xs text-[var(--color-text-secondary)] border-l-2 border-[var(--color-primary)] my-1">
-        <Zap size={12} />
-        <span>Step started</span>
-      </div>
-    )
-  }
-
-  // step-finish
-  const tokens = part.tokens
-  const cost = part.cost
+  const isRunning = part.state === 'running'
+  const isCompleted = part.state === 'completed'
+  const isError = part.state === 'error'
 
   return (
-    <div className="flex items-center gap-3 px-2 py-1 text-xs text-[var(--color-text-secondary)] border-l-2 border-green-500 my-1">
-      <Zap size={12} className="text-green-500" />
-      <span>Step completed</span>
-      {tokens && (
-        <span className="text-xs">
-          {tokens.input + tokens.output} tokens
-        </span>
+    <div className="my-2 flex items-center gap-2 text-sm">
+      {isRunning && (
+        <Loader2 size={14} className="text-[var(--color-primary)] animate-spin shrink-0" />
       )}
-      {cost && cost > 0 && (
-        <span className="flex items-center gap-1 text-xs">
-          <Coins size={10} />
-          ${cost.toFixed(4)}
-        </span>
+      {isCompleted && (
+        <CheckCircle size={14} className="text-[var(--color-success)] shrink-0" />
       )}
+      {isError && (
+        <XCircle size={14} className="text-[var(--color-error)] shrink-0" />
+      )}
+      {!isRunning && !isCompleted && !isError && (
+        <div className="w-3.5 h-3.5 rounded-full border border-[var(--color-border)] shrink-0" />
+      )}
+      <span className={
+        isRunning
+          ? 'text-[var(--color-text-primary)] font-medium'
+          : isError
+            ? 'text-[var(--color-error)]'
+            : 'text-[var(--color-text-secondary)]'
+      }>
+        {part.text || part.name || 'Step'}
+      </span>
     </div>
   )
 }

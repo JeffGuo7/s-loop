@@ -1,18 +1,23 @@
-import { Markdown, StatusIndicator } from '../shared'
-import type { TextPart } from '../../../types'
+import { Markdown, shouldUseDocumentLayout } from '../shared/Markdown'
 
 interface TextPartViewProps {
-  part: TextPart
+  text: string
   isStreaming?: boolean
 }
 
-export function TextPartView({ part, isStreaming }: TextPartViewProps) {
-  if (!part.text) return null
+export function TextPartView({ text, isStreaming = false }: TextPartViewProps) {
+  if (!text) return null
+
+  const isDocument = shouldUseDocumentLayout(text)
 
   return (
-    <div className="relative">
-      <Markdown>{part.text}</Markdown>
-      {isStreaming && <StatusIndicator state="streaming" />}
+    <div className={isDocument ? '' : 'min-w-0'}>
+      <Markdown variant={isDocument ? 'document' : 'default'}>
+        {text}
+      </Markdown>
+      {isStreaming && (
+        <span className="shimmer-cursor" />
+      )}
     </div>
   )
 }

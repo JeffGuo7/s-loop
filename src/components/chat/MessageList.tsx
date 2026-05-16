@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { useAppStore } from '../../stores'
 import { MessageItem } from './MessageItem'
@@ -12,7 +12,6 @@ export function MessageList({ sessionId }: MessageListProps) {
   const streamingMessage = useAppStore((state) => state.streamingMessage[sessionId])
   const virtuosoRef = useRef(null)
 
-  // Combine messages with streaming message
   const allMessages = [...messages]
   if (streamingMessage?.isStreaming && streamingMessage.parts.length > 0) {
     allMessages.push({
@@ -26,41 +25,31 @@ export function MessageList({ sessionId }: MessageListProps) {
     })
   }
 
-  // Auto-scroll to bottom when new content arrives
-  useEffect(() => {
-    if (streamingMessage?.isStreaming) {
-      // Virtuoso will handle this with followOutput
-    }
-  }, [streamingMessage])
-
   if (allMessages.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-[var(--color-text-secondary)]">
-          <p className="text-lg mb-2">Start a conversation</p>
-          <p className="text-sm">Send a message to begin chatting with AI</p>
-        </div>
-      </div>
-    )
+    return null
   }
 
   return (
-    <Virtuoso
-      ref={virtuosoRef}
-      data={allMessages}
-      followOutput="smooth"
-      alignToBottom
-      className="flex-1"
-      itemContent={(index, message) => (
-        <MessageItem
-          message={message}
-          isStreaming={
-            streamingMessage?.isStreaming &&
-            index === allMessages.length - 1 &&
-            message.info.role === 'assistant'
-          }
-        />
-      )}
-    />
+    <div className="flex-1 overflow-hidden">
+      <Virtuoso
+        ref={virtuosoRef}
+        data={allMessages}
+        followOutput="smooth"
+        alignToBottom
+        className="flex-1 h-full chat-scroll-area"
+        itemContent={(index, message) => (
+          <div className="mx-auto max-w-[var(--chat-max-width)] px-2">
+            <MessageItem
+              message={message}
+              isStreaming={
+                streamingMessage?.isStreaming &&
+                index === allMessages.length - 1 &&
+                message.info.role === 'assistant'
+              }
+            />
+          </div>
+        )}
+      />
+    </div>
   )
 }

@@ -69,11 +69,11 @@ export function TelegramSettings() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {isConnected ? (
-              <CheckCircle size={20} className="text-green-500" />
+              <CheckCircle size={20} className="text-[var(--color-success)]" />
             ) : isConnecting ? (
-              <Loader2 size={20} className="animate-spin text-blue-500" />
+              <Loader2 size={20} className="animate-spin text-[var(--color-primary)]" />
             ) : error ? (
-              <AlertCircle size={20} className="text-red-500" />
+              <AlertCircle size={20} className="text-[var(--color-error)]" />
             ) : (
               <Link2Off size={20} className="text-[var(--color-text-secondary)]" />
             )}
@@ -82,7 +82,7 @@ export function TelegramSettings() {
                 {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Not Connected'}
               </p>
               {error && (
-                <p className="text-sm text-red-500">{error}</p>
+                <p className="text-sm text-[var(--color-error)]">{error}</p>
               )}
             </div>
           </div>
@@ -93,7 +93,7 @@ export function TelegramSettings() {
             className={`
               flex items-center gap-2 px-4 py-2 rounded-lg transition-colors
               ${isConnected
-                ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
+                ? 'bg-[var(--color-error)]/10 text-[var(--color-error)] hover:bg-[var(--color-error)]/20'
                 : 'bg-[var(--color-primary)] text-white hover:opacity-90'
               }
               disabled:opacity-50 disabled:cursor-not-allowed
@@ -158,7 +158,7 @@ export function TelegramSettings() {
                 <span className="text-sm">@{user}</span>
                 <button
                   onClick={() => handleRemoveUser(user)}
-                  className="text-[var(--color-text-secondary)] hover:text-red-500"
+                  className="text-[var(--color-text-secondary)] hover:text-[var(--color-error)]"
                 >
                   <X size={14} />
                 </button>
@@ -236,7 +236,7 @@ export function TelegramSettings() {
             <h3 className="font-medium">Message History</h3>
             <button
               onClick={clearMessages}
-              className="flex items-center gap-1 text-sm text-[var(--color-text-secondary)] hover:text-red-500"
+              className="flex items-center gap-1 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-error)]"
             >
               <Trash2 size={14} />
               Clear
@@ -263,8 +263,8 @@ export function TelegramSettings() {
       )}
 
       {/* Commands Info */}
-      <div className="mt-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-        <h3 className="font-medium text-blue-500 mb-2">Available Commands</h3>
+      <div className="mt-6 p-4 rounded-lg bg-[var(--color-primary)]/10 border border-blue-500/20">
+        <h3 className="font-medium text-[var(--color-primary)] mb-2">Available Commands</h3>
         <ul className="text-sm space-y-1 text-[var(--color-text-secondary)]">
           <li><code className="px-1 bg-[var(--color-surface-dim)] rounded">/status</code> - Check Snotra status</li>
           <li><code className="px-1 bg-[var(--color-surface-dim)] rounded">/chat</code> - Start a new conversation</li>

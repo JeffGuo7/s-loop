@@ -31,3 +31,6 @@ CLAUDE.md
 .env
 .env.*
 !.env.example
+
+# Kilo CLI runtime
+.kilo/

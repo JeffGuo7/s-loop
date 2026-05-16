@@ -1,3 +1,6 @@
-export { Markdown } from './Markdown'
+export { Markdown, shouldUseDocumentLayout } from './Markdown'
 export { Collapsible } from './Collapsible'
 export { StatusIndicator } from './StatusIndicator'
+export { CopyButton } from './CopyButton'
+export { MessageActionBar } from './MessageActionBar'
+export { StreamingIndicator } from './StreamingIndicator'

@@ -22,9 +22,10 @@ impl KiloProcess {
         // Find npx - try common locations
         let npx_path = std::env::var("NPX_PATH").unwrap_or_else(|_| {
             let candidates = [
+                "C:\\ProgramData\\nodejs\\npx.cmd",
                 "C:\\nvm4w\\nodejs\\npx.cmd",
                 "C:\\Program Files\\nodejs\\npx.cmd",
-                "C:\\Users\\tszyk\\AppData\\Roaming\\npm\\npx.cmd",
+                "D:\\Program Files\\nodejs\\npx.cmd",
             ];
             for path in &candidates {
                 if std::path::Path::new(path).exists() {

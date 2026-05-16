@@ -262,7 +262,11 @@ export async function prompt(
           switch (evt.type) {
             case 'message.part.updated': {
               messageID = evt.messageID
-              callbacks.onPartUpdated(evt.sessionID, evt.messageID, evt.partID, evt.part)
+              const part = evt.part as unknown as Record<string, unknown>
+              if (part.type === 'tool' && part.tool && !part.name) {
+                part.name = part.tool
+              }
+              callbacks.onPartUpdated(evt.sessionID, evt.messageID, evt.partID, part as unknown as MessagePart)
               break
             }
             case 'message.part.delta': {

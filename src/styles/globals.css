@@ -1,28 +1,64 @@
 @import "tailwindcss";
 
 :root {
+  /* Brand / Primary */
   --color-primary: #8F482F;
   --color-primary-light: #A66B4F;
+  --color-brand: var(--color-primary);
+
+  /* Surfaces */
   --color-background: #FAF9F5;
   --color-surface: #FFFFFF;
   --color-surface-dim: #F4F4F0;
+  --color-surface-user-msg: #F0EDE8;
+  --color-surface-assistant: var(--color-surface);
+  --color-border-assistant: #D8D8D4;
+
+  /* Text */
   --color-text-primary: #1B1C1A;
   --color-text-secondary: #6B6B6B;
+  --color-text-tertiary: #9A9A9A;
+
+  /* Borders */
   --color-border: #E5E5E5;
+
+  /* Semantic */
   --color-success: #22C55E;
   --color-warning: #F59E0B;
   --color-error: #EF4444;
+
+  /* Layout */
+  --chat-max-width: 860px;
+  --sidebar-width: 280px;
+  --sidebar-collapsed: 72px;
+
+  /* Motion */
+  --motion-sidebar: 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-collapse: 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-fade: 150ms ease-out;
 }
 
 .dark {
   --color-primary: #C4856D;
   --color-primary-light: #D4A090;
+  --color-brand: var(--color-primary);
+
   --color-background: #1A1A1A;
   --color-surface: #262626;
   --color-surface-dim: #1F1F1F;
+  --color-surface-user-msg: rgba(32, 31, 31, 0.92);
+  --color-surface-assistant: var(--color-surface);
+  --color-border-assistant: #3A3A3A;
+
   --color-text-primary: #FAFAFA;
   --color-text-secondary: #A3A3A3;
+  --color-text-tertiary: #6B6B6B;
+
   --color-border: #404040;
+
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-error: #F87171;
 }
 
 * {
@@ -44,6 +80,97 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Animations */
+@keyframes shimmer {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1.0; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes thinking-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes thinking-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+@keyframes message-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.animate-thinking-cursor {
+  animation: thinking-cursor-blink 1s step-end infinite;
+}
+
+.animate-message-appear {
+  animation: message-appear 150ms ease-out both;
+}
+
+/* Thinking dots - applied via ::after pseudo-element */
+.thinking-dots::after {
+  content: '';
+  animation: thinking-dots 1.4s steps(4, end) infinite;
+}
+
+/* Streaming cursor bar */
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 18px;
+  background: var(--color-brand);
+  animation: thinking-cursor-blink 1s step-end infinite;
+  vertical-align: text-bottom;
+  margin-left: 1px;
+}
+
+/* Shimmer streaming cursor */
+.shimmer-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 18px;
+  background: var(--color-brand);
+  animation: shimmer 1.5s ease-in-out infinite;
+  vertical-align: text-bottom;
+  margin-left: 1px;
+}
+
+/* Glass panel */
+.glass-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Sidebar transition */
+.sidebar-transition {
+  transition: width var(--motion-sidebar);
+}
+
 /* Scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
@@ -61,4 +188,58 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-secondary);
+}
+
+/* Chat scroll area */
+.chat-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-scroll-area::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.chat-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* Code block styles */
+.code-block-wrapper {
+  position: relative;
+  margin: 12px 0;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--color-surface-dim);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 12px 12px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.code-block-content {
+  padding: 16px;
+  background: var(--color-surface-dim);
+  border-radius: 0 0 12px 12px;
+  overflow-x: auto;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.code-block-content pre {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.code-block-content code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
 }

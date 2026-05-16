@@ -5,15 +5,14 @@ import { SettingsModal } from './components/settings'
 import { PetCompanion, PetHatchModal } from './components/companion'
 import { TasksPage } from './components/tasks'
 import { TelegramModal } from './components/telegram'
-import { useAppStore, usePetStore } from './stores'
+import { useAppStore } from './stores'
 import { useTaskScheduler } from './hooks'
 import { Kilo } from './utils'
 
 export type Page = 'chat' | 'tasks'
 
 function App() {
-  const { theme } = useAppStore()
-  const { pet, showPet, setShowPet } = usePetStore()
+  const { theme, sidebarCollapsed, toggleSidebar } = useAppStore()
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
   const [showHatchModal, setShowHatchModal] = useState(false)
@@ -26,7 +25,6 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    // Get Kilo URL from Tauri backend, or fallback to default for Vite dev
     async function initKiloUrl() {
       try {
         const { invoke } = await import('@tauri-apps/api/core')
@@ -40,8 +38,6 @@ function App() {
     }
     initKiloUrl()
 
-    // Set project directory for Kilo
-    // Use SNOTRA_PROJECT_DIR env var, or user's home directory as default
     const projectDir = import.meta.env.VITE_KILO_PROJECT_DIR || null
     if (projectDir) {
       Kilo.setProjectDir(projectDir)
@@ -51,21 +47,19 @@ function App() {
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar
+        onSettingsOpen={() => setShowSettings(true)}
+        onPetOpen={() => setShowHatchModal(true)}
+        onTelegramOpen={() => setShowTelegramModal(true)}
         currentPage={currentPage}
         onNavigate={setCurrentPage}
-        onOpenSettings={() => setShowSettings(true)}
-        onOpenPet={() => {
-          if (pet) {
-            setShowPet(!showPet)
-          } else {
-            setShowHatchModal(true)
-          }
-        }}
-        onOpenTelegram={() => setShowTelegramModal(true)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
-      {currentPage === 'chat' && <ChatView />}
-      {currentPage === 'tasks' && <TasksPage />}
+      <div className="flex-1 flex flex-col min-w-0">
+        {currentPage === 'chat' && <ChatView />}
+        {currentPage === 'tasks' && <TasksPage />}
+      </div>
 
       <PetCompanion />
 
