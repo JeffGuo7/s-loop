@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useSkillStore } from '../../stores';
 import type { SkillInfo } from '../../types/skill';
+import { CopyButton } from '../chat/shared/CopyButton';
 
 export function SkillSettings() {
   const { skills, paths, removeSkill, toggleSkill, addPath, removePath } = useSkillStore();
@@ -22,25 +23,25 @@ export function SkillSettings() {
   const enabledCount = skills.filter((s) => s.enabled).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-slide-up">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Skills</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {enabledCount} of {skills.length} skills enabled
+          <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">Skills</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+            <span className="font-semibold text-[var(--color-primary)]">{enabledCount}</span> of {skills.length} skills active
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <button
             onClick={() => setShowPathModal(true)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            className="btn-secondary flex items-center gap-2 text-sm"
           >
             <FolderOpen className="w-4 h-4" />
             Paths
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md hover:bg-blue-600 transition-colors"
+            className="btn-primary flex items-center gap-2 text-sm"
           >
             <Plus className="w-4 h-4" />
             Add Skill
@@ -49,13 +50,17 @@ export function SkillSettings() {
       </div>
 
       {skills.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          <Sparkles className="w-12 h-12 mx-auto mb-2 opacity-50" />
-          <p>No skills configured</p>
-          <p className="text-sm">Add a skill or configure a path to discover skills</p>
+        <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface-dim)]/50">
+          <div className="w-16 h-16 bg-[var(--color-primary-muted)] rounded-full flex items-center justify-center mb-4">
+            <Sparkles className="w-8 h-8 text-[var(--color-primary)] opacity-80" />
+          </div>
+          <h4 className="text-lg font-semibold text-[var(--color-text-primary)]">No skills yet</h4>
+          <p className="text-sm text-[var(--color-text-secondary)] text-center max-w-xs mt-2">
+            Skills extend AI capabilities. Add one manually or configure a path to discover skills.
+          </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-4">
           {skills.map((skill) => (
             <SkillCard
               key={skill.name}
@@ -89,96 +94,136 @@ interface SkillCardProps {
 
 function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: SkillCardProps) {
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div 
+      className={`group transition-all duration-300 border ${
+        expanded 
+          ? 'border-[var(--color-primary)] shadow-md' 
+          : 'border-[var(--color-border)] hover:border-[var(--color-primary-light)]'
+      } rounded-[var(--radius-md)] overflow-hidden bg-[var(--color-surface)]`}
+    >
       <div
-        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 cursor-pointer"
+        className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${
+          expanded ? 'bg-[var(--color-primary-muted)]' : 'hover:bg-[var(--color-surface-dim)]'
+        }`}
         onClick={onToggleExpand}
       >
-        <div className="flex items-center gap-3">
-          {expanded ? (
-            <ChevronDown className="w-4 h-4 text-gray-500" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-gray-500" />
-          )}
-          <Sparkles className={`w-4 h-4 ${skill.enabled ? 'text-[var(--color-primary)]' : 'text-gray-400'}`} />
-          <span className="font-medium">{skill.name}</span>
-          {skill.location === 'builtin' && (
-            <span className="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
-              builtin
-            </span>
-          )}
+        <div className="flex items-center gap-4 min-w-0">
+          <div className={`p-2 rounded-xl transition-colors ${
+            skill.enabled ? 'bg-[var(--color-primary)] text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-400'
+          }`}>
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-[var(--color-text-primary)] truncate">{skill.name}</span>
+              {skill.location === 'builtin' && (
+                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-[var(--color-primary-muted)] text-[var(--color-primary)] font-bold rounded-md">
+                  builtin
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-[var(--color-text-secondary)] truncate mt-0.5">
+              {skill.description || 'No description provided'}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onToggle();
             }}
-            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-            title={skill.enabled ? 'Disable' : 'Enable'}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+              skill.enabled 
+                ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20' 
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}
           >
             {skill.enabled ? (
-              <Power className="w-4 h-4 text-[var(--color-success)]" />
+              <><Power className="w-3.5 h-3.5" /> Active</>
             ) : (
-              <PowerOff className="w-4 h-4 text-gray-400" />
+              <><PowerOff className="w-3.5 h-3.5" /> Disabled</>
             )}
           </button>
+          
+          <div className="w-[1px] h-6 bg-[var(--color-border)]" />
+          
           {skill.location !== 'builtin' && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onRemove();
               }}
-              className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+              className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
               title="Remove"
             >
-              <Trash2 className="w-4 h-4 text-[var(--color-error)]" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
+          
+          <div className={`transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}>
+            <ChevronDown className="w-4 h-4 text-[var(--color-text-tertiary)]" />
+          </div>
         </div>
       </div>
 
       {expanded && (
-        <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
-          <div className="text-sm text-gray-600 dark:text-gray-300">{skill.description}</div>
-
-          <div className="text-sm">
-            <span className="text-gray-500 dark:text-gray-400">Location: </span>
-            <span className="font-mono text-xs">{skill.location}</span>
-          </div>
-
-          {skill.hooks && (skill.hooks.pre || skill.hooks.post) && (
-            <div className="text-sm">
-              <span className="text-gray-500 dark:text-gray-400">Hooks: </span>
-              <div className="mt-1 space-x-1">
-                {skill.hooks.pre?.map((hook, i) => (
-                  <span
-                    key={i}
-                    className="inline-block text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded"
-                  >
-                    pre: {hook}
-                  </span>
-                ))}
-                {skill.hooks.post?.map((hook, i) => (
-                  <span
-                    key={i}
-                    className="inline-block text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded"
-                  >
-                    post: {hook}
-                  </span>
-                ))}
+        <div className="p-5 border-t border-[var(--color-border)] bg-[var(--color-surface)] animate-slide-up">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-1.5 block">
+                  Location
+                </label>
+                <div className="flex items-center gap-2 text-sm font-mono text-[var(--color-text-secondary)] bg-[var(--color-surface-dim)] p-2 rounded-lg">
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  {skill.location}
+                </div>
               </div>
-            </div>
-          )}
 
-          {skill.content && (
-            <div className="mt-2">
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Content:</div>
-              <pre className="text-xs bg-gray-100 dark:bg-gray-900 p-2 rounded overflow-auto max-h-40">
-                {skill.content}
-              </pre>
+              {skill.hooks && (skill.hooks.pre || skill.hooks.post) && (
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-1.5 block">
+                    Execution Hooks
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {skill.hooks.pre?.map((hook, i) => (
+                      <span
+                        key={i}
+                        className="text-[11px] px-2.5 py-1 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded-full font-medium"
+                      >
+                        pre: {hook}
+                      </span>
+                    ))}
+                    {skill.hooks.post?.map((hook, i) => (
+                      <span
+                        key={i}
+                        className="text-[11px] px-2.5 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-full font-medium"
+                      >
+                        post: {hook}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            {skill.content && (
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-1.5 block">
+                  Instruction Content
+                </label>
+                <div className="flex-1 relative group/code">
+                  <pre className="text-xs bg-[var(--color-surface-dim)] p-4 rounded-xl overflow-auto max-h-48 font-mono leading-relaxed border border-[var(--color-border)]">
+                    {skill.content}
+                  </pre>
+                  <div className="absolute top-2 right-2 opacity-0 group-hover/code:opacity-100 transition-opacity">
+                    <CopyButton text={skill.content} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -211,60 +256,63 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg">
-        <h3 className="text-lg font-semibold mb-4">Add Skill</h3>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up">
+        <div className="px-8 pt-8 pb-6">
+          <h3 className="text-2xl font-bold text-[var(--color-text-primary)]">New Skill</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">Define custom instructions for the AI agent.</p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Name</label>
+        <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Skill Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
-              placeholder="my-skill"
+              className="w-full px-4 py-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] transition-all outline-none text-sm"
+              placeholder="e.g., code-reviewer"
               required
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Description</label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
-              placeholder="A brief description of what this skill does"
+              className="w-full px-4 py-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] transition-all outline-none text-sm"
+              placeholder="What does this skill do?"
               required
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Content</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">System Instructions</label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 font-mono text-sm"
+              className="w-full px-4 py-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] transition-all outline-none font-mono text-sm leading-relaxed"
               rows={6}
-              placeholder="Skill instructions..."
+              placeholder="Act as a senior engineer..."
               required
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              className="px-6 py-2.5 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-md hover:bg-blue-600 transition-colors"
+              className="btn-primary px-8"
             >
-              Add Skill
+              Create Skill
             </button>
           </div>
         </form>
@@ -292,63 +340,69 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h3 className="text-lg font-semibold mb-4">Skill Paths</h3>
-
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Add directories to scan for SKILL.md files
-        </p>
-
-        <div className="space-y-2 mb-4">
-          {paths.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">
-              No paths configured
-            </p>
-          ) : (
-            paths.map((path) => (
-              <div
-                key={path}
-                className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded"
-              >
-                <div className="flex items-center gap-2">
-                  <FileCode className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm font-mono">{path}</span>
-                </div>
-                <button
-                  onClick={() => removePath(path)}
-                  className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
-                >
-                  <Trash2 className="w-4 h-4 text-[var(--color-error)]" />
-                </button>
-              </div>
-            ))
-          )}
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
+        <div className="px-8 pt-8 pb-6">
+          <h3 className="text-2xl font-bold text-[var(--color-text-primary)]">Skill Paths</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">Scan directories for automated skill loading.</p>
         </div>
 
-        <form onSubmit={handleAddPath} className="flex gap-2">
-          <input
-            type="text"
-            value={newPath}
-            onChange={(e) => setNewPath(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm"
-            placeholder="~/skills or ./skills"
-          />
-          <button
-            type="submit"
-            className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-md hover:bg-blue-600 transition-colors"
-          >
-            Add
-          </button>
-        </form>
+        <div className="px-8 pb-4">
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+            {paths.length === 0 ? (
+              <div className="text-center py-8 bg-[var(--color-surface-dim)] rounded-xl border border-dashed border-[var(--color-border)]">
+                <FolderOpen className="w-8 h-8 text-[var(--color-text-tertiary)] mx-auto mb-2 opacity-50" />
+                <p className="text-sm text-[var(--color-text-tertiary)]">No paths configured</p>
+              </div>
+            ) : (
+              paths.map((path: string) => (
+                <div
+                  key={path}
+                  className="flex items-center justify-between p-3 bg-[var(--color-surface-dim)] rounded-xl border border-[var(--color-border)] group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                      <FileCode className="w-4 h-4 text-[var(--color-primary)]" />
+                    </div>
+                    <span className="text-sm font-mono text-[var(--color-text-secondary)] truncate">{path}</span>
+                  </div>
+                  <button
+                    onClick={() => removePath(path)}
+                    className="p-1.5 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
 
-        <div className="flex justify-end mt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-          >
-            Done
-          </button>
+        <div className="px-8 pb-8 space-y-6">
+          <form onSubmit={handleAddPath} className="flex gap-2">
+            <input
+              type="text"
+              value={newPath}
+              onChange={(e) => setNewPath(e.target.value)}
+              className="flex-1 px-4 py-2.5 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm"
+              placeholder="e.g., ./my-skills"
+            />
+            <button
+              type="submit"
+              className="btn-primary"
+            >
+              Add
+            </button>
+          </form>
+
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="btn-secondary w-full"
+            >
+              Done
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -74,42 +74,64 @@ export function ToolPartView({ part }: ToolPartViewProps) {
   const subtitle = getToolSubtitle(part)
   const state = part.state as Record<string, unknown>
   const output = formatOutput(state?.output || state?.error)
+  const isError = !!state?.error
 
   return (
-    <div className="my-2 rounded-lg border border-[var(--color-border)]/50 bg-[var(--color-surface-dim)] overflow-hidden">
+    <div className={`my-3 rounded-2xl border transition-all duration-300 ${
+      expanded 
+        ? 'border-[var(--color-primary)] shadow-sm' 
+        : 'border-[var(--color-border)] hover:border-[var(--color-primary-light)]/50'
+    } bg-[var(--color-surface-dim)]/50 overflow-hidden`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[var(--color-border)]/20 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface)]/50 transition-colors text-left"
       >
-        <Icon size={15} className="text-[var(--color-primary)] shrink-0" />
+        <div className={`p-2 rounded-xl ${
+          expanded ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
+        } transition-colors`}>
+          <Icon size={16} strokeWidth={2.5} />
+        </div>
+        
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-[var(--color-text-primary)] truncate">
-            {toolName}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)]">
+              {toolName.replace(/_/g, ' ')}
+            </span>
+            <StatusIndicator state={part.state as ToolState} size={12} />
           </div>
           {subtitle && (
-            <div className="text-[11px] text-[var(--color-text-tertiary)] truncate mt-0.5 font-mono">
+            <div className="text-[11px] text-[var(--color-text-tertiary)] truncate mt-0.5 font-mono opacity-80">
               {subtitle}
             </div>
           )}
         </div>
-        <StatusIndicator state={part.state as ToolState} size={14} />
-        <span
-          className="text-[var(--color-text-tertiary)] text-[10px] transition-transform duration-200"
-          style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-        >
-          ▼
-        </span>
+
+        <div className={`transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}>
+          <ChevronDown size={14} className="text-[var(--color-text-tertiary)]" />
+        </div>
       </button>
 
-      {expanded && output && (
-        <div className="border-t border-[var(--color-border)]/30 px-3 py-2.5">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] text-[var(--color-text-tertiary)]">Output</span>
-            <CopyButton text={output} label="Copy" />
-          </div>
-          <pre className="font-mono text-[11px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-[300px] overflow-y-auto bg-[var(--color-surface)] rounded-lg p-3">
-            {output}
-          </pre>
+      {expanded && (
+        <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)]/30 animate-slide-up">
+          {output && (
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${isError ? 'text-[var(--color-error)]' : 'text-[var(--color-text-tertiary)]'}`}>
+                  {isError ? 'Error Output' : 'Result'}
+                </span>
+                <CopyButton text={output} />
+              </div>
+              <div className="relative group">
+                <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto rounded-xl p-4 border ${
+                  isError 
+                    ? 'bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 text-red-700 dark:text-red-300' 
+                    : 'bg-[var(--color-surface-dim)] border-[var(--color-border)] text-[var(--color-text-secondary)]'
+                }`}>
+                  {output}
+                </pre>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

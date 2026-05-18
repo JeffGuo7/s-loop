@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../../stores'
-import { X, Key, Globe, Cpu, Save, Eye, EyeOff, Server, Sparkles, Wifi, WifiOff, RefreshCw, ChevronUp, ChevronRight } from 'lucide-react'
+import { X, Key, Globe, Cpu, Save, Eye, EyeOff, Server, Sparkles, Wifi, WifiOff, RefreshCw, ChevronUp, ChevronRight, ChevronDown, Sun, Moon, CheckCircle } from 'lucide-react'
 import type { ProviderConfig } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
@@ -98,221 +98,261 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const envVar = provider?.env || ''
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[80vh] bg-[var(--color-surface)] rounded-xl shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-          <h2 className="text-xl font-bold">Settings</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--color-surface-dim)] transition-colors">
-            <X size={20} />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="w-full max-w-5xl h-[85vh] bg-[var(--color-surface)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex animate-slide-up border border-[var(--color-border)]">
+        
+        {/* Settings Sidebar */}
+        <aside className="w-64 bg-[var(--color-surface-dim)] border-r border-[var(--color-border)] flex flex-col">
+          <div className="p-8">
+            <h2 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">Settings</h2>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mt-2">Configuration</p>
+          </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 px-6 pt-4 border-b border-[var(--color-border)]">
-          {[
-            ['provider', 'Cpu', 'AI Provider'],
-            ['mcp', 'Server', 'MCP Servers'],
-            ['skills', 'Sparkles', 'Skills'],
-          ].map(([tab, icon, label]) => (
-            <button
-              key={String(tab)}
-              onClick={() => setActiveTab(String(tab) as typeof activeTab)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-t-lg transition-colors ${
-                activeTab === tab
-                  ? 'bg-[var(--color-surface-dim)] border-b-2 border-[var(--color-primary)]'
-                  : 'hover:bg-[var(--color-surface-dim)]'
-              }`}
+          <nav className="flex-1 px-4 space-y-1">
+            {[
+              { id: 'provider', icon: Cpu, label: 'AI Providers' },
+              { id: 'mcp', icon: Server, label: 'MCP Servers' },
+              { id: 'skills', icon: Sparkles, label: 'Skills' },
+            ].map((item: any) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+                  activeTab === item.id
+                    ? 'bg-[var(--color-primary)] text-white shadow-lg shadow-[var(--color-primary)]/20'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]'
+                }`}
+              >
+                <item.icon size={18} strokeWidth={activeTab === item.id ? 3 : 2} />
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="p-6">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm">
+              <div className={`w-2 h-2 rounded-full ${providerList.length > 0 ? 'bg-[var(--color-success)] animate-pulse' : 'bg-[var(--color-error)]'}`} />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                {providerList.length > 0 ? 'Kilo Online' : 'Kilo Offline'}
+              </span>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0 bg-[var(--color-surface)]">
+          {/* Header */}
+          <header className="h-20 flex items-center justify-between px-10 border-b border-[var(--color-border)] shrink-0">
+            <div>
+              <h3 className="text-lg font-bold text-[var(--color-text-primary)]">
+                {activeTab === 'provider' && 'AI Provider Configuration'}
+                {activeTab === 'mcp' && 'Model Context Protocol'}
+                {activeTab === 'skills' && 'Skill Management'}
+              </h3>
+            </div>
+            <button 
+              onClick={onClose} 
+              className="p-2 rounded-xl hover:bg-[var(--color-surface-dim)] text-[var(--color-text-tertiary)] transition-all"
             >
-              {icon === 'Cpu' ? <Cpu size={16} /> : icon === 'Server' ? <Server size={16} /> : <Sparkles size={16} />}
-              {label}
+              <X size={20} />
             </button>
-          ))}
-        </div>
+          </header>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-160px)] space-y-4">
-          {activeTab === 'provider' && (
-            <>
-              {/* Theme */}
-              <section>
-                <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">Appearance</h3>
-                <div className="flex gap-2">
-                  {(['light', 'dark'] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setTheme(t)}
-                      className={`px-4 py-2 rounded-lg capitalize transition-colors ${
-                        theme === t ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-dim)] hover:bg-[var(--color-border)]'
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              {/* Provider List */}
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                    Providers {providerList.length > 0 && `(${providerList.length})`}
-                  </h3>
-                  <button
-                    onClick={fetchProviders}
-                    disabled={fetching}
-                    className="flex items-center gap-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]"
-                  >
-                    <RefreshCw size={12} className={fetching ? 'animate-spin' : ''} />
-                    Refresh
-                  </button>
-                </div>
-
-                {providerList.length === 0 ? (
-                  <div className="text-center py-8 text-[var(--color-text-secondary)] border border-dashed border-[var(--color-border)] rounded-lg">
-                    <Server size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">
-                      {fetching ? 'Loading providers from Kilo...' : 'No providers loaded. Connect Kilo and click Refresh.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-1 max-h-64 overflow-y-auto border border-[var(--color-border)] rounded-lg">
-                    {providerList.map((p) => {
-                      const isActive = expandedProvider === p.id
-                      const isConfigured = !!localConfigs[p.id]?.apiKey
-                      return (
-                        <div
-                          key={p.id}
-                          onClick={() => setExpandedProvider(isActive ? null : p.id)}
-                          className={`flex items-center gap-3 p-3 cursor-pointer transition-colors border-b border-[var(--color-border)] last:border-b-0 ${
-                            isActive
-                              ? 'bg-[var(--color-primary)]/10 border-l-2 border-l-[var(--color-primary)]'
-                              : 'hover:bg-[var(--color-surface-dim)]'
-                          }`}
-                        >
-                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            isActive ? 'bg-[var(--color-success)]' : isConfigured ? 'bg-yellow-500' : 'bg-gray-400'
-                          }`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{p.name}</span>
-                              {p.source === 'config' && (
-                                <span className="text-[10px] px-1.5 rounded bg-purple-500/10 text-purple-600">built-in</span>
-                              )}
-                            </div>
-                            <p className="text-xs text-[var(--color-text-secondary)] truncate">
-                              {envVar ? `Env: ${envVar}` : Object.keys(p.models || {}).length + ' models'}
-                            </p>
-                          </div>
-                          {(isActive ? <ChevronUp size={16} /> : <ChevronRight size={16} />)}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </section>
-
-              {/* Provider Detail */}
-              {expandedProvider && provider && cfg && (
-                <section className="space-y-3 p-4 border border-[var(--color-border)] rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{provider.name}</span>
-                    {provider.source === 'config' && (
-                      <span className="text-[10px] px-1.5 rounded bg-purple-500/10 text-purple-600">built-in</span>
-                    )}
-                  </div>
-
-                  {/* API Key + Env name */}
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <Key size={16} />
-                      {envVar ? `API Key (${envVar})` : 'API Key'}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showKey ? 'text' : 'password'}
-                        value={cfg.apiKey}
-                        onChange={(e) => handleConfigChange(expandedProvider, 'apiKey', e.target.value)}
-                        placeholder="Paste your API key"
-                        className="w-full px-4 py-2 pr-10 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
-                      />
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+            {activeTab === 'provider' && (
+              <div className="max-w-3xl space-y-10 animate-slide-up">
+                {/* Theme Selection */}
+                <section>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-4 block">
+                    Interface Theme
+                  </label>
+                  <div className="flex p-1.5 bg-[var(--color-surface-dim)] rounded-2xl w-fit border border-[var(--color-border)]">
+                    {(['light', 'dark'] as const).map((t) => (
                       <button
-                        type="button"
-                        onClick={() => setShowKey(!showKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)]"
+                        key={t}
+                        onClick={() => setTheme(t)}
+                        className={`flex items-center gap-3 px-8 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                          theme === t 
+                            ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-md shadow-black/5' 
+                            : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                        }`}
                       >
-                        {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                        {t === 'light' ? <Sun size={16} /> : <Moon size={16} />}
+                        {t.charAt(0).toUpperCase() + t.slice(1)}
                       </button>
-                    </div>
-                  </div>
-
-                  {/* Model */}
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <Cpu size={16} /> Model
-                    </label>
-                    {modelKeys.length > 0 ? (
-                      <select
-                        value={cfg.model}
-                        onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
-                        className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
-                      >
-                        {modelKeys.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={cfg.model}
-                        onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
-                        placeholder="Model ID"
-                        className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
-                      />
-                    )}
-                  </div>
-
-                  {/* Base URL */}
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <Globe size={16} /> Base URL <span className="text-xs text-[var(--color-text-secondary)]">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={cfg.baseUrl || ''}
-                      onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
-                      placeholder="Custom endpoint"
-                      className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
-                    />
+                    ))}
                   </div>
                 </section>
-              )}
-            </>
-          )}
 
-          {activeTab === 'mcp' && <MCPSettings />}
-          {activeTab === 'skills' && <SkillSettings />}
-        </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                  {/* Left Column: Provider List */}
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)]">
+                        Providers ({providerList.length})
+                      </label>
+                      <button
+                        onClick={fetchProviders}
+                        disabled={fetching}
+                        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-primary)] hover:opacity-80 disabled:opacity-50"
+                      >
+                        <RefreshCw size={12} className={fetching ? 'animate-spin' : ''} strokeWidth={3} />
+                        Sync
+                      </button>
+                    </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-          <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-            {providerList.length > 0 ? <Wifi size={12} className="text-[var(--color-success)]" /> : <WifiOff size={12} className="text-[var(--color-error)]" />}
-            {providerList.length > 0 ? 'Connected to Kilo' : 'Kilo not connected'}
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                      {providerList.map((p) => {
+                        const isActive = expandedProvider === p.id
+                        const isConfigured = !!localConfigs[p.id]?.apiKey
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => setExpandedProvider(isActive ? null : p.id)}
+                            className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${
+                              isActive
+                                ? 'bg-[var(--color-primary-muted)] border-[var(--color-primary)]'
+                                : 'bg-[var(--color-surface)] border-[var(--color-border)] hover:border-[var(--color-primary-light)]'
+                            }`}
+                          >
+                            <div className={`p-2 rounded-xl transition-colors ${
+                              isActive ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-dim)] text-[var(--color-text-tertiary)]'
+                            }`}>
+                              <Cpu size={18} strokeWidth={isActive ? 2.5 : 2} />
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm font-bold ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-primary)]'}`}>
+                                  {p.name}
+                                </span>
+                                {isConfigured && !isActive && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)]" />
+                                )}
+                              </div>
+                              <p className="text-[10px] text-[var(--color-text-tertiary)] truncate font-mono mt-0.5">
+                                {Object.keys(p.models || {}).length} Models
+                              </p>
+                            </div>
+                            <ChevronRight size={16} className={`text-[var(--color-text-tertiary)] transition-transform duration-300 ${isActive ? 'rotate-90 text-[var(--color-primary)]' : ''}`} />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </section>
+
+                  {/* Right Column: Provider Config */}
+                  <section className="space-y-4">
+                    {expandedProvider && provider && cfg ? (
+                      <div className="p-8 bg-[var(--color-surface-dim)] rounded-[var(--radius-lg)] border border-[var(--color-border)] animate-slide-up space-y-6">
+                        <div className="flex items-center gap-3 pb-4 border-b border-[var(--color-border)]">
+                          <div className="w-1.5 h-6 bg-[var(--color-primary)] rounded-full" />
+                          <span className="text-base font-bold text-[var(--color-text-primary)]">{provider.name}</span>
+                        </div>
+
+                        <div className="space-y-5">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] ml-1">
+                              API Key {envVar && <span className="text-[var(--color-primary)] opacity-70">({envVar})</span>}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showKey ? 'text' : 'password'}
+                                value={cfg.apiKey}
+                                onChange={(e) => handleConfigChange(expandedProvider, 'apiKey', e.target.value)}
+                                placeholder="sk-..."
+                                className="w-full px-5 py-3.5 pr-14 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-mono transition-all"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowKey(!showKey)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
+                              >
+                                {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] ml-1">Default Model</label>
+                            <div className="relative">
+                              {modelKeys.length > 0 ? (
+                                <select
+                                  value={cfg.model}
+                                  onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
+                                  className="w-full px-5 py-3.5 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-bold appearance-none cursor-pointer pr-10"
+                                >
+                                  {modelKeys.map((m) => (
+                                    <option key={m} value={m}>{m}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={cfg.model}
+                                  onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
+                                  placeholder="e.g., gpt-4-turbo"
+                                  className="w-full px-5 py-3.5 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-bold"
+                                />
+                              )}
+                              {modelKeys.length > 0 && (
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-tertiary)]">
+                                  <ChevronDown size={16} />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] ml-1">Endpoint Proxy</label>
+                            <input
+                              type="text"
+                              value={cfg.baseUrl || ''}
+                              onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
+                              placeholder="https://api.openai.com/v1"
+                              className="w-full px-5 py-3.5 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-[var(--color-surface-dim)]/50 rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--color-border)]">
+                        <Cpu size={48} className="text-[var(--color-text-tertiary)] opacity-20 mb-4" />
+                        <h4 className="text-sm font-bold text-[var(--color-text-secondary)]">No Provider Selected</h4>
+                        <p className="text-xs text-[var(--color-text-tertiary)] mt-2">Select a provider from the list to configure its API settings.</p>
+                      </div>
+                    )}
+                  </section>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'mcp' && <MCPSettings />}
+            {activeTab === 'skills' && <SkillSettings />}
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={onClose} className="px-4 py-2 rounded-lg hover:bg-[var(--color-border)] transition-colors text-sm">
+
+          {/* Action Footer */}
+          <footer className="h-24 px-10 border-t border-[var(--color-border)] bg-[var(--color-surface-dim)]/30 flex items-center justify-end gap-4 shrink-0">
+            <button 
+              onClick={onClose} 
+              className="px-8 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+            >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 transition-opacity text-sm"
+              className={`flex items-center gap-3 px-10 py-3 rounded-2xl font-bold text-sm transition-all ${
+                saved 
+                  ? 'bg-[var(--color-success)] text-white' 
+                  : 'bg-[var(--color-primary)] text-white shadow-xl shadow-[var(--color-primary)]/30 hover:scale-[1.02] active:scale-[0.98]'
+              } disabled:opacity-50`}
             >
-              {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-              {saved ? 'Saved' : saving ? 'Saving...' : 'Save'}
+              {saving ? <RefreshCw size={18} className="animate-spin" /> : saved ? <CheckCircle size={18} /> : <Save size={18} />}
+              {saved ? 'Settings Saved' : saving ? 'Syncing...' : 'Apply Changes'}
             </button>
-          </div>
+          </footer>
         </div>
       </div>
     </div>

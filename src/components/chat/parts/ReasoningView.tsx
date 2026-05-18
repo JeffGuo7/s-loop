@@ -23,17 +23,24 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
   }, [isActive])
 
   const label = isActive ? (
-    <span className="flex items-center gap-1.5">
-      <Brain size={14} className="text-[var(--color-primary)]" />
-      <span>Thinking</span>
-      <span className="thinking-dots" />
+    <span className="flex items-center gap-3">
+      <div className="relative">
+        <Brain size={14} className="text-[var(--color-primary)] animate-pulse" />
+        <div className="absolute inset-0 bg-[var(--color-primary)] blur-md opacity-30 animate-pulse" />
+      </div>
+      <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-primary)]">Reasoning</span>
+      <div className="flex gap-1">
+        <div className="w-1 h-1 bg-[var(--color-primary)] rounded-full animate-bounce [animation-delay:-0.3s]" />
+        <div className="w-1 h-1 bg-[var(--color-primary)] rounded-full animate-bounce [animation-delay:-0.15s]" />
+        <div className="w-1 h-1 bg-[var(--color-primary)] rounded-full animate-bounce" />
+      </div>
     </span>
   ) : (
-    <span className="flex items-center gap-1.5">
-      <Brain size={14} className="text-[var(--color-text-secondary)]" />
-      <span>Thought</span>
+    <span className="flex items-center gap-3">
+      <Brain size={14} className="text-[var(--color-text-tertiary)]" />
+      <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-tertiary)]">Thought Process</span>
       {text && (
-        <span className="text-[var(--color-text-tertiary)] font-mono text-[11px] ml-2 truncate max-w-[300px]">
+        <span className="text-[10px] text-[var(--color-text-tertiary)] font-mono opacity-50 truncate max-w-[250px] hidden sm:inline">
           {getPreviewLine(text)}
         </span>
       )}
@@ -44,10 +51,10 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
     <Collapsible
       header={label}
       defaultExpanded={isActive}
-      className="my-2"
+      className="my-4 border border-[var(--color-border)]/50 rounded-2xl bg-[var(--color-surface-dim)]/30 overflow-hidden"
     >
       <div
-        className="font-mono text-[11px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-[300px] overflow-y-auto"
+        className="font-mono text-[11px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-[400px] overflow-y-auto p-4 bg-[var(--color-surface)]/50"
       >
         {text}
       </div>
