@@ -3,7 +3,7 @@ import { TextPartView, ReasoningView, ToolPartView, StepView } from './parts'
 import { MessageActionBar } from './shared/MessageActionBar'
 import { StreamingIndicator } from './shared/StreamingIndicator'
 import { shouldUseDocumentLayout } from './shared/Markdown'
-import type { KiloMessage, MessagePart, TextPart, ToolCallPart, StepPart, FilePart } from '../../types'
+import type { KiloMessage, MessagePart, TextPart, ToolPart, StepStartPart, StepFinishPart, FilePart } from '../../types'
 
 interface MessageItemProps {
   message: KiloMessage
@@ -24,7 +24,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
     if (!isStreaming) return undefined
     const lastPart = message.parts[message.parts.length - 1]
     if (lastPart?.type === 'reasoning') return 'Thinking'
-    if (lastPart?.type === 'tool' && (lastPart as ToolCallPart).state === 'running') return 'Running'
+    if (lastPart?.type === 'tool') return 'Running'
     return 'Working'
   }, [isStreaming, message.parts])
 
@@ -100,7 +100,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
         {!isStreaming && message.info.cost !== undefined && (
           <div className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
             {message.info.tokens && (
-              <span>{message.info.tokens.input + message.info.tokens.output} tokens</span>
+              <span>{(message.info.tokens.input ?? 0) + (message.info.tokens.output ?? 0)} tokens</span>
             )}
             {message.info.cost > 0 && (
               <span className="ml-2">${message.info.cost.toFixed(4)}</span>
@@ -124,14 +124,14 @@ function MessagePartRenderer({ part, isStreaming }: MessagePartRendererProps) {
     case 'reasoning':
       return <ReasoningView text={part.text} isActive={isStreaming} />
     case 'tool':
-      return <ToolPartView part={part as ToolCallPart} />
+      return <ToolPartView part={part as ToolPart} />
     case 'step-start':
     case 'step-finish':
-      return <StepView part={part as StepPart} />
+      return <StepView part={part as StepStartPart | StepFinishPart} />
     case 'file':
       return (
         <div className="text-sm text-[var(--color-text-secondary)]">
-          📎 {(part as FilePart).filename || 'File'}
+          {(part as FilePart).filename || 'File'}
         </div>
       )
     default:

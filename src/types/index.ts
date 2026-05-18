@@ -1,173 +1,184 @@
-export interface Session {
-  id: string
-  title: string
-  createdAt: number
-  updatedAt: number
-  kiloId?: string
-}
+// Kilo API types matching @kilocode/sdk
 
-export interface Message {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  timestamp: number
-}
+// ----- Message Parts -----
 
-export interface ProviderConfig {
-  apiKey: string
-  model: string
-  baseUrl?: string
-}
-
-export type ProviderKind = 'anthropic' | 'openai'
-
-export interface Companion {
-  name: string
-  personality: string
-  species: string
-  rarity: string
-  hatchedAt: number
-}
-
-// Kilo-backed provider info (from /provider API)
-export interface ProviderInfo {
-  id: string
-  name: string
-  env: string
-  models: Record<string, { id: string; name: string }>
-  source: string
-}
-
-// ============================================
-// Kilo Message Part Types
-// ============================================
-
-/** Tool execution state */
-export type ToolState = 'pending' | 'running' | 'completed' | 'error'
-
-/** Text content part */
 export interface TextPart {
   id: string
+  sessionID?: string
+  messageID?: string
   type: 'text'
   text: string
-  time?: { start?: number; end?: number }
+  time?: { created?: number; completed?: number }
 }
 
-/** Reasoning/thinking part */
 export interface ReasoningPart {
   id: string
+  sessionID: string
+  messageID: string
   type: 'reasoning'
   text: string
-  time?: { start?: number; end?: number }
+  time: { created: number; completed?: number }
 }
 
-/** Tool invocation part */
-export interface ToolCallPart {
+export type ToolState =
+  | { status: 'pending' }
+  | { status: 'running' }
+  | { status: 'completed'; output?: string }
+  | { status: 'error'; error?: string }
+
+export interface ToolPart {
   id: string
+  sessionID: string
+  messageID: string
   type: 'tool'
   callID: string
-  name: string
-  state: ToolState
-  input?: Record<string, unknown>
-  output?: unknown
-  error?: string
-  title?: string
-  time?: { start?: number; end?: number }
-}
-
-/** Step part (start, running, completed, error) */
-export interface StepPart {
-  id: string
-  type: 'step-start' | 'step-finish'
-  state: 'running' | 'completed' | 'error' | 'pending'
+  tool: string
   name?: string
-  text?: string
-  tokens?: {
-    input: number
-    output: number
-    reasoning: number
-    cache?: { read: number; write: number }
-  }
-  cost?: number
+  state: ToolState
+  args?: unknown
+  result?: unknown
+  time?: { created?: number; completed?: number }
 }
 
-/** File attachment part */
+export interface StepStartPart {
+  id: string
+  sessionID: string
+  messageID: string
+  type: 'step-start'
+  snapshot?: unknown
+  time?: { created?: number }
+}
+
+export interface StepFinishPart {
+  id: string
+  sessionID: string
+  messageID: string
+  type: 'step-finish'
+  reason?: string
+  cost?: number
+  tokens?: { input?: number; output?: number }
+  time?: { created?: number; completed?: number }
+}
+
 export interface FilePart {
   id: string
+  sessionID: string
+  messageID: string
   type: 'file'
   mime: string
   url: string
   filename?: string
+  time?: { created?: number }
 }
 
-/** Union of all message part types */
-export type MessagePart = TextPart | ReasoningPart | ToolCallPart | StepPart | FilePart
+export type MessagePart = TextPart | ReasoningPart | ToolPart | StepStartPart | StepFinishPart | FilePart
 
-/** Message metadata */
+// ----- Message -----
+
 export interface MessageInfo {
   id: string
   sessionID: string
   role: 'user' | 'assistant'
-  time: {
-    created: number
-    completed?: number
-  }
-  modelID?: string
-  providerID?: string
+  time: { created: number; completed?: number }
   cost?: number
-  tokens?: {
-    input: number
-    output: number
-    reasoning: number
-    cache?: { read: number; write: number }
-  }
-  finish?: 'stop' | 'tool-calls' | 'error' | 'unknown'
-  error?: { message: string }
+  tokens?: { input?: number; output?: number }
 }
 
-/** Full Kilo message with parts */
 export interface KiloMessage {
   info: MessageInfo
   parts: MessagePart[]
 }
 
-// ============================================
-// SSE Event Types
-// ============================================
+// ----- SSE Events -----
 
 export interface SSEPartUpdatedEvent {
   type: 'message.part.updated'
-  sessionID: string
-  messageID: string
-  partID: string
-  part: MessagePart
-}
-
-export interface SSEPartDeltaEvent {
-  type: 'message.part.delta'
-  sessionID: string
-  messageID: string
-  partID: string
-  field: 'text'
-  delta: string
+  properties: {
+    part: MessagePart
+    delta?: string
+  }
 }
 
 export interface SSEMessageUpdatedEvent {
   type: 'message.updated'
-  sessionID: string
-  messageID: string
-  info: MessageInfo
+  properties: {
+    info: MessageInfo
+  }
 }
 
-export interface SSESessionErrorEvent {
+export interface SSESessionIdleEvent {
+  type: 'session.idle'
+  properties: {
+    sessionID: string
+  }
+}
+
+export interface SSESessionStatusEvent {
+  type: 'session.status'
+  properties: {
+    sessionID: string
+    status: 'idle' | 'busy'
+  }
+}
+
+export interface SSErrorEvent {
   type: 'session.error'
-  error: { message: string }
+  properties: {
+    sessionID: string
+    error: { message: string }
+  }
+}
+
+export interface SSEServerConnectedEvent {
+  type: 'server.connected'
+}
+
+export interface SSEServerHeartbeatEvent {
+  type: 'server.heartbeat'
 }
 
 export type SSEEvent =
   | SSEPartUpdatedEvent
-  | SSEPartDeltaEvent
   | SSEMessageUpdatedEvent
-  | SSESessionErrorEvent
-  | { type: 'server.connected' }
-  | { type: 'server.heartbeat' }
+  | SSESessionIdleEvent
+  | SSESessionStatusEvent
+  | SSErrorEvent
+  | SSEServerConnectedEvent
+  | SSEServerHeartbeatEvent
+
+// ----- Session -----
+
+export interface Session {
+  id: string
+  title: string
+  kiloId?: string
+  createdAt: number
+  updatedAt: number
+}
+
+// ----- Provider -----
+
+export interface ProviderConfig {
+  apiKey: string
+  model: string
+  baseUrl: string
+}
+
+export interface ProviderInfo {
+  id: string
+  name: string
+  source?: string
+  env?: string | string[]
+  models?: Record<string, { id: string; name: string }>
+}
+
+// ----- Companion -----
+
+export interface Companion {
+  name: string
+  type: string
+  level: number
+  xp: number
+  mood: number
+  hatchedAt: number
+}

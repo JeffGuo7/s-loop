@@ -1,37 +1,37 @@
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
-import type { StepPart } from '../../../types'
+import type { StepStartPart, StepFinishPart } from '../../../types'
 
 interface StepViewProps {
-  part: StepPart
+  part: StepStartPart | StepFinishPart
 }
 
 export function StepView({ part }: StepViewProps) {
-  const isRunning = part.state === 'running'
-  const isCompleted = part.state === 'completed'
-  const isError = part.state === 'error'
+  const isStart = part.type === 'step-start'
+  const isFinish = part.type === 'step-finish'
+  const reason = isFinish ? (part as StepFinishPart).reason : undefined
 
   return (
-    <div className="my-2 flex items-center gap-2 text-sm">
-      {isRunning && (
+    <div className="my-1 flex items-center gap-2 text-sm">
+      {isStart && (
         <Loader2 size={14} className="text-[var(--color-primary)] animate-spin shrink-0" />
       )}
-      {isCompleted && (
+      {isFinish && reason === 'stop' && (
         <CheckCircle size={14} className="text-[var(--color-success)] shrink-0" />
       )}
-      {isError && (
+      {isFinish && reason === 'error' && (
         <XCircle size={14} className="text-[var(--color-error)] shrink-0" />
       )}
-      {!isRunning && !isCompleted && !isError && (
-        <div className="w-3.5 h-3.5 rounded-full border border-[var(--color-border)] shrink-0" />
+      {isFinish && reason !== 'stop' && reason !== 'error' && (
+        <CheckCircle size={14} className="text-[var(--color-text-secondary)] shrink-0" />
       )}
       <span className={
-        isRunning
+        isStart
           ? 'text-[var(--color-text-primary)] font-medium'
-          : isError
+          : reason === 'error'
             ? 'text-[var(--color-error)]'
             : 'text-[var(--color-text-secondary)]'
       }>
-        {part.text || part.name || 'Step'}
+        {isStart ? 'Processing...' : `Done (${reason || 'completed'})`}
       </span>
     </div>
   )

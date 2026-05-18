@@ -2,12 +2,14 @@ import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react'
 import type { ToolState } from '../../../types'
 
 interface StatusIndicatorProps {
-  state: ToolState | 'streaming'
+  state: ToolState
   size?: number
 }
 
 export function StatusIndicator({ state, size = 14 }: StatusIndicatorProps) {
-  switch (state) {
+  const status = state.status
+
+  switch (status) {
     case 'pending':
       return <Clock size={size} className="text-[var(--color-warning)]" />
     case 'running':
@@ -16,8 +18,6 @@ export function StatusIndicator({ state, size = 14 }: StatusIndicatorProps) {
       return <CheckCircle size={size} className="text-[var(--color-success)]" />
     case 'error':
       return <XCircle size={size} className="text-[var(--color-error)]" />
-    case 'streaming':
-      return <span className="shimmer-cursor" />
     default:
       return null
   }

@@ -5,6 +5,9 @@ import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import * as Kilo from '../../utils/kiloClient'
 
+const EMPTY_MESSAGES: never[] = []
+const EMPTY_STREAMING = null
+
 export function ChatView() {
   const {
     activeSessionId,
@@ -13,6 +16,7 @@ export function ChatView() {
     activeProvider,
     providerList,
     startStreaming,
+    updateStreamingMessageID,
     updateStreamingPart,
     appendStreamingDelta,
     finishStreaming,
@@ -23,6 +27,72 @@ export function ChatView() {
   const [error, setError] = useState<string | null>(null)
   const [serverOnline, setServerOnline] = useState(false)
 
+  // Subscribe to SSE events on mount
+  useEffect(() => {
+    const unsubscribe = Kilo.subscribeToEvents({
+      onPartUpdated: (part) => {
+        const kiloSessionId = part.sessionID
+        if (!kiloSessionId) return
+
+        const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
+        if (!localId) return
+
+        const streaming = useAppStore.getState().streamingMessage[localId]
+        if (streaming) {
+          // Update messageID from real Kilo ID if still placeholder
+          if (streaming.messageID.startsWith('pending-') && part.messageID) {
+            updateStreamingMessageID(localId, part.messageID)
+          }
+          updateStreamingPart(localId, part.id, part)
+        }
+      },
+      onPartDelta: (kiloSessionId, _messageID, partID, delta) => {
+        // Map Kilo session ID to local session ID
+        const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
+        if (!localId) return
+
+        const streaming = useAppStore.getState().streamingMessage[localId]
+        if (streaming) {
+          appendStreamingDelta(localId, partID, delta)
+        }
+      },
+      onMessageUpdated: (info) => {
+        const kiloSessionId = info.sessionID
+        if (!kiloSessionId) return
+
+        const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
+        if (!localId) return
+
+        const streaming = useAppStore.getState().streamingMessage[localId]
+        if (streaming) {
+          useAppStore.setState((state) => ({
+            streamingMessage: {
+              ...state.streamingMessage,
+              [localId]: { ...streaming, info },
+            },
+          }))
+        }
+      },
+      onSessionIdle: (kiloSessionId) => {
+        const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
+        if (localId) {
+          finishStreaming(localId)
+        }
+      },
+      onError: (err) => {
+        setError(err.message)
+      },
+      onConnected: () => {
+        setServerOnline(true)
+      },
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [updateStreamingMessageID, updateStreamingPart, appendStreamingDelta, finishStreaming])
+
+  // Health check as fallback
   useEffect(() => {
     const check = async () => {
       const ok = await Kilo.health()
@@ -34,9 +104,8 @@ export function ChatView() {
   }, [])
 
   const session = sessions.find((s) => s.id === activeSessionId)
-  const messages = activeSessionId
-    ? useAppStore.getState().sessionMessages[activeSessionId] || []
-    : []
+  const sessionMessages = useAppStore((state) => state.sessionMessages)
+  const messages = activeSessionId ? sessionMessages[activeSessionId] || EMPTY_MESSAGES : EMPTY_MESSAGES
   const isEmpty = messages.length === 0
 
   const handleSubmit = useCallback(
@@ -63,7 +132,7 @@ export function ChatView() {
           role: 'user',
           time: { created: Date.now() },
         },
-        parts: [{ id: `${userMessageID}-0`, type: 'text', text: content }],
+        parts: [{ id: `${userMessageID}-0`, type: 'text' as const, text: content, sessionID: activeSessionId, messageID: userMessageID }],
       })
 
       if (session && session.title === 'New Chat') {
@@ -89,37 +158,13 @@ export function ChatView() {
         }
       }
 
-      const assistantMessageID = Math.random().toString(36).substring(2, 15)
+      // Start streaming — messageID will be updated from SSE events
+      const assistantMessageID = `pending-${Date.now()}`
       startStreaming(activeSessionId, assistantMessageID)
 
+      // Send prompt async — all updates come through SSE
       try {
-        await Kilo.prompt(kiloId!, content, {
-          onPartUpdated: (_sessionID, _messageID, partID, part) => {
-            updateStreamingPart(activeSessionId, partID, part)
-          },
-          onPartDelta: (_sessionID, _messageID, partID, delta) => {
-            appendStreamingDelta(activeSessionId, partID, delta)
-          },
-          onMessageUpdated: (_sessionID, _messageID, info) => {
-            useAppStore.setState((state) => {
-              const streaming = state.streamingMessage[activeSessionId]
-              if (!streaming) return state
-              return {
-                streamingMessage: {
-                  ...state.streamingMessage,
-                  [activeSessionId]: { ...streaming, info },
-                },
-              }
-            })
-          },
-          onComplete: () => {
-            finishStreaming(activeSessionId)
-          },
-          onError: (err) => {
-            setError(err.message)
-            finishStreaming(activeSessionId)
-          },
-        }, model)
+        await Kilo.promptAsync(kiloId!, content, model)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
@@ -137,8 +182,6 @@ export function ChatView() {
       providerConfigs,
       session,
       startStreaming,
-      updateStreamingPart,
-      appendStreamingDelta,
       finishStreaming,
       addMessage,
       updateSessionTitle,
@@ -146,13 +189,17 @@ export function ChatView() {
   )
 
   const abort = useCallback(() => {
-    Kilo.abortPrompt()
-    if (activeSessionId) finishStreaming(activeSessionId)
-  }, [activeSessionId, finishStreaming])
+    if (activeSessionId) {
+      const s = sessions.find((s) => s.id === activeSessionId)
+      if (s?.kiloId) {
+        Kilo.abortSession(s.kiloId).catch(() => {})
+      }
+      finishStreaming(activeSessionId)
+    }
+  }, [activeSessionId, sessions, finishStreaming])
 
-  const streamingMessage = activeSessionId
-    ? useAppStore.getState().streamingMessage[activeSessionId]
-    : null
+  const streamingMessages = useAppStore((state) => state.streamingMessage)
+  const streamingMessage = activeSessionId ? streamingMessages[activeSessionId] : EMPTY_STREAMING
   const isStreaming = streamingMessage?.isStreaming ?? false
 
   if (!activeSessionId) {
@@ -174,7 +221,7 @@ export function ChatView() {
 
   return (
     <div className="flex-1 flex flex-col bg-[var(--color-background)] h-full">
-      {/* Offline status bar - only shown when disconnected */}
+      {/* Offline status bar */}
       {!serverOnline && (
         <div className="px-4 py-1.5 text-xs flex items-center gap-2 border-b bg-[var(--color-error)]/10 text-[var(--color-error)] border-[var(--color-error)]/20">
           <WifiOff size={12} />

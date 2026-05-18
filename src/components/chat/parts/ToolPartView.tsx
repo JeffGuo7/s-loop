@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { Wrench, FileText, Terminal, Globe, Database, FolderOpen } from 'lucide-react'
 import { StatusIndicator } from '../shared/StatusIndicator'
 import { CopyButton } from '../shared/CopyButton'
-import type { ToolCallPart, ToolState } from '../../../types'
+import type { ToolPart, ToolState } from '../../../types'
 
 interface ToolPartViewProps {
-  part: ToolCallPart
+  part: ToolPart
 }
 
 const TOOL_ICONS: Record<string, typeof Wrench> = {
@@ -41,8 +41,9 @@ function getToolIcon(toolName: string): typeof Wrench {
   return Wrench
 }
 
-function getToolSubtitle(part: ToolCallPart): string | null {
-  const input = part.input as Record<string, unknown> | undefined
+function getToolSubtitle(part: ToolPart): string | null {
+  const state = part.state as Record<string, unknown>
+  const input = state?.input as Record<string, unknown> | undefined
   if (!input) return null
 
   if (typeof input.path === 'string') return input.path
@@ -68,9 +69,11 @@ function formatOutput(output: unknown): string {
 
 export function ToolPartView({ part }: ToolPartViewProps) {
   const [expanded, setExpanded] = useState(false)
-  const Icon = getToolIcon(part.name)
+  const toolName = part.name || part.tool
+  const Icon = getToolIcon(toolName)
   const subtitle = getToolSubtitle(part)
-  const output = formatOutput(part.output)
+  const state = part.state as Record<string, unknown>
+  const output = formatOutput(state?.output || state?.error)
 
   return (
     <div className="my-2 rounded-lg border border-[var(--color-border)]/50 bg-[var(--color-surface-dim)] overflow-hidden">
@@ -81,7 +84,7 @@ export function ToolPartView({ part }: ToolPartViewProps) {
         <Icon size={15} className="text-[var(--color-primary)] shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-[var(--color-text-primary)] truncate">
-            {part.name}
+            {toolName}
           </div>
           {subtitle && (
             <div className="text-[11px] text-[var(--color-text-tertiary)] truncate mt-0.5 font-mono">

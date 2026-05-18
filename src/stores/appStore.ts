@@ -13,6 +13,7 @@ interface AppState {
     messageID: string
     parts: MessagePart[]
     isStreaming: boolean
+    info?: MessageInfo
   }>
 
   // Provider — now dynamic (any Kilo provider ID)
@@ -41,6 +42,7 @@ interface AppState {
 
   // Actions - Streaming
   startStreaming: (sessionId: string, messageID: string) => void
+  updateStreamingMessageID: (sessionId: string, messageID: string) => void
   updateStreamingPart: (sessionId: string, partID: string, part: MessagePart) => void
   appendStreamingDelta: (sessionId: string, partID: string, delta: string) => void
   finishStreaming: (sessionId: string) => void
@@ -190,6 +192,19 @@ export const useAppStore = create<AppState>()(
         }))
       },
 
+      updateStreamingMessageID: (sessionId, messageID) => {
+        set((state) => {
+          const streaming = state.streamingMessage[sessionId]
+          if (!streaming) return state
+          return {
+            streamingMessage: {
+              ...state.streamingMessage,
+              [sessionId]: { ...streaming, messageID },
+            },
+          }
+        })
+      },
+
       updateStreamingPart: (sessionId, partID, part) => {
         set((state) => {
           const streaming = state.streamingMessage[sessionId]
@@ -197,7 +212,18 @@ export const useAppStore = create<AppState>()(
           const parts = [...streaming.parts]
           const idx = parts.findIndex((p) => p.id === partID)
           if (idx >= 0) {
-            parts[idx] = part
+            const existing = parts[idx]
+            // For text/reasoning parts, keep local text if it's longer
+            // (deltas via appendStreamingDelta may have advanced beyond the server snapshot)
+            if (
+              (existing.type === 'text' || existing.type === 'reasoning') &&
+              (part.type === 'text' || part.type === 'reasoning') &&
+              existing.text.length > (part.text?.length ?? 0)
+            ) {
+              parts[idx] = { ...part, text: existing.text }
+            } else {
+              parts[idx] = part
+            }
           } else {
             parts.push(part)
           }
@@ -235,14 +261,16 @@ export const useAppStore = create<AppState>()(
           const streaming = state.streamingMessage[sessionId]
           if (!streaming) return state
 
-          // Move streaming message to sessionMessages
+          // Use info from SSE events if available, otherwise create default
+          const info = streaming.info || {
+            id: streaming.messageID,
+            sessionID: sessionId,
+            role: 'assistant' as const,
+            time: { created: Date.now(), completed: Date.now() },
+          }
+
           const newMessage: KiloMessage = {
-            info: {
-              id: streaming.messageID,
-              sessionID: sessionId,
-              role: 'assistant',
-              time: { created: Date.now(), completed: Date.now() },
-            },
+            info,
             parts: streaming.parts,
           }
 
@@ -294,6 +322,21 @@ export const useAppStore = create<AppState>()(
         theme: state.theme,
         companion: state.companion,
       }),
+      // Migrate old data format to new format
+      version: 1,
+      migrate: (persistedState: unknown) => {
+        const persisted = (persistedState || {}) as Record<string, unknown>
+        // Ensure sessionMessages is in the new KiloMessage[] format
+        if (persisted.sessionMessages && typeof persisted.sessionMessages === 'object') {
+          const msgs = persisted.sessionMessages as Record<string, unknown[]>
+          for (const key of Object.keys(msgs)) {
+            if (!Array.isArray(msgs[key])) {
+              msgs[key] = []
+            }
+          }
+        }
+        return persisted as Partial<AppState>
+      },
     },
   ),
 )

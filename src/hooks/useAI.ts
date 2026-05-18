@@ -48,8 +48,10 @@ export function useAI() {
               const partID = `${messageID}-0`
               const part: MessagePart = {
                 id: partID,
-                type: 'text',
+                type: 'text' as const,
                 text: fullContent,
+                sessionID: activeSessionId,
+                messageID,
               }
               const message: KiloMessage = {
                 info: {

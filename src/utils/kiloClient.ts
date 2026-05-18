@@ -1,12 +1,11 @@
 // HTTP client for Kilo serve API
-// Handles SSE streaming for real-time message updates
+// Uses EventSource for SSE event subscription + promptAsync for sending messages
 
-import type { MessagePart, SSEEvent, KiloMessage, MessageInfo } from '../types'
+import type { MessagePart, MessageInfo, KiloMessage } from '../types'
 
 const DEFAULT_BASE = 'http://127.0.0.1:4096'
 
 let _base = DEFAULT_BASE
-let _fetch: typeof fetch = globalThis.fetch.bind(globalThis)
 let _projectDir: string | null = null
 
 export function setBaseUrl(url: string) {
@@ -40,7 +39,7 @@ function getHeaders(): Record<string, string> {
 }
 
 async function post(paths: string, body?: unknown) {
-  const res = await _fetch(url(paths), {
+  const res = await fetch(url(paths), {
     method: 'POST',
     headers: getHeaders(),
     body: body ? JSON.stringify(body) : undefined,
@@ -53,7 +52,7 @@ async function post(paths: string, body?: unknown) {
 }
 
 async function del(paths: string) {
-  const res = await _fetch(url(paths), {
+  const res = await fetch(url(paths), {
     method: 'DELETE',
     headers: getHeaders(),
   })
@@ -65,7 +64,7 @@ async function del(paths: string) {
 }
 
 async function get(paths: string) {
-  const res = await _fetch(url(paths), {
+  const res = await fetch(url(paths), {
     headers: getHeaders(),
   })
   if (!res.ok) {
@@ -83,7 +82,7 @@ async function getJson<T>(paths: string): Promise<T> {
   }
   try {
     return JSON.parse(text) as T
-  } catch (e) {
+  } catch {
     throw new Error(`Failed to parse JSON from ${paths}: ${text.slice(0, 100)}`)
   }
 }
@@ -131,28 +130,139 @@ export async function deleteSession(id: string): Promise<void> {
 
 export async function getMessages(sessionId: string): Promise<KiloMessage[]> {
   const data = await getJson<{ info: MessageInfo; parts: MessagePart[] }[]>(`/session/${sessionId}/message`)
-  // Convert to our format
   return data.map((msg) => ({
     info: msg.info,
     parts: msg.parts || [],
   }))
 }
 
-// ----- Prompt (streaming) -----
+// ----- SSE Event Subscription -----
 
-export interface StreamCallbacks {
-  onPartUpdated: (sessionID: string, messageID: string, partID: string, part: MessagePart) => void
+export interface SSECallbacks {
+  onPartUpdated: (part: MessagePart) => void
   onPartDelta: (sessionID: string, messageID: string, partID: string, delta: string) => void
-  onMessageUpdated: (sessionID: string, messageID: string, info: MessageInfo) => void
-  onComplete: (messageID: string) => void
-  onError: (err: Error) => void
+  onMessageUpdated: (info: MessageInfo) => void
+  onSessionIdle: (sessionID: string) => void
+  onError: (error: { message: string }) => void
+  onConnected: () => void
 }
 
-let _activeAbort: AbortController | null = null
+let _eventSource: EventSource | null = null
+let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let _sseCallbacks: SSECallbacks | null = null
 
-export function abortPrompt() {
-  _activeAbort?.abort()
+export function subscribeToEvents(callbacks: SSECallbacks): () => void {
+  _sseCallbacks = callbacks
+  connectSSE()
+  return unsubscribeFromEvents
 }
+
+function connectSSE() {
+  if (_eventSource) {
+    _eventSource.close()
+  }
+
+  const params = new URLSearchParams()
+  if (_projectDir) params.set('directory', _projectDir)
+  const qs = params.toString()
+  const eventUrl = url(`/event${qs ? '?' + qs : ''}`)
+
+  const es = new EventSource(eventUrl)
+  _eventSource = es
+
+  es.onopen = () => {
+    _sseCallbacks?.onConnected()
+  }
+
+  es.onmessage = (e) => {
+    const raw = e.data
+    if (!raw || !raw.trim()) return
+
+    try {
+      const evt = JSON.parse(raw)
+
+      switch (evt.type) {
+        case 'message.part.updated': {
+          const part = evt.properties?.part as MessagePart | undefined
+          if (part) {
+            if (part.type === 'tool') {
+              const p = part as unknown as Record<string, unknown>
+              if (p.tool && !p.name) {
+                p.name = p.tool
+              }
+            }
+            _sseCallbacks?.onPartUpdated(part)
+          }
+          break
+        }
+        case 'message.part.delta': {
+          const props = evt.properties
+          if (props) {
+            const sessionID = props.sessionID as string | undefined
+            const messageID = props.messageID as string | undefined
+            const partID = props.partID as string | undefined
+            const delta = props.delta as string | undefined
+            if (sessionID && messageID && partID && delta) {
+              _sseCallbacks?.onPartDelta(sessionID, messageID, partID, delta)
+            }
+          }
+          break
+        }
+        case 'message.updated': {
+          const info = evt.properties?.info as MessageInfo | undefined
+          if (info) {
+            _sseCallbacks?.onMessageUpdated(info)
+          }
+          break
+        }
+        case 'session.idle': {
+          const sessionID = evt.properties?.sessionID as string | undefined
+          if (sessionID) {
+            _sseCallbacks?.onSessionIdle(sessionID)
+          }
+          break
+        }
+        case 'session.error': {
+          const error = evt.properties?.error as { message: string } | undefined
+          _sseCallbacks?.onError(error || { message: 'Session error' })
+          break
+        }
+        case 'server.connected':
+        case 'server.heartbeat':
+        case 'session.status':
+        case 'session.turn.open':
+        case 'session.turn.close':
+          // Ignore
+          break
+      }
+    } catch {
+      // Skip unparseable events
+    }
+  }
+
+  es.onerror = () => {
+    es.close()
+    _eventSource = null
+    // Reconnect after 3 seconds
+    if (_sseCallbacks) {
+      _reconnectTimer = setTimeout(connectSSE, 3000)
+    }
+  }
+}
+
+export function unsubscribeFromEvents() {
+  _sseCallbacks = null
+  if (_reconnectTimer) {
+    clearTimeout(_reconnectTimer)
+    _reconnectTimer = null
+  }
+  if (_eventSource) {
+    _eventSource.close()
+    _eventSource = null
+  }
+}
+
+// ----- Prompt (async via SSE) -----
 
 export interface ModelRef {
   providerID: string
@@ -160,14 +270,53 @@ export interface ModelRef {
 }
 
 /**
- * Send a prompt to a Kilo session and stream the response via SSE.
- * Parses Kilo's event format: message.part.updated, message.part.delta, message.updated
- * Also handles direct JSON response when SSE is not available.
+ * Send a prompt asynchronously. The response comes through the SSE event stream.
+ * Subscribe to events first via subscribeToEvents().
+ */
+export async function promptAsync(
+  sessionId: string,
+  content: string,
+  model?: ModelRef,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    parts: [{ type: 'text', text: content }],
+  }
+  if (model) {
+    body.model = model
+  }
+
+  await post(`/session/${sessionId}/message`, body)
+}
+
+/**
+ * Abort the current prompt for a session.
+ */
+export async function abortSession(sessionId: string): Promise<void> {
+  await post(`/session/${sessionId}/abort`)
+}
+
+// ----- Legacy prompt (for task scheduler) -----
+
+let _activeAbort: AbortController | null = null
+
+export function abortPrompt() {
+  _activeAbort?.abort()
+}
+
+/**
+ * Legacy synchronous prompt with inline SSE parsing.
+ * Used by the task scheduler. For chat, use promptAsync + subscribeToEvents instead.
  */
 export async function prompt(
   sessionId: string,
   content: string,
-  callbacks: StreamCallbacks,
+  callbacks: {
+    onPartUpdated: (sessionID: string, messageID: string, partID: string, part: MessagePart) => void
+    onPartDelta: (sessionID: string, messageID: string, partID: string, delta: string) => void
+    onMessageUpdated: (sessionID: string, messageID: string, info: MessageInfo) => void
+    onComplete: (messageID: string) => void
+    onError: (err: Error) => void
+  },
   model?: ModelRef,
 ): Promise<string> {
   const controller = new AbortController()
@@ -205,22 +354,15 @@ export async function prompt(
 
     const contentType = res.headers.get('content-type') || ''
 
-    // Handle direct JSON response (non-streaming)
+    // Handle direct JSON response
     if (contentType.includes('application/json')) {
       const text = await res.text()
       if (!text || text.trim() === '') {
         throw new Error('Empty response from Kilo API')
       }
-      let data
-      try {
-        data = JSON.parse(text)
-      } catch (e) {
-        console.error('[kiloClient] Failed to parse JSON:', text.slice(0, 200))
-        throw new Error(`Failed to parse JSON response: ${text.slice(0, 100)}`)
-      }
+      const data = JSON.parse(text)
       if (data.info?.id) {
         messageID = data.info.id
-        // Process all parts
         if (data.parts && Array.isArray(data.parts)) {
           for (const part of data.parts) {
             if (part.id) {
@@ -236,7 +378,7 @@ export async function prompt(
       return messageID
     }
 
-    // Handle SSE streaming response
+    // Handle SSE streaming response (legacy path)
     const reader = res.body?.getReader()
     if (!reader) throw new Error('No response body')
 
@@ -248,47 +390,56 @@ export async function prompt(
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
 
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const raw = line.slice(6).trim()
-        if (!raw) continue
+      let eventBoundary = buffer.indexOf('\n\n')
+      while (eventBoundary !== -1) {
+        const eventText = buffer.slice(0, eventBoundary)
+        buffer = buffer.slice(eventBoundary + 2)
+
+        const eventLines = eventText.split('\n')
+        const dataLines: string[] = []
+        for (const line of eventLines) {
+          if (line.startsWith('data: ')) {
+            dataLines.push(line.slice(6))
+          } else if (line.startsWith('data:')) {
+            dataLines.push(line.slice(5))
+          }
+        }
+
+        if (dataLines.length === 0) {
+          eventBoundary = buffer.indexOf('\n\n')
+          continue
+        }
+
+        const raw = dataLines.join('\n').trim()
+        if (!raw) {
+          eventBoundary = buffer.indexOf('\n\n')
+          continue
+        }
 
         try {
-          const evt = JSON.parse(raw) as SSEEvent
+          const evt = JSON.parse(raw)
 
-          switch (evt.type) {
-            case 'message.part.updated': {
-              messageID = evt.messageID
-              const part = evt.part as unknown as Record<string, unknown>
-              if (part.type === 'tool' && part.tool && !part.name) {
-                part.name = part.tool
-              }
-              callbacks.onPartUpdated(evt.sessionID, evt.messageID, evt.partID, part as unknown as MessagePart)
-              break
+          if (evt.type === 'message.part.updated' && evt.properties) {
+            messageID = evt.properties.part?.messageID || messageID
+            const part = evt.properties.part as Record<string, unknown>
+            if (part.type === 'tool' && part.tool && !part.name) {
+              part.name = part.tool
             }
-            case 'message.part.delta': {
-              callbacks.onPartDelta(evt.sessionID, evt.messageID, evt.partID, evt.delta)
-              break
+            callbacks.onPartUpdated(sessionId, messageID, part.id as string, part as unknown as MessagePart)
+            if (evt.properties.delta) {
+              callbacks.onPartDelta(sessionId, messageID, part.id as string, evt.properties.delta as string)
             }
-            case 'message.updated': {
-              callbacks.onMessageUpdated(evt.sessionID, evt.messageID, evt.info)
-              break
-            }
-            case 'session.error': {
-              callbacks.onError(new Error(evt.error?.message || 'Session error'))
-              break
-            }
-            case 'server.connected':
-            case 'server.heartbeat':
-              // Ignore these
-              break
+          } else if (evt.type === 'message.updated' && evt.properties) {
+            callbacks.onMessageUpdated(sessionId, evt.properties.info?.id || messageID, evt.properties.info)
+          } else if (evt.type === 'session.error' && evt.properties) {
+            callbacks.onError(new Error(evt.properties.error?.message || 'Session error'))
           }
         } catch {
           // Skip unparseable events
         }
+
+        eventBoundary = buffer.indexOf('\n\n')
       }
     }
 
