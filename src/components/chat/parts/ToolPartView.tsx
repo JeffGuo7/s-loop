@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Wrench, FileText, Terminal, Globe, Database, FolderOpen } from 'lucide-react'
+import { Wrench, FileText, Terminal, Globe, Database, FolderOpen, ChevronDown } from 'lucide-react'
 import { StatusIndicator } from '../shared/StatusIndicator'
 import { CopyButton } from '../shared/CopyButton'
 import type { ToolPart, ToolState } from '../../../types'
