@@ -46,7 +46,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
           <h2 className="text-xl font-bold">New Scheduled Task</h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[var(--color-surface-dim)] transition-colors"
+            className="p-2 rounded-lg hover:bg-[var(--color-surface-secondary)] transition-colors"
           >
             <X size={20} />
           </button>
@@ -55,8 +55,8 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Info Banner */}
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-surface-dim)]">
-            <Clock size={18} className="text-[var(--color-primary)]" />
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-surface-secondary)]">
+            <Clock size={18} className="text-[var(--color-accent)]" />
             <p className="text-sm text-[var(--color-text-secondary)]">
               Tasks run while Snotra is open. Schedule AI prompts to execute automatically.
             </p>
@@ -70,7 +70,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Daily Code Review"
-              className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+              className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
             />
           </div>
 
@@ -84,7 +84,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief description of this task..."
-              className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+              className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
             />
           </div>
 
@@ -96,7 +96,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="What should the AI do when this task runs?"
               rows={4}
-              className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)] resize-none"
+              className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)] resize-none"
             />
           </div>
 
@@ -107,7 +107,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
               <select
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as TaskFrequency)}
-                className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+                className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
               >
                 <option value="once">Once</option>
                 <option value="daily">Daily</option>
@@ -122,7 +122,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
                 type="datetime-local"
                 value={scheduledTime}
                 onChange={(e) => setScheduledTime(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+                className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
               />
             </div>
           </div>
@@ -139,11 +139,11 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
                 value={workingDirectory}
                 onChange={(e) => setWorkingDirectory(e.target.value)}
                 placeholder="/path/to/project"
-                className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+                className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
               />
               <button
                 type="button"
-                className="px-3 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] hover:bg-[var(--color-border)] transition-colors"
+                className="px-3 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-border)] transition-colors"
               >
                 Browse
               </button>
@@ -160,7 +160,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+                className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
               >
                 <option value={providerConfigs.anthropic.model}>
                   {providerConfigs.anthropic.model} (Anthropic)
@@ -179,7 +179,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
               <select
                 value={permissionMode}
                 onChange={(e) => setPermissionMode(e.target.value as 'auto' | 'ask')}
-                className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+                className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
               >
                 <option value="ask">Ask before actions</option>
                 <option value="auto">Auto-approve</option>
@@ -189,7 +189,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-lg hover:bg-[var(--color-surface)] transition-colors"
@@ -199,7 +199,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
           <button
             onClick={handleSubmit}
             disabled={!name.trim() || !prompt.trim() || !scheduledTime}
-            className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            className="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
           >
             Create Task
           </button>

@@ -31,8 +31,8 @@ export function StreamingIndicator({
 
   return (
     <div className="flex justify-center py-2">
-      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)]/50 bg-[var(--color-surface-dim)] px-3 py-1 text-xs text-[var(--color-text-secondary)]">
-        <span className="animate-shimmer text-[var(--color-brand)]">✦</span>
+      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)]/50 bg-[var(--color-surface-secondary)] px-3 py-1 text-xs text-[var(--color-text-secondary)]">
+        <span className="animate-shimmer text-[var(--color-accent)]">✦</span>
         <span>{verb}...</span>
         <span className="text-[var(--color-text-tertiary)]">{formatElapsed(elapsed)}</span>
         {tokenCount !== undefined && tokenCount > 0 && (

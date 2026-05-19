@@ -7,7 +7,6 @@ import {
   Power,
   PowerOff,
   ChevronDown,
-  ChevronRight,
   Wrench,
   FileText,
 } from 'lucide-react';
@@ -28,7 +27,7 @@ export function MCPSettings() {
     <div className="space-y-8 animate-slide-up">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">MCP Servers</h3>
+          <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">MCP Servers</h3>
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">
             Connect to external context via Model Context Protocol.
           </p>
@@ -52,11 +51,11 @@ export function MCPSettings() {
       </div>
 
       {servers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-4 border-2 border-dashed border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface-dim)]/50">
-          <div className="w-16 h-16 bg-[var(--color-primary-muted)] rounded-full flex items-center justify-center mb-4">
-            <Server className="w-8 h-8 text-[var(--color-primary)] opacity-80" />
+        <div className="flex flex-col items-center justify-center py-20 px-4 border-2 border-dashed border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface-secondary)]/50">
+          <div className="w-16 h-16 bg-[var(--color-accent-muted)] rounded-full flex items-center justify-center mb-4">
+            <Server className="w-8 h-8 text-[var(--color-accent)] opacity-80" />
           </div>
-          <h4 className="text-lg font-semibold text-[var(--color-text-primary)]">No servers found</h4>
+          <h4 className="text-lg font-semibold text-[var(--color-text)]">No servers found</h4>
           <p className="text-sm text-[var(--color-text-secondary)] text-center max-w-xs mt-2">
             Add your first MCP server to extend AI knowledge with local files, databases, or APIs.
           </p>
@@ -108,7 +107,7 @@ function MCPServerCard({
     connected: 'bg-[var(--color-success)]',
     connecting: 'bg-yellow-500 animate-pulse',
     error: 'bg-[var(--color-error)]',
-    disabled: 'bg-gray-400',
+    disabled: 'bg-[var(--color-text-tertiary)]',
   };
 
   const currentStatus = server.disabled ? 'disabled' : status?.status || 'disabled';
@@ -116,24 +115,24 @@ function MCPServerCard({
   return (
     <div className={`group transition-all duration-300 border ${
       expanded 
-        ? 'border-[var(--color-primary)] shadow-md' 
-        : 'border-[var(--color-border)] hover:border-[var(--color-primary-light)]'
+        ? 'border-[var(--color-accent)] shadow-md' 
+        : 'border-[var(--color-border)] hover:border-[var(--color-accent-light)]'
     } rounded-[var(--radius-md)] overflow-hidden bg-[var(--color-surface)]`}>
       <div
         className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${
-          expanded ? 'bg-[var(--color-primary-muted)]' : 'hover:bg-[var(--color-surface-dim)]'
+          expanded ? 'bg-[var(--color-accent-muted)]' : 'hover:bg-[var(--color-surface-secondary)]'
         }`}
         onClick={onToggleExpand}
       >
         <div className="flex items-center gap-4 min-w-0">
           <div className={`p-2.5 rounded-xl transition-colors ${
-            currentStatus === 'connected' ? 'bg-[var(--color-primary)] text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-400'
+            currentStatus === 'connected' ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-tertiary)]'
           }`}>
             <Server className="w-5 h-5" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-[var(--color-text-primary)] truncate">{server.name}</span>
+              <span className="font-bold text-[var(--color-text)] truncate">{server.name}</span>
               <div className={`w-2 h-2 rounded-full ${statusColors[currentStatus]}`} />
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] truncate mt-0.5 uppercase tracking-wider font-bold opacity-60">
@@ -150,7 +149,7 @@ function MCPServerCard({
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
               !server.disabled 
                 ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20' 
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-tertiary)]'
             }`}
           >
             {!server.disabled ? (
@@ -167,7 +166,7 @@ function MCPServerCard({
               e.stopPropagation();
               onRefresh();
             }}
-            className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-muted)] rounded-lg transition-all"
+            className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] rounded-lg transition-all"
             title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
@@ -178,7 +177,7 @@ function MCPServerCard({
               e.stopPropagation();
               onRemove();
             }}
-            className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+            className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-bg)] rounded-lg transition-all"
             title="Remove"
           >
             <Trash2 className="w-4 h-4" />
@@ -199,21 +198,21 @@ function MCPServerCard({
                   Configuration
                 </label>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-mono text-[var(--color-text-secondary)] bg-[var(--color-surface-dim)] p-3 rounded-xl border border-[var(--color-border)]">
-                    <span className="text-[var(--color-primary)] opacity-50 font-bold">TYPE</span>
+                  <div className="flex items-center gap-2 text-sm font-mono text-[var(--color-text-secondary)] bg-[var(--color-surface-secondary)] p-3 rounded-xl border border-[var(--color-border)]">
+                    <span className="text-[var(--color-accent)] opacity-50 font-bold">TYPE</span>
                     {server.type}
                   </div>
                   {server.type === 'stdio' ? (
-                    <div className="flex flex-col gap-1 p-3 bg-[var(--color-surface-dim)] rounded-xl border border-[var(--color-border)]">
+                    <div className="flex flex-col gap-1 p-3 bg-[var(--color-surface-secondary)] rounded-xl border border-[var(--color-border)]">
                        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] opacity-50">Command</span>
-                       <code className="text-xs font-mono text-[var(--color-text-primary)] break-all">
+                       <code className="text-xs font-mono text-[var(--color-text)] break-all">
                         {server.command} {server.args?.join(' ')}
                        </code>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-1 p-3 bg-[var(--color-surface-dim)] rounded-xl border border-[var(--color-border)]">
+                    <div className="flex flex-col gap-1 p-3 bg-[var(--color-surface-secondary)] rounded-xl border border-[var(--color-border)]">
                        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] opacity-50">URL</span>
-                       <code className="text-xs font-mono text-[var(--color-text-primary)] break-all">{server.url}</code>
+                       <code className="text-xs font-mono text-[var(--color-text)] break-all">{server.url}</code>
                     </div>
                   )}
                 </div>
@@ -224,7 +223,7 @@ function MCPServerCard({
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-error)] mb-1.5 block">
                     Connection Error
                   </label>
-                  <div className="text-xs font-mono p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 text-red-700 dark:text-red-300 rounded-xl">
+                  <div className="text-xs font-mono p-3 bg-[var(--color-error-bg)] border border-[var(--color-error)]/20 text-[var(--color-error)] rounded-xl">
                     {status.error}
                   </div>
                 </div>
@@ -241,9 +240,9 @@ function MCPServerCard({
                     {status.tools.map((tool, i) => (
                       <span
                         key={i}
-                        className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 bg-[var(--color-surface-dim)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-bold shadow-sm"
+                        className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 bg-[var(--color-surface-secondary)] text-[var(--color-text)] border border-[var(--color-border)] rounded-lg font-bold shadow-sm"
                       >
-                        <Wrench size={10} className="text-[var(--color-primary)]" />
+                        <Wrench size={10} className="text-[var(--color-accent)]" />
                         {tool.name}
                       </span>
                     ))}
@@ -260,7 +259,7 @@ function MCPServerCard({
                     {status.resources.map((resource, i) => (
                       <span
                         key={i}
-                        className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 bg-[var(--color-surface-dim)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-bold shadow-sm"
+                        className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 bg-[var(--color-surface-secondary)] text-[var(--color-text)] border border-[var(--color-border)] rounded-lg font-bold shadow-sm"
                       >
                         <FileText size={10} className="text-[var(--color-success)]" />
                         {resource.name}
@@ -308,7 +307,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up">
         <div className="px-8 pt-8 pb-6">
-          <h3 className="text-2xl font-bold text-[var(--color-text-primary)]">New MCP Server</h3>
+          <h3 className="text-2xl font-bold text-[var(--color-text)]">New MCP Server</h3>
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">Connect external tools and context.</p>
         </div>
 
@@ -319,7 +318,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm transition-all"
+              className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm transition-all"
               placeholder="e.g., filesystem-server"
               required
             />
@@ -331,7 +330,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as MCPTransportType)}
-                className="w-full px-4 py-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-bold appearance-none cursor-pointer pr-10"
+                className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-bold appearance-none cursor-pointer pr-10"
               >
                 <option value="stdio">stdio (Local Command)</option>
                 <option value="sse">sse (Server-Sent Events)</option>
@@ -351,7 +350,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
                   type="text"
                   value={command}
                   onChange={(e) => setCommand(e.target.value)}
-                  className="w-full px-4 py-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-mono"
+                  className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
                   placeholder="npx, python, etc."
                   required
                 />
@@ -362,7 +361,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
                   type="text"
                   value={args}
                   onChange={(e) => setArgs(e.target.value)}
-                  className="w-full px-4 py-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-mono"
+                  className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
                   placeholder="-y @modelcontextprotocol/server-filesystem ."
                 />
               </div>
@@ -374,7 +373,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full px-4 py-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-mono"
+                className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
                 placeholder="http://localhost:3000/mcp"
                 required
               />
@@ -385,7 +384,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2.5 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+              className="px-6 py-2.5 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
             >
               Cancel
             </button>

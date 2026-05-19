@@ -7,7 +7,7 @@ export function TasksPage() {
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto bg-[var(--color-background)]">
+      <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
         <TaskList onCreateTask={() => setShowCreateModal(true)} />
       </div>
 

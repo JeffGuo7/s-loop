@@ -40,13 +40,13 @@ export function TaskList({ onCreateTask }: TaskListProps) {
   const getStatusColor = (status: ScheduledTask['status']) => {
     switch (status) {
       case 'running':
-        return 'text-[var(--color-primary)]';
+        return 'text-[var(--color-accent)]';
       case 'completed':
         return 'text-[var(--color-success)]';
       case 'failed':
         return 'text-[var(--color-error)]';
       case 'cancelled':
-        return 'text-gray-400';
+        return 'text-[var(--color-text-tertiary)]';
       default:
         return 'text-[var(--color-text-secondary)]';
     }
@@ -64,7 +64,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
         </div>
         <button
           onClick={onCreateTask}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
         >
           <Plus size={18} />
           New Task
@@ -81,7 +81,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
           </p>
           <button
             onClick={onCreateTask}
-            className="text-[var(--color-primary)] hover:underline"
+            className="text-[var(--color-accent)] hover:underline"
           >
             Create a task
           </button>
@@ -95,7 +95,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 p-4 rounded-lg border transition-all
                 ${task.enabled
                   ? 'bg-[var(--color-surface)] border-[var(--color-border)]'
-                  : 'bg-[var(--color-surface-dim)] border-[var(--color-border)] opacity-60'
+                  : 'bg-[var(--color-surface-secondary)] border-[var(--color-border)] opacity-60'
                 }
               `}
             >
@@ -106,8 +106,8 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                   className={`
                     p-2 rounded-lg transition-colors
                     ${task.enabled
-                      ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
-                      : 'bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)]'
+                      ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                      : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
                     }
                   `}
                 >
@@ -121,8 +121,8 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                     <span className={`
                       text-xs px-2 py-0.5 rounded-full
                       ${task.frequency === 'once'
-                        ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
-                        : 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                        ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                        : 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
                       }
                     `}>
                       {getFrequencyLabel(task)}
@@ -147,7 +147,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => deleteTask(task.id)}
-                    className="p-2 rounded-lg hover:bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)] hover:text-[var(--color-error)] transition-colors"
+                    className="p-2 rounded-lg hover:bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-error)] transition-colors"
                   >
                     <Trash2 size={16} />
                   </button>

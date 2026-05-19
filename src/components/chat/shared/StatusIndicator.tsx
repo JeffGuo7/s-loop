@@ -13,7 +13,7 @@ export function StatusIndicator({ state, size = 14 }: StatusIndicatorProps) {
     case 'pending':
       return <Clock size={size} className="text-[var(--color-warning)]" />
     case 'running':
-      return <Loader2 size={size} className="text-[var(--color-primary)] animate-spin" />
+      return <Loader2 size={size} className="text-[var(--color-accent)] animate-spin" />
     case 'completed':
       return <CheckCircle size={size} className="text-[var(--color-success)]" />
     case 'error':

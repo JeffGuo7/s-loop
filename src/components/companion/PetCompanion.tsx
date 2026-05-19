@@ -96,7 +96,7 @@ export function PetCompanion() {
         <div
           className={`
             relative w-16 h-16 rounded-full flex items-center justify-center
-            bg-gradient-to-br from-[var(--color-surface)] to-[var(--color-surface-dim)]
+            bg-gradient-to-br from-[var(--color-surface)] to-[var(--color-surface-secondary)]
             border-2 border-[var(--color-border)] shadow-lg
             ${getMoodAnimation()}
             hover:scale-105 transition-transform
@@ -122,7 +122,7 @@ export function PetCompanion() {
           {/* Rarity indicator */}
           <div
             className="absolute -bottom-1 text-[8px] font-bold"
-            style={{ color: `var(--color-primary)` }}
+            style={{ color: `var(--color-accent)` }}
           >
             {pet.rarity === 'legendary' && '✨'}
           </div>
@@ -170,12 +170,12 @@ export function PetCompanion() {
                 <span className="text-[10px] w-16 text-[var(--color-text-secondary)]">
                   {stat}
                 </span>
-                <div className="flex-1 h-1.5 bg-[var(--color-surface-dim)] rounded-full overflow-hidden">
+                <div className="flex-1 h-1.5 bg-[var(--color-surface-secondary)] rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all"
                     style={{
                       width: `${value}%`,
-                      backgroundColor: `var(--color-primary)`,
+                      backgroundColor: `var(--color-accent)`,
                     }}
                   />
                 </div>

@@ -74,7 +74,7 @@ function CodeBlockComponent({ lang, code }: CodeBlock) {
 
 function InlineCode({ children }: { children: string }) {
   return (
-    <code className="bg-[var(--color-surface-dim)] text-[var(--color-brand)] px-1.5 py-0.5 rounded text-[0.875em] font-mono">
+    <code className="bg-[var(--color-surface-secondary)] text-[var(--color-accent)] px-1.5 py-0.5 rounded text-[0.875em] font-mono">
       {children}
     </code>
   )
@@ -96,6 +96,12 @@ const customRenderer = {
   },
   codespan({ text }: { text: string }) {
     return `<!--INLINE_CODE:${text}-->`
+  },
+  image({ href, text }: { href: string; text: string }) {
+    // Don't render images — show as a text reference instead.
+    // Prevents broken local-path images (C:\...) and unwanted external images.
+    const label = text || href || 'image'
+    return `[img: ${label}](${href})`
   },
 }
 

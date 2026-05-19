@@ -1,3 +1,4 @@
+mod commands;
 mod kilo;
 
 use crate::kilo::{KiloProcess, KiloState};
@@ -81,6 +82,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -88,6 +90,8 @@ pub fn run() {
             stop_kilo,
             kilo_status,
             get_kilo_url,
+            commands::list_directory,
+            commands::read_text_file,
         ])
         .setup(move |_app| {
             let project_dir_inner = project_dir_clone;

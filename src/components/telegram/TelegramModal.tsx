@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 
 export function TelegramPage() {
   return (
-    <div className="flex-1 overflow-y-auto bg-[var(--color-background)]">
+    <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
       <TelegramSettings />
     </div>
   );
@@ -22,7 +22,7 @@ export function TelegramModal({ onClose }: TelegramModalProps) {
           <h2 className="text-xl font-bold">Telegram Integration</h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[var(--color-surface-dim)] transition-colors"
+            className="p-2 rounded-lg hover:bg-[var(--color-surface-secondary)] transition-colors"
           >
             <X size={20} />
           </button>

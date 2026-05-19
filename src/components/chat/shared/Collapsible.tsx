@@ -40,7 +40,7 @@ export function Collapsible({
     <div className={`border border-[var(--color-border)]/50 rounded-lg overflow-hidden ${className}`}>
       <button
         onClick={handleToggle}
-        className="w-full flex items-center gap-2 px-3 py-2.5 bg-[var(--color-surface-dim)] hover:bg-[var(--color-border)]/30 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-3 py-2.5 bg-[var(--color-surface-secondary)] hover:bg-[var(--color-border)]/30 transition-colors text-left"
       >
         <span
           className="text-[var(--color-text-secondary)] transition-transform duration-200 inline-block"

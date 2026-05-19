@@ -79,22 +79,22 @@ export function ToolPartView({ part }: ToolPartViewProps) {
   return (
     <div className={`my-3 rounded-2xl border transition-all duration-300 ${
       expanded 
-        ? 'border-[var(--color-primary)] shadow-sm' 
-        : 'border-[var(--color-border)] hover:border-[var(--color-primary-light)]/50'
-    } bg-[var(--color-surface-dim)]/50 overflow-hidden`}>
+        ? 'border-[var(--color-accent)] shadow-sm' 
+        : 'border-[var(--color-border)] hover:border-[var(--color-accent-light)]/50'
+    } bg-[var(--color-surface-secondary)]/50 overflow-hidden`}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface)]/50 transition-colors text-left"
       >
         <div className={`p-2 rounded-xl ${
-          expanded ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
+          expanded ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-sm'
         } transition-colors`}>
           <Icon size={16} strokeWidth={2.5} />
         </div>
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)]">
+            <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text)]">
               {toolName.replace(/_/g, ' ')}
             </span>
             <StatusIndicator state={part.state as ToolState} size={12} />
@@ -124,8 +124,8 @@ export function ToolPartView({ part }: ToolPartViewProps) {
               <div className="relative group">
                 <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto rounded-xl p-4 border ${
                   isError 
-                    ? 'bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 text-red-700 dark:text-red-300' 
-                    : 'bg-[var(--color-surface-dim)] border-[var(--color-border)] text-[var(--color-text-secondary)]'
+                    ? 'bg-[var(--color-error-bg)] border border-[var(--color-error)]/20 text-[var(--color-error)]' 
+                    : 'bg-[var(--color-surface-secondary)] border-[var(--color-border)] text-[var(--color-text-secondary)]'
                 }`}>
                   {output}
                 </pre>

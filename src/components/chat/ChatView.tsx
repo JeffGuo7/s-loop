@@ -204,13 +204,13 @@ export function ChatView() {
 
   if (!activeSessionId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[var(--color-background)]">
-        <div className="text-center max-w-md space-y-4">
-          <div className="w-16 h-16 mx-auto rounded-full bg-[var(--color-surface-dim)] flex items-center justify-center">
-            <Cpu size={32} className="text-[var(--color-text-secondary)]" />
+      <div className="flex-1 flex items-center justify-center bg-[var(--color-bg)]">
+        <div className="text-center max-w-md space-y-5">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--color-surface-secondary)] flex items-center justify-center">
+            <Cpu size={28} className="text-[var(--color-text-tertiary)]" />
           </div>
-          <h2 className="text-2xl font-bold">Welcome to Snotra</h2>
-          <p className="text-[var(--color-text-secondary)]">
+          <h2 className="text-xl font-semibold">Welcome to Snotra</h2>
+          <p className="text-sm text-[var(--color-text-secondary)]">
             Start a new conversation to begin chatting with AI
           </p>
           <ServerStatus online={serverOnline} />
@@ -220,7 +220,7 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-[var(--color-background)] h-full">
+    <div className="flex-1 flex flex-col bg-[var(--color-bg)] h-full">
       {/* Offline status bar */}
       {!serverOnline && (
         <div className="px-4 py-1.5 text-xs flex items-center gap-2 border-b bg-[var(--color-error)]/10 text-[var(--color-error)] border-[var(--color-error)]/20">
@@ -233,8 +233,8 @@ export function ChatView() {
       {isEmpty ? (
         <div className="flex-1 flex flex-col items-center justify-center px-4">
           <div className="text-center space-y-4 mb-8">
-            <div className="w-14 h-14 mx-auto rounded-full bg-[var(--color-surface-dim)] flex items-center justify-center">
-              <Cpu size={28} className="text-[var(--color-text-secondary)]" />
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-[var(--color-surface-secondary)] flex items-center justify-center">
+              <Cpu size={24} className="text-[var(--color-text-tertiary)]" />
             </div>
             <h2 className="text-xl font-semibold">How can I help?</h2>
           </div>

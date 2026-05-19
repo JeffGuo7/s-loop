@@ -7,6 +7,7 @@ import { TasksPage } from './components/tasks'
 import { TelegramModal } from './components/telegram'
 import { useAppStore } from './stores'
 import { useTaskScheduler } from './hooks'
+import { WorkspacePanel } from './components/workspace'
 import { Kilo } from './utils'
 
 export type Page = 'chat' | 'tasks'
@@ -45,11 +46,11 @@ function App() {
   }, [])
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-background)] relative">
-      {/* Background Decor */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03] dark:opacity-[0.05]">
-        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-[var(--color-primary)] blur-[120px]" />
-        <div className="absolute top-[60%] -right-[5%] w-[30%] h-[30%] rounded-full bg-[var(--color-primary)] blur-[100px]" />
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-bg)]">
+      {/* Subtle ambient background glow */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-[0.02] dark:opacity-[0.04]">
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-[var(--color-accent)] blur-[150px]" />
+        <div className="absolute bottom-[10%] -right-[10%] w-[40%] h-[40%] rounded-full bg-[var(--color-accent)] blur-[120px]" />
       </div>
 
       <Sidebar
@@ -62,9 +63,12 @@ function App() {
         onToggleCollapse={toggleSidebar}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 relative z-10">
-        {currentPage === 'chat' && <ChatView />}
-        {currentPage === 'tasks' && <TasksPage />}
+      <main className="flex-1 flex min-w-0 relative">
+        <div className="flex-1 flex flex-col min-w-0">
+          {currentPage === 'chat' && <ChatView />}
+          {currentPage === 'tasks' && <TasksPage />}
+        </div>
+        <WorkspacePanel />
       </main>
 
       <PetCompanion />

@@ -55,7 +55,7 @@ export function TelegramSettings() {
   return (
     <div className="p-6 max-w-2xl">
       <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-        <MessageSquare size={24} className="text-[var(--color-primary)]" />
+        <MessageSquare size={24} className="text-[var(--color-accent)]" />
         Telegram Integration
       </h2>
 
@@ -65,13 +65,13 @@ export function TelegramSettings() {
       </p>
 
       {/* Connection Status */}
-      <div className="mb-6 p-4 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+      <div className="mb-6 p-4 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {isConnected ? (
               <CheckCircle size={20} className="text-[var(--color-success)]" />
             ) : isConnecting ? (
-              <Loader2 size={20} className="animate-spin text-[var(--color-primary)]" />
+              <Loader2 size={20} className="animate-spin text-[var(--color-accent)]" />
             ) : error ? (
               <AlertCircle size={20} className="text-[var(--color-error)]" />
             ) : (
@@ -94,7 +94,7 @@ export function TelegramSettings() {
               flex items-center gap-2 px-4 py-2 rounded-lg transition-colors
               ${isConnected
                 ? 'bg-[var(--color-error)]/10 text-[var(--color-error)] hover:bg-[var(--color-error)]/20'
-                : 'bg-[var(--color-primary)] text-white hover:opacity-90'
+                : 'bg-[var(--color-accent)] text-white hover:opacity-90'
               }
               disabled:opacity-50 disabled:cursor-not-allowed
             `}
@@ -124,7 +124,7 @@ export function TelegramSettings() {
             value={config.botToken}
             onChange={(e) => setConfig({ botToken: e.target.value })}
             placeholder="Enter your Telegram bot token"
-            className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+            className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
           />
           <p className="text-xs text-[var(--color-text-secondary)]">
             Get a token from @BotFather on Telegram
@@ -139,7 +139,7 @@ export function TelegramSettings() {
             value={config.chatId}
             onChange={(e) => setConfig({ chatId: e.target.value })}
             placeholder="Your Telegram chat ID"
-            className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+            className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
           />
           <p className="text-xs text-[var(--color-text-secondary)]">
             Use @userinfobot to find your chat ID
@@ -153,7 +153,7 @@ export function TelegramSettings() {
             {config.allowedUsers.map((user) => (
               <div
                 key={user}
-                className="flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--color-surface-dim)] border border-[var(--color-border)]"
+                className="flex items-center gap-1 px-3 py-1 rounded-full bg-[var(--color-surface-secondary)] border border-[var(--color-border)]"
               >
                 <span className="text-sm">@{user}</span>
                 <button
@@ -178,17 +178,17 @@ export function TelegramSettings() {
                 value={newUser}
                 onChange={(e) => setNewUser(e.target.value)}
                 placeholder="Telegram username"
-                className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+                className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
               />
               <button
                 onClick={handleAddUser}
-                className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90"
+                className="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90"
               >
                 Add
               </button>
               <button
                 onClick={() => setShowAddUser(false)}
-                className="px-4 py-2 rounded-lg hover:bg-[var(--color-surface-dim)]"
+                className="px-4 py-2 rounded-lg hover:bg-[var(--color-surface-secondary)]"
               >
                 Cancel
               </button>
@@ -196,7 +196,7 @@ export function TelegramSettings() {
           ) : (
             <button
               onClick={() => setShowAddUser(true)}
-              className="flex items-center gap-2 text-sm text-[var(--color-primary)] hover:underline"
+              className="flex items-center gap-2 text-sm text-[var(--color-accent)] hover:underline"
             >
               <Plus size={14} />
               Add user
@@ -207,7 +207,7 @@ export function TelegramSettings() {
 
       {/* Test Message */}
       {isConnected && (
-        <div className="mt-6 p-4 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+        <div className="mt-6 p-4 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)]">
           <h3 className="font-medium mb-3">Test Message</h3>
           <div className="flex gap-2">
             <input
@@ -215,12 +215,12 @@ export function TelegramSettings() {
               value={testMessage}
               onChange={(e) => setTestMessage(e.target.value)}
               placeholder="Send a test message..."
-              className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-primary)]"
+              className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
             />
             <button
               onClick={handleSendTest}
               disabled={!testMessage.trim()}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-50"
             >
               <Send size={16} />
               Send
@@ -247,7 +247,7 @@ export function TelegramSettings() {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className="p-3 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]"
+                className="p-3 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)]"
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium">{msg.from}</span>
@@ -263,14 +263,14 @@ export function TelegramSettings() {
       )}
 
       {/* Commands Info */}
-      <div className="mt-6 p-4 rounded-lg bg-[var(--color-primary)]/10 border border-blue-500/20">
-        <h3 className="font-medium text-[var(--color-primary)] mb-2">Available Commands</h3>
+      <div className="mt-6 p-4 rounded-lg bg-[var(--color-accent)]/10 border border-blue-500/20">
+        <h3 className="font-medium text-[var(--color-accent)] mb-2">Available Commands</h3>
         <ul className="text-sm space-y-1 text-[var(--color-text-secondary)]">
-          <li><code className="px-1 bg-[var(--color-surface-dim)] rounded">/status</code> - Check Snotra status</li>
-          <li><code className="px-1 bg-[var(--color-surface-dim)] rounded">/chat</code> - Start a new conversation</li>
-          <li><code className="px-1 bg-[var(--color-surface-dim)] rounded">/approve</code> - Approve pending permissions</li>
-          <li><code className="px-1 bg-[var(--color-surface-dim)] rounded">/tasks</code> - List scheduled tasks</li>
-          <li><code className="px-1 bg-[var(--color-surface-dim)] rounded">/help</code> - Show all commands</li>
+          <li><code className="px-1 bg-[var(--color-surface-secondary)] rounded">/status</code> - Check Snotra status</li>
+          <li><code className="px-1 bg-[var(--color-surface-secondary)] rounded">/chat</code> - Start a new conversation</li>
+          <li><code className="px-1 bg-[var(--color-surface-secondary)] rounded">/approve</code> - Approve pending permissions</li>
+          <li><code className="px-1 bg-[var(--color-surface-secondary)] rounded">/tasks</code> - List scheduled tasks</li>
+          <li><code className="px-1 bg-[var(--color-surface-secondary)] rounded">/help</code> - Show all commands</li>
         </ul>
       </div>
     </div>

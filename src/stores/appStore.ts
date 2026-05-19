@@ -24,6 +24,7 @@ interface AppState {
   // UI
   theme: 'light' | 'dark'
   sidebarCollapsed: boolean
+  workspaceDir: string | null
 
   // Companion (pet)
   companion: Companion | null
@@ -55,6 +56,7 @@ interface AppState {
   // Actions - UI
   setTheme: (theme: 'light' | 'dark') => void
   toggleSidebar: () => void
+  setWorkspaceDir: (dir: string | null) => void
 
   // Actions - Companion
   setCompanion: (companion: Companion | null) => void
@@ -81,6 +83,7 @@ export const useAppStore = create<AppState>()(
 
       theme: 'light',
       sidebarCollapsed: false,
+      workspaceDir: null,
       companion: null,
 
       // Session actions
@@ -308,6 +311,7 @@ export const useAppStore = create<AppState>()(
       },
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
 
       // Companion actions
       setCompanion: (companion) => set({ companion }),
@@ -321,6 +325,7 @@ export const useAppStore = create<AppState>()(
         providerConfigs: state.providerConfigs,
         theme: state.theme,
         companion: state.companion,
+        workspaceDir: state.workspaceDir,
       }),
       // Migrate old data format to new format
       version: 1,
