@@ -162,8 +162,8 @@ export function ChatInput({
     <div
       className={
         isHero
-          ? 'mx-auto max-w-3xl w-full px-4 mb-8'
-          : 'px-6 py-6 max-w-[var(--chat-max-width)] mx-auto w-full'
+          ? 'mx-auto max-w-4xl w-full px-6'
+          : 'mx-auto w-full max-w-(--chat-max-width) px-8 pb-8'
       }
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -172,37 +172,33 @@ export function ChatInput({
       <form onSubmit={handleSubmit}>
         <div
           className={`relative group transition-all duration-300 ${
-            isHero ? 'glass-panel rounded-2xl' : 'bg-[var(--color-surface)] rounded-xl border border-[var(--color-border-light)] p-1.5'
-          } ${isDragOver ? 'ring-2 ring-[var(--color-accent)]' : ''}`}
+            isHero
+              ? 'surface-panel px-3 py-3 shadow-lg'
+              : 'surface-panel px-3 py-3 bg-(--color-surface-elevated)'
+          } ${isDragOver ? 'ring-2 ring-(--color-accent) ring-offset-2 ring-offset-(--color-bg)' : ''}`}
         >
-          {/* Drag-over overlay */}
           {isDragOver && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--color-surface)]/80 backdrop-blur-[1px] rounded-[inherit] pointer-events-none">
-              <div className="bg-[var(--color-accent)]/10 border-2 border-dashed border-[var(--color-accent)] rounded-2xl px-8 py-4">
-                <p className="text-sm font-semibold text-[var(--color-accent)]">
-                  Drop file to reference
-                </p>
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-(--color-surface)/80 backdrop-blur-sm pointer-events-none">
+              <div className="rounded-md border border-dashed border-(--color-accent) bg-(--color-accent-muted) px-8 py-4">
+                <p className="text-sm font-semibold text-(--color-accent)">Drop file to reference</p>
               </div>
             </div>
           )}
 
-          {/* File attachment chips */}
           {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
+            <div className="flex flex-wrap gap-2 px-2 pb-3">
               {attachments.map((att, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/20 text-xs group/chip"
+                  className="inline-flex items-center gap-2 rounded-full border border-(--color-border) bg-(--color-surface-secondary) px-3 py-2 text-xs"
                   title={att.path}
                 >
-                  <File size={12} className="text-[var(--color-accent)] shrink-0" />
-                  <span className="text-[var(--color-text-secondary)] truncate max-w-[160px]">
-                    {att.name}
-                  </span>
+                  <File size={12} className="text-(--color-accent) shrink-0" />
+                  <span className="max-w-[180px] truncate text-(--color-text-secondary)">{att.name}</span>
                   <button
                     type="button"
                     onClick={() => removeAttachment(idx)}
-                    className="p-0.5 rounded hover:bg-[var(--color-accent)]/20 text-[var(--color-text-tertiary)] hover:text-[var(--color-accent)] transition-colors"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full text-(--color-text-tertiary) hover:bg-(--color-surface) hover:text-(--color-text) transition-colors"
                   >
                     <X size={12} />
                   </button>
@@ -211,50 +207,55 @@ export function ChatInput({
             </div>
           )}
 
-          <div className="flex items-end gap-2">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onCompositionStart={handleCompositionStart}
-              onCompositionEnd={handleCompositionEnd}
-              placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
-              disabled={disabled || isStreaming}
-              rows={1}
-              className="flex-1 px-4 py-3 bg-transparent border-none focus:ring-0 resize-none text-sm leading-relaxed min-h-[46px] max-h-[200px] scrollbar-subtle text-[var(--color-text)] placeholder-[var(--color-text-quaternary)]"
-            />
+          <div className="flex items-end gap-3">
+            <div className="flex-1 rounded-md bg-(--color-surface-secondary) border border-(--color-border-light) px-3">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
+                placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
+                disabled={disabled || isStreaming}
+                rows={1}
+                className="w-full resize-none border-none bg-transparent px-1 py-4 text-[15px] leading-relaxed min-h-[56px] max-h-[300px] custom-scrollbar text-(--color-text) placeholder-(--color-text-quaternary) focus:outline-none focus:ring-0"
+              />
+            </div>
 
-            <div className="flex items-center gap-2 pb-1 pr-1">
+            <div className="flex items-center gap-2 pb-0.5">
               {isStreaming ? (
                 <button
                   type="button"
                   onClick={onAbort}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-[var(--color-error)] text-white hover:bg-[var(--color-error)]/90 active:scale-95 transition-all"
+                  className="w-12 h-12 flex items-center justify-center rounded-md bg-(--color-error) text-white hover:opacity-90 transition-all shadow-md"
                 >
-                  <Square size={14} fill="currentColor" />
+                  <Square size={15} fill="currentColor" />
                 </button>
               ) : (
                 <button
                   type="submit"
                   disabled={(!input.trim() && attachments.length === 0) || disabled}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-light)] active:scale-95 disabled:opacity-30 disabled:scale-100 disabled:cursor-not-allowed transition-all"
+                  className="w-12 h-12 flex items-center justify-center rounded-md bg-(--color-accent) text-white hover:bg-(--color-accent-light) active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-md shadow-(--color-accent)/20"
                 >
-                  <Send size={16} />
+                  <Send
+                    size={18}
+                    strokeWidth={2.5}
+                    className={input.trim() || attachments.length > 0 ? 'translate-x-px -translate-y-px' : ''}
+                  />
                 </button>
               )}
             </div>
           </div>
 
-          {!isHero && (
-            <div className="absolute -top-5 left-3">
-              <span className="text-[10px] text-[var(--color-text-quaternary)]">
-                {attachments.length > 0
-                  ? `${attachments.length} file(s) · Shift + Enter for new line`
-                  : 'Shift + Enter for new line · Drop files here'}
-              </span>
-            </div>
-          )}
+          <div className={`flex items-center justify-between px-2 pt-3 text-[11px] text-(--color-text-tertiary) transition-opacity ${isHero ? 'opacity-70' : 'opacity-60 group-focus-within:opacity-100'}`}>
+            <span>
+              {attachments.length > 0
+                ? `${attachments.length} file reference${attachments.length > 1 ? 's' : ''} attached`
+                : 'Shift + Enter for new line'}
+            </span>
+            <span className="hidden sm:inline">Enter to send</span>
+          </div>
         </div>
       </form>
     </div>

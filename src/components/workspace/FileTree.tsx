@@ -143,7 +143,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
         onKeyDown={handleKeyDown}
         onDragStart={!isDir ? handleDragStart : undefined}
         onDragEnd={!isDir ? handleDragEnd : undefined}
-        className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-[var(--color-surface-secondary)] transition-colors text-left select-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--color-surface-secondary)] transition-colors text-left select-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
         style={{ paddingLeft: `${paddingLeft}px` }}
         title={path}
       >

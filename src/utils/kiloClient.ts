@@ -277,7 +277,7 @@ export async function promptAsync(
   sessionId: string,
   content: string,
   model?: ModelRef,
-): Promise<void> {
+): Promise<string | undefined> {
   const body: Record<string, unknown> = {
     parts: [{ type: 'text', text: content }],
   }
@@ -285,7 +285,16 @@ export async function promptAsync(
     body.model = model
   }
 
-  await post(`/session/${sessionId}/message`, body)
+  const res = await post(`/session/${sessionId}/message`, body)
+  try {
+    const data = await res.json()
+    if (data && data.info && data.info.id) {
+      return data.info.id
+    }
+  } catch {
+    // Ignore JSON parse errors
+  }
+  return undefined
 }
 
 /**

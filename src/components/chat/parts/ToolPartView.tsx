@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Wrench, FileText, Terminal, Globe, Database, FolderOpen, ChevronDown } from 'lucide-react'
-import { StatusIndicator } from '../shared/StatusIndicator'
 import { CopyButton } from '../shared/CopyButton'
-import type { ToolPart, ToolState } from '../../../types'
+import type { ToolPart } from '../../../types'
 
 interface ToolPartViewProps {
   part: ToolPart
@@ -75,65 +74,85 @@ export function ToolPartView({ part }: ToolPartViewProps) {
   const state = part.state as Record<string, unknown>
   const output = formatOutput(state?.output || state?.error)
   const isError = !!state?.error
+  const isRunning = state?.status === 'running'
 
   return (
-    <div className={`my-3 rounded-2xl border transition-all duration-300 ${
-      expanded 
-        ? 'border-[var(--color-accent)] shadow-sm' 
-        : 'border-[var(--color-border)] hover:border-[var(--color-accent-light)]/50'
-    } bg-[var(--color-surface-secondary)]/50 overflow-hidden`}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface)]/50 transition-colors text-left"
-      >
-        <div className={`p-2 rounded-xl ${
-          expanded ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-sm'
-        } transition-colors`}>
-          <Icon size={16} strokeWidth={2.5} />
-        </div>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text)]">
-              {toolName.replace(/_/g, ' ')}
-            </span>
-            <StatusIndicator state={part.state as ToolState} size={12} />
+    <div className="my-4">
+      <div className={`rounded-2xl border transition-all duration-300 ${
+        expanded 
+          ? 'border-(--color-accent) shadow-md' 
+          : 'border-(--color-border) hover:border-(--color-accent-light)/50'
+      } bg-(--color-surface) overflow-hidden`}>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center gap-4 px-4 py-3 hover:bg-(--color-surface-secondary)/70 transition-colors text-left"
+        >
+          <div className={`p-2.5 rounded-xl ${
+            expanded || isRunning ? 'bg-(--color-accent) text-white' : 'bg-(--color-surface-secondary) text-(--color-accent) shadow-sm'
+          } transition-colors`}>
+            <Icon size={16} strokeWidth={2.5} />
           </div>
-          {subtitle && (
-            <div className="text-[11px] text-[var(--color-text-tertiary)] truncate mt-0.5 font-mono opacity-80">
-              {subtitle}
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-(--color-text-secondary) opacity-60">
+                Tool Call
+              </span>
+              <span className="text-sm font-bold text-(--color-text-primary)">
+                {toolName.replace(/_/g, ' ')}
+              </span>
+              {isRunning && (
+                <div className="flex gap-1">
+                  <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse" />
+                  <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse [animation-delay:0.2s]" />
+                  <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse [animation-delay:0.4s]" />
+                </div>
+              )}
             </div>
-          )}
-        </div>
-
-        <div className={`transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}>
-          <ChevronDown size={14} className="text-[var(--color-text-tertiary)]" />
-        </div>
-      </button>
-
-      {expanded && (
-        <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)]/30 animate-slide-up">
-          {output && (
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className={`text-[10px] font-bold uppercase tracking-widest ${isError ? 'text-[var(--color-error)]' : 'text-[var(--color-text-tertiary)]'}`}>
-                  {isError ? 'Error Output' : 'Result'}
-                </span>
-                <CopyButton text={output} />
+            {subtitle && (
+              <div className="text-[11px] text-(--color-text-tertiary) truncate mt-1 font-mono opacity-80" style={{ maxWidth: 'calc(100% - 24px)' }}>
+                {subtitle}
               </div>
-              <div className="relative group">
-                <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto rounded-xl p-4 border ${
-                  isError 
-                    ? 'bg-[var(--color-error-bg)] border border-[var(--color-error)]/20 text-[var(--color-error)]' 
-                    : 'bg-[var(--color-surface-secondary)] border-[var(--color-border)] text-[var(--color-text-secondary)]'
-                }`}>
-                  {output}
+            )}
+          </div>
+
+          <div className={`transition-transform duration-300 mr-1 ${expanded ? 'rotate-180' : ''}`}>
+            <ChevronDown size={14} className="text-(--color-text-tertiary)" />
+          </div>
+        </button>
+
+        {expanded && (
+          <div className="border-t border-(--color-border) bg-(--color-surface-secondary)/40 animate-slide-up">
+            <div className="p-5 space-y-4">
+              {/* Input Args if available */}
+              <div className="space-y-2">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-(--color-text-tertiary) ml-1">Arguments</span>
+                <pre className="font-mono text-[11px] leading-relaxed bg-(--color-surface) border border-(--color-border) rounded-2xl p-4 overflow-x-auto text-(--color-text-secondary)">
+                  {JSON.stringify(state?.input || {}, null, 2)}
                 </pre>
               </div>
+
+              {output && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className={`text-[9px] font-bold uppercase tracking-widest ${isError ? 'text-(--color-error)' : 'text-(--color-text-tertiary)'}`}>
+                      {isError ? 'Error Output' : 'Result Output'}
+                    </span>
+                    <CopyButton text={output} />
+                  </div>
+                  <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto rounded-2xl p-4 border ${
+                    isError 
+                      ? 'bg-(--color-error-bg) border border-(--color-error)/20 text-(--color-error)' 
+                      : 'bg-(--color-surface) border border-(--color-border) text-(--color-text-secondary)'
+                  }`}>
+                    {output}
+                  </pre>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

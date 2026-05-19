@@ -22,7 +22,7 @@ export function MessageActionBar({ content, timestamp, align = 'start' }: Messag
       }`}
     >
       {timestamp && (
-        <span className="text-[11px] text-[var(--color-text-tertiary)]">
+        <span className="text-[11px] text-(--color-text-tertiary)">
           {formatRelativeTime(timestamp)}
         </span>
       )}

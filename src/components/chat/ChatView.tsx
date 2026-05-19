@@ -8,6 +8,9 @@ import * as Kilo from '../../utils/kiloClient'
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
 
+// Store Kilo message IDs that belong to the user, so we don't accidentally treat them as the assistant's streaming response
+const ignoredMessageIDs = new Set<string>()
+
 export function ChatView() {
   const {
     activeSessionId,
@@ -32,27 +35,37 @@ export function ChatView() {
     const unsubscribe = Kilo.subscribeToEvents({
       onPartUpdated: (part) => {
         const kiloSessionId = part.sessionID
-        if (!kiloSessionId) return
+        if (!kiloSessionId || !part.messageID) return
+
+        if (ignoredMessageIDs.has(part.messageID)) return
 
         const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
         if (!localId) return
 
         const streaming = useAppStore.getState().streamingMessage[localId]
         if (streaming) {
+          // Check if this part belongs to the user message by seeing if there's already a message with this ID
+          const existingMessage = useAppStore.getState().sessionMessages[localId]?.find(m => m.info.id === part.messageID)
+          
+          if (existingMessage) {
+            ignoredMessageIDs.add(part.messageID)
+            return
+          }
+
           // Update messageID from real Kilo ID if still placeholder
-          if (streaming.messageID.startsWith('pending-') && part.messageID) {
+          if (streaming.messageID.startsWith('pending-')) {
             updateStreamingMessageID(localId, part.messageID)
           }
           updateStreamingPart(localId, part.id, part)
         }
       },
-      onPartDelta: (kiloSessionId, _messageID, partID, delta) => {
-        // Map Kilo session ID to local session ID
+      onPartDelta: (kiloSessionId, messageID, partID, delta) => {
+        if (ignoredMessageIDs.has(messageID)) return
         const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
         if (!localId) return
 
         const streaming = useAppStore.getState().streamingMessage[localId]
-        if (streaming) {
+        if (streaming && streaming.messageID === messageID) {
           appendStreamingDelta(localId, partID, delta)
         }
       },
@@ -60,15 +73,23 @@ export function ChatView() {
         const kiloSessionId = info.sessionID
         if (!kiloSessionId) return
 
+        if (info.role === 'user') {
+          ignoredMessageIDs.add(info.id)
+          return
+        }
+
         const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
         if (!localId) return
 
         const streaming = useAppStore.getState().streamingMessage[localId]
-        if (streaming) {
+        if (streaming && (streaming.messageID.startsWith('pending-') || streaming.messageID === info.id)) {
+          if (streaming.messageID.startsWith('pending-')) {
+            updateStreamingMessageID(localId, info.id)
+          }
           useAppStore.setState((state) => ({
             streamingMessage: {
               ...state.streamingMessage,
-              [localId]: { ...streaming, info },
+              [localId]: { ...state.streamingMessage[localId], info },
             },
           }))
         }
@@ -164,7 +185,10 @@ export function ChatView() {
 
       // Send prompt async — all updates come through SSE
       try {
-        await Kilo.promptAsync(kiloId!, content, model)
+        const kiloMessageId = await Kilo.promptAsync(kiloId!, content, model)
+        if (kiloMessageId) {
+          ignoredMessageIDs.add(kiloMessageId)
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
@@ -204,13 +228,13 @@ export function ChatView() {
 
   if (!activeSessionId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[var(--color-bg)]">
+      <div className="flex-1 flex items-center justify-center bg-(--color-bg)">
         <div className="text-center max-w-md space-y-5">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--color-surface-secondary)] flex items-center justify-center">
-            <Cpu size={28} className="text-[var(--color-text-tertiary)]" />
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-(--color-surface-secondary) flex items-center justify-center">
+            <Cpu size={28} className="text-(--color-text-tertiary)" />
           </div>
           <h2 className="text-xl font-semibold">Welcome to Snotra</h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">
+          <p className="text-sm text-(--color-text-secondary)">
             Start a new conversation to begin chatting with AI
           </p>
           <ServerStatus online={serverOnline} />
@@ -220,10 +244,10 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-[var(--color-bg)] h-full">
+    <div className="flex-1 flex flex-col bg-transparent h-full">
       {/* Offline status bar */}
       {!serverOnline && (
-        <div className="px-4 py-1.5 text-xs flex items-center gap-2 border-b bg-[var(--color-error)]/10 text-[var(--color-error)] border-[var(--color-error)]/20">
+        <div className="mx-6 mt-5 rounded-xl px-4 py-2 text-xs flex items-center gap-2 bg-(--color-error)/10 text-(--color-error) border border-(--color-error)/20">
           <WifiOff size={12} />
           Kilo offline
         </div>
@@ -231,14 +255,20 @@ export function ChatView() {
 
       {/* Messages or hero empty state */}
       {isEmpty ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-4">
-          <div className="text-center space-y-4 mb-8">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-[var(--color-surface-secondary)] flex items-center justify-center">
-              <Cpu size={24} className="text-[var(--color-text-tertiary)]" />
+        <div className="flex-1 flex flex-col items-center justify-center px-8">
+          <div className="text-center space-y-4 mb-10">
+            <div className="w-16 h-16 mx-auto rounded-md bg-(--color-surface-secondary) border border-(--color-border) flex items-center justify-center shadow-sm">
+              <Cpu size={24} className="text-(--color-text-tertiary)" />
             </div>
-            <h2 className="text-xl font-semibold">How can I help?</h2>
+            <div className="space-y-2">
+              <p className="section-kicker">Snotra Workspace</p>
+              <h2 className="text-[32px] font-bold tracking-[-0.03em]">How can I help?</h2>
+              <p className="text-sm text-(--color-text-secondary) max-w-md mx-auto">
+                Ask questions, inspect files, and orchestrate tools from one calm workspace.
+              </p>
+            </div>
           </div>
-          <div className="w-full max-w-3xl">
+          <div className="w-full max-w-4xl">
             <ChatInput
               onSubmit={handleSubmit}
               onAbort={abort}
@@ -254,30 +284,34 @@ export function ChatView() {
 
           {/* Error Display */}
           {error && (
-            <div className="mx-4 mb-2 flex items-center gap-2 p-3 rounded-lg bg-[var(--color-error)]/10 text-[var(--color-error)] text-sm">
+            <div className="mx-8 mb-3 flex items-center gap-2 p-3 rounded-xl bg-(--color-error)/10 text-(--color-error) text-sm border border-(--color-error)/15">
               <span>{error}</span>
               <button
                 onClick={() => setError(null)}
-                className="ml-auto text-[var(--color-error)] hover:opacity-70 text-xs"
+                className="ml-auto text-(--color-error) hover:opacity-70 text-xs"
               >
                 Dismiss
               </button>
             </div>
           )}
 
-          {/* Input */}
-          <ChatInput
-            onSubmit={handleSubmit}
-            onAbort={abort}
-            isStreaming={isStreaming}
-            placeholder="Ask anything..."
-          />
+          {/* Input Area Wrapper */}
+          <div className="shrink-0 pt-3 relative z-10 before:absolute before:inset-x-0 before:-top-10 before:h-10 before:bg-linear-to-t before:from-(--color-surface) before:to-transparent">
+            {/* Input */}
+            <ChatInput
+              onSubmit={handleSubmit}
+              onAbort={abort}
+              isStreaming={isStreaming}
+              placeholder="Ask anything..."
+            />
 
-          {/* Model info */}
-          <div className="px-4 pb-2 text-[11px] text-[var(--color-text-tertiary)] text-center flex items-center justify-center gap-1">
-            <Cpu size={10} />
-            {providerConfigs[activeProvider]?.model || 'No model'} via{' '}
-            {providerList.find((p) => p.id === activeProvider)?.name || activeProvider}
+            {/* Model info */}
+            <div className="px-4 pb-5 text-[11px] text-(--color-text-tertiary) text-center flex items-center justify-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity">
+              <Cpu size={12} />
+              <span className="font-medium">{providerConfigs[activeProvider]?.model || 'No model'}</span>
+              <span className="mx-1 opacity-50">via</span>
+              <span className="font-bold">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
+            </div>
           </div>
         </>
       )}
@@ -290,8 +324,8 @@ function ServerStatus({ online }: { online: boolean }) {
     <div
       className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs ${
         online
-          ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
-          : 'bg-[var(--color-error)]/10 text-[var(--color-error)]'
+          ? 'bg-(--color-success)/10 text-(--color-success)'
+          : 'bg-(--color-error)/10 text-(--color-error)'
       }`}
     >
       {online ? <Wifi size={12} /> : <WifiOff size={12} />}

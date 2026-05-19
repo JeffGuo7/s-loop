@@ -2,7 +2,6 @@ import { useRef } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { useAppStore } from '../../stores'
 import { MessageItem } from './MessageItem'
-import type { TextPart } from '../../types'
 
 interface MessageListProps {
   sessionId: string
@@ -31,31 +30,21 @@ export function MessageList({ sessionId }: MessageListProps) {
   }
 
   return (
-    <div className="flex-1 overflow-hidden">
+    <div className="flex-1 overflow-hidden pt-4">
       <Virtuoso
         ref={virtuosoRef}
         data={allMessages}
         followOutput="smooth"
         alignToBottom
         className="flex-1 h-full chat-scroll-area"
+        components={{
+          Footer: () => <div className="h-10" />
+        }}
         itemContent={(index, message) => {
-          // Find the most recent user message before this one
-          let previousUserText = ''
-          for (let i = index - 1; i >= 0; i--) {
-            const prev = allMessages[i]
-            if (prev.info.role === 'user') {
-              previousUserText = prev.parts
-                .filter((p): p is TextPart => p.type === 'text')
-                .map((p) => p.text)
-                .join('\n')
-              break
-            }
-          }
           return (
-            <div className="mx-auto max-w-[var(--chat-max-width)] px-2">
+            <div className="mx-auto max-w-(--chat-max-width) px-8">
               <MessageItem
                 message={message}
-                previousUserText={previousUserText}
                 isStreaming={
                   streamingMessage?.isStreaming &&
                   index === allMessages.length - 1 &&

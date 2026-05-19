@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
+import { ChevronRight } from 'lucide-react'
 
 interface CollapsibleProps {
   header: ReactNode
@@ -20,6 +21,10 @@ export function Collapsible({
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined)
 
   useEffect(() => {
+    setExpanded(defaultExpanded)
+  }, [defaultExpanded])
+
+  useEffect(() => {
     if (!contentRef.current) return
     const observer = new ResizeObserver(([entry]) => {
       setContentHeight(entry.contentRect.height)
@@ -37,18 +42,17 @@ export function Collapsible({
   }, [onToggle])
 
   return (
-    <div className={`border border-[var(--color-border)]/50 rounded-lg overflow-hidden ${className}`}>
+    <div className={`border border-(--color-border) rounded-xl overflow-hidden transition-colors hover:border-(--color-border-hover) ${className}`}>
       <button
         onClick={handleToggle}
-        className="w-full flex items-center gap-2 px-3 py-2.5 bg-[var(--color-surface-secondary)] hover:bg-[var(--color-border)]/30 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-3 bg-(--color-surface-secondary)/30 hover:bg-(--color-surface-secondary)/80 transition-colors text-left"
       >
-        <span
-          className="text-[var(--color-text-secondary)] transition-transform duration-200 inline-block"
+        <ChevronRight
+          size={16}
+          className="text-(--color-text-tertiary) transition-transform duration-300"
           style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-        >
-          ▶
-        </span>
-        <span className="text-sm flex-1">{header}</span>
+        />
+        <span className="text-sm flex-1 min-w-0">{header}</span>
       </button>
       <div
         style={{
@@ -57,7 +61,7 @@ export function Collapsible({
           transition: 'max-height var(--motion-collapse)',
         }}
       >
-        <div ref={contentRef} className="px-3 py-2.5 border-t border-[var(--color-border)]/30">
+        <div ref={contentRef} className="px-4 py-4 border-t border-(--color-border-light) bg-(--color-surface)/50">
           {children}
         </div>
       </div>

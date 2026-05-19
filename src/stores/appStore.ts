@@ -212,12 +212,17 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           const streaming = state.streamingMessage[sessionId]
           if (!streaming) return state
+          
+          // STRICT CHECK: Ensure part belongs to the streaming message
+          // Only enforce this if we have locked onto a non-pending messageID
+          if (!streaming.messageID.startsWith('pending-') && part.messageID !== streaming.messageID) {
+            return state
+          }
+
           const parts = [...streaming.parts]
           const idx = parts.findIndex((p) => p.id === partID)
           if (idx >= 0) {
             const existing = parts[idx]
-            // For text/reasoning parts, keep local text if it's longer
-            // (deltas via appendStreamingDelta may have advanced beyond the server snapshot)
             if (
               (existing.type === 'text' || existing.type === 'reasoning') &&
               (part.type === 'text' || part.type === 'reasoning') &&
@@ -243,6 +248,7 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           const streaming = state.streamingMessage[sessionId]
           if (!streaming) return state
+          
           const parts = streaming.parts.map((p) => {
             if (p.id !== partID) return p
             if (p.type === 'text' || p.type === 'reasoning') {

@@ -18,7 +18,7 @@ const PROSE_BASE = 'prose max-w-none break-words'
 const PROSE_VARIANTS = {
   default: 'prose-sm',
   document: 'prose-base leading-relaxed',
-  compact: 'prose-sm text-[var(--color-text-secondary)]',
+  compact: 'prose-sm text-(--color-text-secondary)',
 }
 
 function CodeBlockComponent({ lang, code }: CodeBlock) {
@@ -55,7 +55,7 @@ function CodeBlockComponent({ lang, code }: CodeBlock) {
         <span>{lang || 'text'}</span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] hover:bg-[var(--color-border)] transition-colors"
+          className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] hover:bg-(--color-border) transition-colors"
         >
           {copied ? '✓ Copied' : 'Copy'}
         </button>
@@ -74,7 +74,7 @@ function CodeBlockComponent({ lang, code }: CodeBlock) {
 
 function InlineCode({ children }: { children: string }) {
   return (
-    <code className="bg-[var(--color-surface-secondary)] text-[var(--color-accent)] px-1.5 py-0.5 rounded text-[0.875em] font-mono">
+    <code className="bg-(--color-surface-secondary) text-(--color-accent) px-1.5 py-0.5 rounded text-[0.875em] font-mono">
       {children}
     </code>
   )
@@ -98,10 +98,9 @@ const customRenderer = {
     return `<!--INLINE_CODE:${text}-->`
   },
   image({ href, text }: { href: string; text: string }) {
-    // Don't render images — show as a text reference instead.
-    // Prevents broken local-path images (C:\...) and unwanted external images.
-    const label = text || href || 'image'
-    return `[img: ${label}](${href})`
+    // Let images render normally, but add sensible max dimensions to prevent breaking layout
+    const label = text || 'image'
+    return `<img src="${href}" alt="${label}" class="max-w-full h-auto max-h-[400px] rounded-lg border border-(--color-border) shadow-sm object-contain my-4" />`
   },
 }
 
@@ -145,7 +144,7 @@ function parseRenderedContent(html: string, keyPrefix: string): ReactNode[] {
   for (const rep of allReplacements) {
     if (rep.index > lastIndex) {
       const segment = html.slice(lastIndex, rep.index)
-      const sanitized = DOMPurify.sanitize(segment)
+      const sanitized = DOMPurify.sanitize(segment, { ADD_TAGS: ['img'], ADD_ATTR: ['target'] })
       parts.push(
         <span
           key={`${keyPrefix}-t-${lastIndex}`}
@@ -158,7 +157,7 @@ function parseRenderedContent(html: string, keyPrefix: string): ReactNode[] {
   }
 
   if (lastIndex < html.length) {
-    const sanitized = DOMPurify.sanitize(html.slice(lastIndex))
+    const sanitized = DOMPurify.sanitize(html.slice(lastIndex), { ADD_TAGS: ['img'], ADD_ATTR: ['target'] })
     parts.push(
       <span
         key={`${keyPrefix}-t-end`}
