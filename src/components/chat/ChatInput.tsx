@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Square, X, File, Paperclip } from 'lucide-react'
+import { TextField, TextArea } from "@heroui/react"
 import { Button, Card } from '../ui'
 
 interface FileAttachment {
@@ -27,19 +28,7 @@ export function ChatInput({
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const composingRef = useRef(false)
-
-  const autoResize = useCallback(() => {
-    const el = textareaRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px'
-  }, [])
-
-  useEffect(() => {
-    autoResize()
-  }, [input, autoResize])
 
   const removeAttachment = useCallback((index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index))
@@ -124,9 +113,6 @@ export function ChatInput({
     onSubmit(parts.join('\n'))
     setInput('')
     setAttachments([])
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
   }, [input, attachments, onSubmit])
 
   const handleKeyDown = useCallback(
@@ -157,14 +143,25 @@ export function ChatInput({
     composingRef.current = false
   }, [])
 
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-resize logic
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 300)}px`
+    }
+  }, [input])
+
   const isHero = variant === 'hero'
 
   return (
     <div
       className={
         isHero
-          ? 'mx-auto max-w-4xl w-full px-6'
-          : 'mx-auto w-full max-w-(--chat-max-width) px-8 pb-10'
+          ? 'mx-auto max-w-3xl w-full px-6'
+          : 'mx-auto w-full max-w-(--chat-max-width) px-12 pb-10'
       }
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -173,7 +170,7 @@ export function ChatInput({
       <form onSubmit={handleSubmit}>
         <Card
           variant={isHero ? 'glass' : 'default'}
-          className={`relative group p-1 transition-all duration-500 border border-(--color-border-light) ${
+          className={`relative group p-1.5 transition-all duration-500 border border-(--color-border-light) ${
             isHero ? 'shadow-2xl' : 'shadow-lg hover:shadow-xl'
           } ${isDragOver ? 'ring-2 ring-(--color-accent) ring-offset-4 ring-offset-(--color-bg)' : ''}`}
         >
@@ -188,9 +185,9 @@ export function ChatInput({
             </div>
           )}
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col">
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2.5 px-4 pt-4 pb-2 animate-fade-in">
+              <div className="flex flex-wrap gap-2.5 px-4 pt-4 pb-1 animate-fade-in">
                 {attachments.map((att, idx) => (
                   <div
                     key={idx}
@@ -211,23 +208,27 @@ export function ChatInput({
               </div>
             )}
 
-            <div className="flex items-end gap-2 px-2">
-              <div className="flex-1 px-4">
-                <textarea
-                  ref={textareaRef}
+            <div className="flex items-end px-1">
+              <div className="flex-1">
+                <TextField
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onCompositionStart={handleCompositionStart}
-                  onCompositionEnd={handleCompositionEnd}
-                  placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
-                  disabled={disabled || isStreaming}
-                  rows={1}
-                  className="w-full resize-none border-none bg-transparent py-5 text-[15px] font-medium leading-relaxed min-h-[64px] max-h-[450px] custom-scrollbar text-(--color-text) placeholder-(--color-text-quaternary)/50 focus:outline-none focus:ring-0"
-                />
+                  onChange={setInput}
+                  isDisabled={disabled || isStreaming}
+                  className="w-full"
+                >
+                  <TextArea
+                    ref={textareaRef}
+                    onKeyDown={handleKeyDown}
+                    onCompositionStart={handleCompositionStart}
+                    onCompositionEnd={handleCompositionEnd}
+                    placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
+                    className="w-full bg-transparent hover:bg-transparent focus:outline-none shadow-none border-none p-4 min-h-[56px] text-[15px] font-medium leading-relaxed custom-scrollbar text-(--color-text) placeholder:text-(--color-text-quaternary)/40 resize-none"
+                    rows={1}
+                  />
+                </TextField>
               </div>
 
-              <div className="flex items-center gap-2 p-2.5">
+              <div className="flex items-center p-2">
                 {isStreaming ? (
                   <Button
                     type="button"
@@ -260,7 +261,7 @@ export function ChatInput({
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-6 pb-4 pt-1 text-[10px] font-bold tracking-[0.1em] uppercase transition-all duration-300">
+            <div className="flex items-center justify-between px-6 pb-4 pt-0 text-[10px] font-bold tracking-[0.1em] uppercase transition-all duration-300">
               <div className={`flex items-center gap-4 transition-opacity ${isHero ? 'opacity-40' : 'opacity-30 group-focus-within:opacity-60'}`}>
                 <div className="flex items-center gap-1.5">
                   <span className="w-1 h-1 rounded-full bg-(--color-accent)" />

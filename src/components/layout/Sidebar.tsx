@@ -13,8 +13,8 @@ import {
   Clock,
   type LucideIcon,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Listbox, ListboxItem } from "@heroui/react"
+import { motion } from 'framer-motion'
+import { ListBox, ListBoxItem } from "@heroui/react"
 import { useAppStore, usePetStore, useTelegramStore } from '../../stores'
 import { Button } from '../ui'
 import type { Page } from '../../App'
@@ -138,56 +138,55 @@ export function Sidebar({
 
       {/* Session list */}
       <div className="flex-1 overflow-y-auto px-3 pb-3 pt-2 scrollbar-subtle">
-        <Listbox
+        <ListBox
           aria-label="Chat Sessions"
-          variant="flat"
+          items={sessions}
           onAction={(key) => handleSelect(key as string)}
           selectedKeys={activeSessionId ? [activeSessionId] : []}
-          classNames={{
-            base: "p-0",
-            list: "gap-1",
-          }}
+          className="p-0"
         >
-          {sessions.map((session) => {
+          {(session) => {
             const isActive = session.id === activeSessionId
             const title = session.title || 'New Chat'
 
             return (
-              <ListboxItem
+              <ListBoxItem
                 key={session.id}
+                id={session.id}
                 textValue={title}
                 className={`group relative h-12 rounded-xl transition-all duration-300 ${
                   isActive 
                     ? 'bg-(--color-accent-muted) text-(--color-accent)' 
                     : 'text-(--color-text-secondary) hover:bg-(--color-surface-secondary)'
                 }`}
-                startContent={
+              >
+                <div className="flex items-center gap-3 w-full">
                   <MessageSquare
                     size={16}
                     strokeWidth={isActive ? 2.5 : 1.5}
                     className={isActive ? 'text-(--color-accent)' : 'text-(--color-text-quaternary) group-hover:text-(--color-text-secondary)'}
                   />
-                }
-                endContent={
-                  !collapsed && (
+                  {!collapsed ? (
+                    <span className={`text-sm truncate tracking-tight flex-1 ${isActive ? 'font-bold' : 'font-medium'}`}>
+                      {title}
+                    </span>
+                  ) : null}
+                  {!collapsed ? (
                     <button
-                      onClick={(e) => handleDelete(e, session.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(e, session.id);
+                      }}
                       className="p-1.5 rounded-lg text-(--color-text-quaternary) hover:text-(--color-error) hover:bg-(--color-error-bg) opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-100"
                     >
                       <Trash2 size={13} />
                     </button>
-                  )
-                }
-              >
-                {!collapsed && (
-                  <span className={`text-sm truncate tracking-tight ${isActive ? 'font-bold' : 'font-medium'}`}>
-                    {title}
-                  </span>
-                )}
-              </ListboxItem>
+                  ) : null}
+                </div>
+              </ListBoxItem>
             )
-          })}
-        </Listbox>
+          }}
+        </ListBox>
       </div>
 
       {/* Footer */}

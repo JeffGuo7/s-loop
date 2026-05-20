@@ -3,7 +3,7 @@ import { TextPartView, ReasoningView, ToolPartView, StepView } from './parts'
 import { MessageActionBar } from './shared/MessageActionBar'
 import { StreamingIndicator } from './shared/StreamingIndicator'
 import { shouldUseDocumentLayout } from './shared/Markdown'
-import { User, Cpu, Sparkles } from 'lucide-react'
+import { User, Cpu, Bot } from 'lucide-react'
 import { Card } from '../ui'
 import type { KiloMessage, MessagePart, TextPart, ToolPart, StepStartPart, StepFinishPart, FilePart } from '../../types'
 
@@ -43,12 +43,12 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
 
           <div className="flex flex-col items-end gap-2 min-w-0">
             <div
-              className="bg-(--color-accent) text-(--color-accent-foreground) px-5 py-4 text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word shadow-md rounded-(--radius-user-msg) ring-1 ring-white/10"
+              className="bg-(--color-accent) text-(--color-accent-foreground) px-5 py-2 text-[15px] leading-normal wrap-break-word shadow-md rounded-(--radius-user-msg) ring-1 ring-white/10"
             >
               {message.parts.map((part, idx) => (
                 <MessagePartRenderer
                   key={part.id || idx}
-                  part={part}
+                  part={part.type === 'text' ? { ...part, text: part.text.trim() } : part}
                   isStreaming={false}
                 />
               ))}
@@ -78,7 +78,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
         {/* Avatar */}
         <div className="shrink-0 mt-1">
           <div className="w-9 h-9 rounded-xl bg-(--color-surface) border border-(--color-border) flex items-center justify-center text-(--color-accent) shadow-sm ring-2 ring-black/[0.02]">
-            <Sparkles size={18} strokeWidth={2.5} className="animate-spin-slow" />
+            <Bot size={18} strokeWidth={2.5} />
           </div>
         </div>
 

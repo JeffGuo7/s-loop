@@ -173,7 +173,7 @@ export function Markdown({ children, className = '', variant = 'default' }: Mark
   const isDocument = variant === 'document' || (variant === 'default' && shouldUseDocumentLayout(children))
 
   const elements = useMemo(() => {
-    const html = marked.parse(children) as string
+    const html = (marked.parse(children) as string).trim()
     return parseRenderedContent(html, 'md')
   }, [children])
 

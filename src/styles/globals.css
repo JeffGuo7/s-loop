@@ -47,8 +47,9 @@
 
   /* ── Layout ── */
   --sidebar-width: 280px;
-  --sidebar-collapsed: 80px;
-  --chat-max-width: 1000px;
+  --sidebar-collapsed: 72px;
+  --chat-max-width: 880px;
+  --workspace-panel-width: 320px;
   --chat-max-content: 720px;
 
   /* ── Radius ── */
@@ -820,9 +821,17 @@ button {
   margin-bottom: 0.4em;
 }
 .prose-sm p {
-  margin-top: 0.8em;
-  margin-bottom: 0.8em;
-  line-height: 1.7;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.6;
+}
+.prose-sm p:first-child,
+.prose-sm *:first-child > p:first-child {
+  margin-top: 0 !important;
+}
+.prose-sm p:last-child,
+.prose-sm *:last-child > p:last-child {
+  margin-bottom: 0 !important;
 }
 .prose-sm strong {
   font-weight: 600;
