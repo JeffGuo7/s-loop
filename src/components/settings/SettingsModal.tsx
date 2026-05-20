@@ -5,6 +5,7 @@ import type { ProviderConfig } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
 import { Kilo } from '../../utils'
+import { Input } from '../ui'
 import { ScrollShadow, Select, SelectTrigger, SelectValue, SelectPopover, ListBox, ListBoxItem } from "@heroui/react"
 
 interface SettingsModalProps {
