@@ -1,5 +1,6 @@
 import { useTaskStore } from '../../stores';
 import { Plus, Clock, Trash2, Play, Pause, ChevronRight, RefreshCw } from 'lucide-react';
+import { MagicButton } from '../ui';
 import type { ScheduledTask } from '../../types/task';
 
 interface TaskListProps {
@@ -63,13 +64,13 @@ export function TaskList({ onCreateTask }: TaskListProps) {
             Automate AI tasks to run at specific times
           </p>
         </div>
-        <button
+        <MagicButton
           onClick={onCreateTask}
-          className="btn btn-primary btn-lg gap-2"
+          className="gap-2"
         >
           <Plus size={18} />
           New Task
-        </button>
+        </MagicButton>
       </div>
 
       {/* Task List */}

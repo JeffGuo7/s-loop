@@ -16,7 +16,7 @@ import {
 import { motion } from 'framer-motion'
 import { ListBox, ListBoxItem } from "@heroui/react"
 import { useAppStore, usePetStore, useTelegramStore } from '../../stores'
-import { Button } from '../ui'
+import { MagicButton } from '../ui'
 import type { Page } from '../../App'
 
 interface SidebarProps {
@@ -84,15 +84,14 @@ export function Sidebar({
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
             >
-              <Button
+              <MagicButton
                 onClick={handleNewChat}
-                variant="primary"
                 className="w-full gap-2 rounded-xl shadow-lg shadow-accent/15 py-6 group relative overflow-hidden"
               >
                 <div className="absolute inset-0 bg-linear-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <Plus size={18} strokeWidth={2.5} />
                 <span className="font-bold tracking-tight">New Chat</span>
-              </Button>
+              </MagicButton>
             </motion.div>
             
             <div className="mt-8 flex items-center justify-between px-1">
@@ -115,15 +114,12 @@ export function Sidebar({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <Button
+              <MagicButton
                 onClick={handleNewChat}
-                variant="primary"
-                size="icon"
                 className="w-12 h-12 rounded-xl shadow-lg shadow-accent/15"
-                title="New Chat"
               >
                 <Plus size={22} strokeWidth={2.5} />
-              </Button>
+              </MagicButton>
             </motion.div>
             <button
               onClick={onToggleCollapse}

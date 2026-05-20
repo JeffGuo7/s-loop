@@ -12,8 +12,7 @@ function isTauri(): boolean {
 }
 
 export function WorkspacePanel() {
-  const { workspaceDir, setWorkspaceDir } = useAppStore()
-  const [collapsed, setCollapsed] = useState(false)
+  const { workspaceDir, setWorkspaceDir, workspaceCollapsed: collapsed, toggleWorkspace } = useAppStore()
   const [showInput, setShowInput] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const hiddenInputRef = useRef<HTMLInputElement>(null)
@@ -94,9 +93,12 @@ export function WorkspacePanel() {
 
   if (collapsed) {
     return (
-      <div className="w-12 border-l border-(--color-border) flex flex-col items-center pt-6 bg-(--color-surface)/50">
+      <div 
+        className="flex flex-col items-center pt-6 bg-(--color-surface)/50 border-l border-(--color-border)"
+        style={{ width: 'var(--workspace-panel-collapsed)' }}
+      >
         <button
-          onClick={() => setCollapsed(false)}
+          onClick={toggleWorkspace}
           className="p-2.5 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
           title="Show workspace panel"
         >
@@ -107,7 +109,10 @@ export function WorkspacePanel() {
   }
 
   return (
-    <div className="w-80 border-l border-(--color-border) flex flex-col overflow-hidden shrink-0 animate-slide-in-right bg-(--color-surface)/30 backdrop-blur-xl">
+    <div 
+      className="border-l border-(--color-border) flex flex-col overflow-hidden shrink-0 animate-slide-in-right bg-(--color-surface)/30 backdrop-blur-xl"
+      style={{ width: 'var(--workspace-panel-width)' }}
+    >
       {/* Hidden file input for browser fallback */}
       <input
         ref={hiddenInputRef}
@@ -126,7 +131,7 @@ export function WorkspacePanel() {
           Workspace
         </div>
         <button
-          onClick={() => setCollapsed(true)}
+          onClick={toggleWorkspace}
           className="p-1.5 rounded-lg hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
           title="Collapse workspace panel"
         >

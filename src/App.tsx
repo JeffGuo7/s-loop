@@ -13,11 +13,17 @@ import { Kilo } from './utils'
 export type Page = 'chat' | 'tasks'
 
 function App() {
-  const { theme, sidebarCollapsed, toggleSidebar } = useAppStore()
+  const { theme, sidebarCollapsed, workspaceCollapsed, toggleSidebar } = useAppStore()
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
   const [showHatchModal, setShowHatchModal] = useState(false)
   const [showTelegramModal, setShowTelegramModal] = useState(false)
+
+  // Calculate the offset to center content in the window
+  // (Workspace Panel Width - Sidebar Width) / 2
+  const sWidth = sidebarCollapsed ? 72 : 280
+  const wWidth = workspaceCollapsed ? 48 : 320
+  const centeringOffset = (wWidth - sWidth) / 2
 
   useTaskScheduler()
 
@@ -64,7 +70,10 @@ function App() {
       />
 
       <main className="flex-1 flex min-w-0 relative">
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div 
+          className="flex-1 flex flex-col min-w-0 overflow-hidden transition-transform duration-500 ease-[var(--ease-out)]"
+          style={{ transform: `translateX(${centeringOffset}px)` }}
+        >
           {currentPage === 'chat' && <ChatView />}
           {currentPage === 'tasks' && <TasksPage />}
         </div>

@@ -293,7 +293,7 @@ export function ChatView() {
               </p>
             </div>
           </div>
-          <div className="w-full max-w-4xl relative z-10">
+          <div className="w-full max-w-(--chat-max-width) relative z-10">
             <ChatInput
               onSubmit={handleSubmit}
               onAbort={abort}

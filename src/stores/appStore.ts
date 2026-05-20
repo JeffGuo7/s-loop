@@ -24,6 +24,7 @@ interface AppState {
   // UI
   theme: 'light' | 'dark'
   sidebarCollapsed: boolean
+  workspaceCollapsed: boolean
   workspaceDir: string | null
 
   // Companion (pet)
@@ -57,6 +58,7 @@ interface AppState {
   // Actions - UI
   setTheme: (theme: 'light' | 'dark') => void
   toggleSidebar: () => void
+  toggleWorkspace: () => void
   setWorkspaceDir: (dir: string | null) => void
 
   // Actions - Companion
@@ -84,6 +86,7 @@ export const useAppStore = create<AppState>()(
 
       theme: 'light',
       sidebarCollapsed: false,
+      workspaceCollapsed: false,
       workspaceDir: null,
       companion: null,
 
@@ -354,6 +357,7 @@ export const useAppStore = create<AppState>()(
       },
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      toggleWorkspace: () => set((state) => ({ workspaceCollapsed: !state.workspaceCollapsed })),
       setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
 
       // Companion actions

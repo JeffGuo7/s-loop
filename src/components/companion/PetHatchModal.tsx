@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { usePetStore } from '../../stores';
 import { generatePetAppearance, getSpeciesEmoji, getHatEmoji } from '../../utils';
 import { Sparkles, Heart } from 'lucide-react';
+import { MagicButton } from '../ui';
 
 interface PetHatchModalProps {
   onClose: () => void;
@@ -182,13 +183,13 @@ export function PetHatchModal({ onClose }: PetHatchModalProps) {
                   <Sparkles size={16} />
                   Reroll
                 </button>
-                <button
+                <MagicButton
                   onClick={handleHatch}
-                  className="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity flex items-center gap-1"
+                  className="flex items-center gap-1"
                 >
                   <Heart size={16} />
                   Hatch!
-                </button>
+                </MagicButton>
               </div>
             </div>
           </div>

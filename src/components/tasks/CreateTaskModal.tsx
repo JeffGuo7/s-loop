@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTaskStore, useAppStore } from '../../stores';
 import { X, Clock, FolderOpen, Cpu, Shield } from 'lucide-react';
+import { MagicButton } from '../ui';
 import type { TaskFrequency } from '../../types/task';
 
 interface CreateTaskModalProps {
@@ -199,13 +200,12 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
           >
             Cancel
           </button>
-          <button
+          <MagicButton
             onClick={handleSubmit}
-            disabled={!name.trim() || !prompt.trim() || !scheduledTime}
-            className="btn btn-primary"
+            isDisabled={!name.trim() || !prompt.trim() || !scheduledTime}
           >
             Create Task
-          </button>
+          </MagicButton>
         </div>
       </div>
     </div>
