@@ -112,8 +112,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         {/* Settings Sidebar */}
         <aside className="w-64 bg-(--color-surface) border-r border-(--color-border) flex flex-col shrink-0">
           <div className="px-8 pt-9 pb-6">
-            <h2 className="text-xl font-bold text-(--color-text) tracking-tight ml-2.5">Settings</h2>
-            <p className="text-[10px] text-(--color-text-tertiary) mt-1.5 ml-0.5 font-semibold uppercase tracking-[0.15em]">Intelligence Hub</p>
+            <h2 className="text-xl font-bold text-(--color-text) tracking-tight">Settings</h2>
+            <p className="text-[10px] text-(--color-text-tertiary) mt-1.5 font-semibold uppercase tracking-[0.15em]">Intelligence Hub</p>
           </div>
 
           <nav className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-subtle">
@@ -250,7 +250,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <div className="space-y-7">
                         <div className="space-y-2.5">
                           <div className="flex items-center justify-between">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary)">
+                            <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) ml-0.5">
                               API Key {envVar && <span className="opacity-40 lowercase ml-1 font-mono">({envVar})</span>}
                             </label>
                           </div>
@@ -273,7 +273,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         </div>
 
                         <div className="space-y-2.5">
-                          <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary)">Model</label>
+                          <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) ml-0.5">Model</label>
                           {modelKeys.length > 0 ? (
                             <Select
                               selectedKey={cfg.model}
@@ -306,7 +306,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         </div>
 
                         <div className="space-y-2.5">
-                          <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary)">Base URL (Optional)</label>
+                          <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) ml-0.5">Base URL (Optional)</label>
                           <input
                             value={cfg.baseUrl || ''}
                             onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
