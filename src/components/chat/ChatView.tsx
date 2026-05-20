@@ -248,15 +248,20 @@ export function ChatView() {
 
   if (!activeSessionId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-(--color-bg)">
-        <div className="text-center max-w-md space-y-5">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-(--color-surface-secondary) flex items-center justify-center">
-            <Cpu size={28} className="text-(--color-text-tertiary)" />
+      <div className="flex-1 flex items-center justify-center bg-(--color-bg) relative overflow-hidden">
+        {/* Ambient glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-(--color-accent)/3 rounded-full blur-[100px] pointer-events-none" />
+
+        <div className="text-center space-y-8 relative z-10 px-8">
+          <div className="w-24 h-24 mx-auto rounded-3xl bg-(--color-surface) border border-(--color-border-light) flex items-center justify-center shadow-lg shadow-(--color-accent)/5">
+            <Cpu size={40} className="text-(--color-accent)" />
           </div>
-          <h2 className="text-xl font-semibold">Welcome to Snotra</h2>
-          <p className="text-sm text-(--color-text-secondary)">
-            Start a new conversation to begin chatting with AI
-          </p>
+          <div className="space-y-3">
+            <h2 className="text-[28px] font-bold tracking-[-0.03em] text-(--color-text)">Welcome to Snotra</h2>
+            <p className="text-sm text-(--color-text-tertiary) max-w-sm mx-auto leading-relaxed">
+              Start a new conversation to begin chatting with AI
+            </p>
+          </div>
           <ServerStatus online={serverOnline} />
         </div>
       </div>
@@ -276,23 +281,27 @@ export function ChatView() {
       {/* Messages or hero empty state */}
       {isEmpty ? (
         <div className="flex-1 flex flex-col items-center justify-center px-8 relative overflow-hidden">
-          {/* Subtle background element */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
-          
-          <div className="text-center space-y-6 mb-12 relative z-10">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-(--color-surface-secondary)/80 border border-(--color-border-light) flex items-center justify-center shadow-2xl shadow-accent/5 backdrop-blur-xl">
-              <Cpu size={32} className="text-(--color-accent)" />
+          {/* Ambient glow */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-(--color-accent)/3 rounded-full blur-[120px] pointer-events-none" />
+
+          <div className="text-center relative z-10">
+            {/* Label ABOVE icon */}
+            <p className="section-kicker tracking-[0.3em] mb-6">Snotra Workspace</p>
+
+            {/* Centered icon */}
+            <div className="w-24 h-24 mx-auto rounded-3xl bg-(--color-surface) border border-(--color-border-light) flex items-center justify-center shadow-lg shadow-(--color-accent)/5 mb-8">
+              <Cpu size={40} className="text-(--color-accent)" />
             </div>
-            <div className="space-y-3">
-              <p className="section-kicker tracking-[0.3em]">Snotra Workspace</p>
-              <h2 className="text-[42px] font-black tracking-[-0.04em] text-(--color-text) leading-tight">
-                How can I help?
-              </h2>
-              <p className="text-[15px] text-(--color-text-tertiary) max-w-lg mx-auto leading-relaxed">
-                Seamlessly orchestrate your workspace, files, and AI agents from one minimalist interface.
-              </p>
-            </div>
+
+            {/* Heading below icon */}
+            <h2 className="text-[40px] font-bold tracking-[-0.04em] text-(--color-text) leading-tight mb-3">
+              How can I help?
+            </h2>
+            <p className="text-[15px] text-(--color-text-tertiary) max-w-lg mx-auto leading-relaxed mb-14">
+              Seamlessly orchestrate your workspace, files, and AI agents from one minimalist interface.
+            </p>
           </div>
+
           <div className="w-full max-w-(--chat-max-width) relative z-10">
             <ChatInput
               onSubmit={handleSubmit}
