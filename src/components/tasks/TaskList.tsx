@@ -1,5 +1,5 @@
 import { useTaskStore } from '../../stores';
-import { Plus, Clock, Trash2, Play, Pause, ChevronRight, RefreshCw } from 'lucide-react';
+import { Plus, Clock, Trash2, Play, Pause, RefreshCw } from 'lucide-react';
 import { MagicButton } from '../ui';
 import type { ScheduledTask } from '../../types/task';
 
@@ -54,120 +54,133 @@ export function TaskList({ onCreateTask }: TaskListProps) {
   };
 
   return (
-    <div className="p-8">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <p className="section-kicker mb-2">Automation Desk</p>
-          <h1 className="section-heading">Scheduled Tasks</h1>
-          <p className="text-sm text-(--color-text-secondary) mt-2">
-            Automate AI tasks to run at specific times
-          </p>
+      <div className="shrink-0 px-8 pt-8 pb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="section-kicker mb-2">Automation Desk</p>
+            <h1 className="section-heading">Scheduled Tasks</h1>
+            <p className="text-sm text-(--color-text-secondary) mt-2">
+              Automate AI tasks to run at specific times
+            </p>
+          </div>
+          <MagicButton
+            onClick={onCreateTask}
+            className="gap-2 shrink-0"
+          >
+            <Plus size={18} />
+            New Task
+          </MagicButton>
         </div>
-        <MagicButton
-          onClick={onCreateTask}
-          className="gap-2"
-        >
-          <Plus size={18} />
-          New Task
-        </MagicButton>
       </div>
 
       {/* Task List */}
-      {tasks.length === 0 ? (
-        <div className="surface-panel-subtle text-center py-20 px-6">
-          <Clock size={48} className="mx-auto mb-5 text-(--color-text-secondary) opacity-50" />
-          <h3 className="text-lg font-semibold mb-2">No scheduled tasks</h3>
-          <p className="text-sm text-(--color-text-secondary) mb-4">
-            Create your first task to automate AI workflows
-          </p>
-          <button
-            onClick={onCreateTask}
-            className="btn btn-secondary"
-          >
-            Create a task
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {tasks.map((task) => (
-            <div
-              key={task.id}
-              className={`
-                p-5 rounded-2xl border transition-all shadow-sm
-                ${task.enabled
-                  ? 'bg-(--color-surface) border-(--color-border)'
-                  : 'bg-(--color-surface-secondary) border-(--color-border) opacity-60'
-                }
-              `}
+      <div className="flex-1 overflow-y-auto px-8 pb-8">
+        {tasks.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center">
+            <div className="relative group mb-8">
+              <div className="absolute inset-0 bg-(--color-accent) opacity-[0.04] blur-3xl rounded-full scale-150" />
+              <div className="relative w-32 h-32 rounded-[40%_60%_55%_45%_/_50%_45%_55%_50%] bg-white/50 dark:bg-white/5 border border-(--color-border-light) flex items-center justify-center shadow-xl backdrop-blur-2xl overflow-hidden">
+                <Clock size={52} className="text-(--color-text-secondary) opacity-40" />
+              </div>
+            </div>
+            <h3 className="text-xl font-semibold mb-3 text-(--color-text)">No scheduled tasks</h3>
+            <p className="text-sm text-(--color-text-tertiary) mb-8 max-w-xs text-center leading-relaxed">
+              Create your first task to automate AI workflows and let Snotra handle the heavy lifting.
+            </p>
+            <button
+              onClick={onCreateTask}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-(--color-accent) text-(--color-accent-foreground) font-medium text-sm shadow-lg shadow-(--color-accent)/20 hover:shadow-xl hover:shadow-(--color-accent)/30 hover:-translate-y-0.5 transition-all"
             >
-              <div className="flex items-center gap-4">
-                {/* Enable/Disable Toggle */}
-                <button
-                  onClick={() => toggleTask(task.id)}
-                  className={`
-                    p-2.5 rounded-xl transition-colors
-                    ${task.enabled
-                      ? 'bg-(--color-accent)/10 text-(--color-accent)'
-                      : 'bg-(--color-surface-secondary) text-(--color-text-secondary)'
-                    }
-                  `}
-                >
-                  {task.enabled ? <Play size={18} /> : <Pause size={18} />}
-                </button>
+              <Plus size={18} />
+              Create a task
+            </button>
+          </div>
+        ) : (
+          <div className="max-w-4xl space-y-2">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                className={`
+                  group flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200
+                  ${task.enabled
+                    ? 'bg-(--color-surface) border-(--color-border) hover:border-(--color-border-hover) hover:shadow-md'
+                    : 'bg-(--color-surface-secondary) border-(--color-border) opacity-60 hover:opacity-80'
+                  }
+                `}
+              >
+                {/* Status Indicator Dot */}
+                <div className={`
+                  w-2.5 h-2.5 rounded-full shrink-0
+                  ${task.status === 'running' ? 'bg-(--color-accent) animate-pulse' : ''}
+                  ${task.status === 'completed' ? 'bg-(--color-success)' : ''}
+                  ${task.status === 'failed' ? 'bg-(--color-error)' : ''}
+                  ${task.status === 'pending' ? 'bg-(--color-text-tertiary)' : ''}
+                  ${task.status === 'cancelled' ? 'bg-(--color-text-quaternary)' : ''}
+                `} />
 
                 {/* Task Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium truncate">{task.name}</h3>
-                    <span className={`
-                      badge badge-accent
-                    `}>
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-semibold text-[15px] text-(--color-text) truncate">{task.name}</h3>
+                    <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] px-2.5 py-0.5 rounded-full bg-(--color-surface-secondary) border border-(--color-border-light) text-(--color-text-tertiary)">
                       {getFrequencyLabel(task)}
                     </span>
                   </div>
-                  <p className="text-sm text-(--color-text-secondary) truncate mt-1">
-                    {task.description || task.prompt.slice(0, 100)}
+                  <p className="text-sm text-(--color-text-secondary) truncate mt-1 leading-relaxed">
+                    {task.description || task.prompt.slice(0, 120)}
                   </p>
                 </div>
 
-                {/* Status & Next Run */}
-                <div className="text-right">
-                  <p className={`text-sm capitalize ${getStatusColor(task.status)}`}>
+                {/* Status & Time */}
+                <div className="text-right shrink-0 hidden sm:block">
+                  <p className={`text-sm font-medium capitalize ${getStatusColor(task.status)}`}>
                     {task.status}
                   </p>
-                  <p className="text-xs text-(--color-text-secondary) mt-1">
+                  <p className="text-xs text-(--color-text-tertiary) mt-0.5 whitespace-nowrap">
                     {formatNextRun(task.nextRun)}
                   </p>
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => toggleTask(task.id)}
+                    className={`
+                      p-2 rounded-xl transition-all duration-200
+                      ${task.enabled
+                        ? 'bg-(--color-accent)/10 text-(--color-accent) hover:bg-(--color-accent)/20'
+                        : 'bg-(--color-surface-secondary) text-(--color-text-secondary) hover:bg-(--color-surface)'
+                      }
+                    `}
+                  >
+                    {task.enabled ? <Play size={15} /> : <Pause size={15} />}
+                  </button>
                   <button
                     onClick={() => deleteTask(task.id)}
-                    className="p-2 rounded-lg hover:bg-(--color-surface-secondary) text-(--color-text-secondary) hover:text-(--color-error) transition-colors"
+                    className="p-2 rounded-xl hover:bg-(--color-error)/10 text-(--color-text-tertiary) hover:text-(--color-error) transition-all duration-200 opacity-0 group-hover:opacity-100"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={15} />
                   </button>
-                  <ChevronRight size={16} className="text-(--color-text-secondary)" />
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Notice */}
-      {tasks.length > 0 && (
-        <div className="mt-8 surface-panel-subtle p-4 border-(--color-warning)/20 bg-(--color-warning)/10">
-          <div className="flex items-center gap-2 text-(--color-warning)">
-            <RefreshCw size={16} />
-            <span className="text-sm">
-              Tasks run while the application is open. Make sure Snotra is running at the scheduled time.
-            </span>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Notice */}
+        {tasks.length > 0 && (
+          <div className="mt-6 max-w-4xl p-4 rounded-2xl bg-(--color-warning)/[0.06] border border-(--color-warning)/[0.12]">
+            <div className="flex items-start gap-3">
+              <RefreshCw size={16} className="mt-0.5 text-(--color-warning) shrink-0" />
+              <span className="text-sm text-(--color-text-secondary) leading-relaxed">
+                Tasks run while the application is open. Make sure Snotra is running at the scheduled time.
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

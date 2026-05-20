@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAppStore } from '../../stores'
-import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Save, Check, Sun, Moon } from 'lucide-react'
+import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon } from 'lucide-react'
 import type { ProviderConfig } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
 import { Kilo } from '../../utils'
-import { Button, Input, Card } from '../ui'
 import { ScrollShadow, Select, SelectTrigger, SelectValue, SelectPopover, ListBox, ListBoxItem } from "@heroui/react"
 
 interface SettingsModalProps {
@@ -107,17 +106,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const envVar = provider?.env || ''
 
   return (
-    <div className="modal-overlay p-6 sm:p-10">
-      <div className="modal-content w-full max-w-6xl h-[88vh] flex flex-row overflow-hidden bg-(--color-bg) shadow-2xl rounded-[32px] border border-(--color-border-light)">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-10 bg-black/20 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-5xl h-[85vh] flex flex-row overflow-hidden bg-(--color-bg) shadow-2xl rounded-[28px] border border-(--color-border-light) animate-scale-in">
         
         {/* Settings Sidebar */}
-        <aside className="w-72 bg-(--color-surface) border-r border-(--color-border) flex flex-col shrink-0">
-          <div className="p-10 pb-8">
-            <h2 className="text-2xl font-bold text-(--color-text) tracking-tight">Settings</h2>
-            <p className="text-[11px] text-(--color-text-tertiary) mt-1.5 font-bold uppercase tracking-[0.2em] opacity-50">Intelligence Hub</p>
+        <aside className="w-64 bg-(--color-surface) border-r border-(--color-border) flex flex-col shrink-0">
+          <div className="px-8 pt-10 pb-6">
+            <h2 className="text-xl font-bold text-(--color-text) tracking-tight">Settings</h2>
+            <p className="text-[10px] text-(--color-text-tertiary) mt-1.5 font-semibold uppercase tracking-[0.15em]">Intelligence Hub</p>
           </div>
 
-          <div className="flex-1 px-5 space-y-1.5 overflow-y-auto scrollbar-subtle">
+          <nav className="flex-1 px-4 space-y-1 overflow-y-auto scrollbar-subtle">
             {[
               { id: 'provider', icon: Cpu, label: 'AI Providers' },
               { id: 'mcp', icon: Server, label: 'MCP Servers' },
@@ -127,54 +126,46 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-4 px-5 py-4 rounded-[20px] text-sm font-bold tracking-tight transition-all duration-300 ${
+                className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-semibold tracking-tight transition-all duration-200 ${
                   activeTab === item.id
                     ? 'bg-(--color-accent-muted) text-(--color-accent)'
-                    : 'text-(--color-text-secondary) hover:bg-(--color-surface-secondary)'
+                    : 'text-(--color-text-secondary) hover:bg-(--color-surface-secondary) hover:text-(--color-text)'
                 }`}
               >
-                <item.icon size={18} className={activeTab === item.id ? 'text-(--color-accent)' : 'text-(--color-text-tertiary)'} />
+                <item.icon size={17} className={activeTab === item.id ? 'text-(--color-accent)' : 'text-(--color-text-tertiary)'} />
                 {item.label}
               </button>
             ))}
-          </div>
+          </nav>
 
-          <div className="p-8">
-            <Card className={`p-4 transition-all duration-500 border-none rounded-[20px] ${
-              providerList.length > 0 
-                ? 'bg-green-500/5' 
-                : 'bg-red-500/5'
-            }`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${providerList.length > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                  providerList.length > 0 ? 'text-green-600' : 'text-red-500'
-                }`}>
-                  {providerList.length > 0 ? 'Kilo Core Active' : 'Kilo Core Offline'}
-                </span>
-              </div>
-            </Card>
+          <div className="px-6 pb-8 pt-4">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-(--color-surface-secondary)/60 border border-(--color-border-light)">
+              <div className={`w-2 h-2 rounded-full ${providerList.length > 0 ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.4)]' : 'bg-red-400'}`} />
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${
+                providerList.length > 0 ? 'text-green-600' : 'text-red-400'
+              }`}>
+                Kilo {providerList.length > 0 ? 'Connected' : 'Offline'}
+              </span>
+            </div>
           </div>
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-(--color-bg) relative">
+        <div className="flex-1 flex flex-col min-w-0 bg-(--color-bg)">
           {/* Header */}
-          <header className="h-20 flex items-center justify-between px-10 shrink-0 bg-(--color-surface)/50 backdrop-blur-xl border-b border-(--color-border-light) z-10">
-            <h3 className="text-lg font-bold text-(--color-text) tracking-tight">
+          <header className="shrink-0 flex items-center justify-between px-10 h-16 border-b border-(--color-border-light)">
+            <h3 className="text-[15px] font-semibold text-(--color-text) tracking-tight">
               {activeTab === 'provider' && 'AI Model Providers'}
-              {activeTab === 'mcp' && 'MCP Integration'}
-              {activeTab === 'skills' && 'Skill Capabilities'}
-              {activeTab === 'appearance' && 'Visual Interface'}
+              {activeTab === 'mcp' && 'MCP Servers'}
+              {activeTab === 'skills' && 'Skills'}
+              {activeTab === 'appearance' && 'Appearance'}
             </h3>
-            <Button 
-              onClick={onClose} 
-              variant="ghost"
-              size="icon"
-              className="rounded-full hover:bg-(--color-surface-hover)"
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
             >
-              <X size={20} />
-            </Button>
+              <X size={18} />
+            </button>
           </header>
 
           {/* Content Area */}
@@ -182,33 +173,32 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             {activeTab === 'provider' && (
               <div className="flex h-full">
                 {/* Provider List */}
-                <aside className="w-[320px] border-r border-(--color-border-light) flex flex-col bg-(--color-surface)/30 shrink-0">
-                  <div className="p-6 border-b border-(--color-border-light) space-y-4">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-[10px] font-bold text-(--color-text-tertiary) uppercase tracking-widest">
-                        {providerList.length} Options
+                <aside className="w-[280px] border-r border-(--color-border-light) flex flex-col shrink-0">
+                  <div className="px-5 py-5 border-b border-(--color-border-light) space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-(--color-text-tertiary) uppercase tracking-[0.15em]">
+                        {providerList.length} Available
                       </span>
-                      <Button
+                      <button
                         onClick={fetchProviders}
-                        isDisabled={fetching}
-                        variant="ghost"
-                        size="sm"
-                        className="text-(--color-accent) h-7"
+                        disabled={fetching}
+                        className="p-1.5 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-accent) transition-all disabled:opacity-40"
                       >
-                        <RefreshCw size={12} className={fetching ? 'animate-spin' : ''} />
-                        Sync
-                      </Button>
+                        <RefreshCw size={13} className={fetching ? 'animate-spin' : ''} />
+                      </button>
                     </div>
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Filter providers..."
-                      startContent={<Search size={14} className="text-(--color-text-tertiary)" />}
-                      variant="primary"
-                    />
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-(--color-surface) border border-(--color-border-light) focus-within:border-(--color-accent)/40 focus-within:shadow-[0_0_0_3px_var(--color-accent-muted)] transition-all">
+                      <Search size={14} className="text-(--color-text-quaternary) shrink-0" />
+                      <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search providers..."
+                        className="flex-1 bg-transparent text-sm text-(--color-text) placeholder:text-(--color-text-quaternary) outline-none min-w-0"
+                      />
+                    </div>
                   </div>
                   
-                  <ScrollShadow className="flex-1 p-3 space-y-1">
+                  <ScrollShadow className="flex-1 px-2.5 py-3 space-y-0.5">
                     {filteredProviders.map((p) => {
                       const isActive = expandedProvider === p.id
                       const isConfigured = !!localConfigs[p.id]?.apiKey
@@ -216,19 +206,25 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         <button
                           key={p.id}
                           onClick={() => setExpandedProvider(p.id)}
-                          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-left ${
-                            isActive ? 'bg-(--color-accent-muted) text-(--color-accent)' : 'text-(--color-text-secondary) hover:bg-(--color-surface-secondary)'
+                          className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl transition-all duration-200 text-left ${
+                            isActive 
+                              ? 'bg-(--color-accent-muted)' 
+                              : 'hover:bg-(--color-surface-secondary)'
                           }`}
                         >
-                          <div className={`p-2 rounded-xl transition-colors ${
-                            isActive ? 'bg-(--color-accent) text-white' : 'bg-(--color-surface-secondary) text-(--color-text-tertiary)'
+                          <div className={`p-2 rounded-xl transition-all duration-200 ${
+                            isActive 
+                              ? 'bg-(--color-accent) text-white shadow-sm shadow-(--color-accent)/20' 
+                              : 'bg-(--color-surface-secondary) text-(--color-text-tertiary)'
                           }`}>
-                            <Cpu size={14} />
+                            <Cpu size={13} />
                           </div>
-                          <span className="flex-1 text-sm font-semibold tracking-tight">{p.name}</span>
+                          <span className={`flex-1 text-sm font-medium tracking-tight ${
+                            isActive ? 'text-(--color-accent)' : 'text-(--color-text-secondary)'
+                          }`}>{p.name}</span>
                           {isConfigured && (
-                            <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center">
-                              <Check size={10} className="text-green-500" />
+                            <div className="w-4 h-4 rounded-full bg-green-500/10 flex items-center justify-center">
+                              <Check size={8} className="text-green-500" />
                             </div>
                           )}
                         </button>
@@ -238,46 +234,46 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </aside>
 
                 {/* Provider Detail Form */}
-                <ScrollShadow className="flex-1 p-10 bg-(--color-bg)">
+                <ScrollShadow className="flex-1 px-12 py-10">
                   {expandedProvider && provider && cfg ? (
-                    <div className="max-w-xl mx-auto space-y-10 animate-fade-in">
-                      <div className="flex items-center gap-4">
-                        <div className="p-3.5 rounded-2xl bg-(--color-accent-muted) text-(--color-accent) shadow-sm">
-                          <Cpu size={24} />
+                    <div className="max-w-lg mx-auto space-y-10 animate-fade-in">
+                      <div className="flex items-center gap-4 pb-2">
+                        <div className="p-3 rounded-2xl bg-(--color-accent-muted) text-(--color-accent)">
+                          <Cpu size={22} />
                         </div>
                         <div>
-                          <h2 className="text-2xl font-bold text-(--color-text) tracking-tight">{provider.name}</h2>
-                          <p className="text-xs text-(--color-text-tertiary) mt-1 font-medium italic opacity-70">Configure API credentials and operational parameters</p>
+                          <h2 className="text-xl font-bold text-(--color-text) tracking-tight">{provider.name}</h2>
+                          <p className="text-xs text-(--color-text-tertiary) mt-0.5">Configure API credentials and operational parameters</p>
                         </div>
                       </div>
 
-                      <div className="space-y-8 bg-(--color-surface) p-10 rounded-[32px] border border-(--color-border-light) shadow-xl shadow-black/[0.02]">
-                        <div className="space-y-3">
-                          <label className="text-[11px] font-bold uppercase tracking-widest text-(--color-text-tertiary) ml-1 opacity-70">
-                            Authentication Token {envVar && <span className="opacity-50 lowercase ml-1 font-mono">({envVar})</span>}
-                          </label>
-                            <Input
-                               type={showKey ? 'text' : 'password'}
-                               value={cfg.apiKey}
-                               onChange={(e) => handleConfigChange(expandedProvider, 'apiKey', e.target.value)}
-                               placeholder="Enter API Key..."
-                               variant="primary"
-                               size="lg"
-                               className="font-mono"
-                               endContent={
-                              <button
-                                type="button"
-                                onClick={() => setShowKey(!showKey)}
-                                className="text-(--color-text-tertiary) hover:text-(--color-text) transition-colors"
-                              >
-                                {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                              </button>
-                            }
-                          />
+                      <div className="space-y-7">
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary)">
+                              API Key {envVar && <span className="opacity-40 lowercase ml-1 font-mono">({envVar})</span>}
+                            </label>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type={showKey ? 'text' : 'password'}
+                              value={cfg.apiKey}
+                              onChange={(e) => handleConfigChange(expandedProvider, 'apiKey', e.target.value)}
+                              placeholder="sk-..."
+                              className="w-full px-4 py-3.5 rounded-2xl bg-(--color-surface) border border-(--color-border-light) text-sm font-mono text-(--color-text) placeholder:text-(--color-text-quaternary) outline-none focus:border-(--color-accent)/30 focus:shadow-[0_0_0_3px_var(--color-accent-muted)] transition-all pr-12"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowKey(!showKey)}
+                              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-(--color-text-tertiary) hover:text-(--color-text) hover:bg-(--color-surface-secondary) transition-all"
+                            >
+                              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="space-y-3">
-                          <label className="text-[11px] font-bold uppercase tracking-widest text-(--color-text-tertiary) ml-1 opacity-70">Deployment Model</label>
+                        <div className="space-y-2.5">
+                          <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary)">Model</label>
                           {modelKeys.length > 0 ? (
                             <Select
                               selectedKey={cfg.model}
@@ -286,7 +282,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                               }}
                               placeholder="Select a model"
                             >
-                              <SelectTrigger className="w-full px-4 py-3 rounded-2xl bg-(--color-surface-secondary)/50 border border-(--color-border) outline-none focus:border-(--color-accent) text-sm font-semibold transition-all">
+                              <SelectTrigger className="w-full px-4 py-3.5 rounded-2xl bg-(--color-surface) border border-(--color-border-light) outline-none focus:border-(--color-accent)/30 text-sm transition-all data-[open=true]:border-(--color-accent)/30">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectPopover>
@@ -300,35 +296,33 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                               </SelectPopover>
                             </Select>
                           ) : (
-                            <Input
+                            <input
                               value={cfg.model}
                               onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
                               placeholder="e.g., gpt-4-turbo"
-                              variant="primary"
+                              className="w-full px-4 py-3.5 rounded-2xl bg-(--color-surface) border border-(--color-border-light) text-sm text-(--color-text) placeholder:text-(--color-text-quaternary) outline-none focus:border-(--color-accent)/30 focus:shadow-[0_0_0_3px_var(--color-accent-muted)] transition-all"
                             />
                           )}
                         </div>
 
-                        <div className="space-y-3">
-                          <label className="text-[11px] font-bold uppercase tracking-widest text-(--color-text-tertiary) ml-1 opacity-70">Backend Endpoint (Optional)</label>
-                          <Input
+                        <div className="space-y-2.5">
+                          <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary)">Base URL (Optional)</label>
+                          <input
                             value={cfg.baseUrl || ''}
                             onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
                             placeholder="https://api.openai.com/v1"
-                            variant="primary"
-                            size="lg"
-                            className="font-mono"
+                            className="w-full px-4 py-3.5 rounded-2xl bg-(--color-surface) border border-(--color-border-light) text-sm font-mono text-(--color-text) placeholder:text-(--color-text-quaternary) outline-none focus:border-(--color-accent)/30 focus:shadow-[0_0_0_3px_var(--color-accent-muted)] transition-all"
                           />
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-30 animate-fade-in">
-                      <div className="p-10 rounded-[48px] bg-(--color-surface-secondary) mb-8">
-                        <Cpu size={64} className="text-(--color-text-tertiary)" />
+                    <div className="h-full flex flex-col items-center justify-center text-center px-8">
+                      <div className="w-20 h-20 rounded-[30%_70%_60%_40%_/_50%_40%_60%_50%] bg-(--color-surface-secondary)/80 border border-(--color-border-light) flex items-center justify-center mb-6 backdrop-blur-xl">
+                        <Cpu size={36} className="text-(--color-text-tertiary) opacity-40" />
                       </div>
-                      <h4 className="text-xl font-bold text-(--color-text) tracking-tight">Intelligence Selection</h4>
-                      <p className="text-sm text-(--color-text-tertiary) mt-2 max-w-xs font-medium leading-relaxed">Select a model provider from the sidebar to establish connection.</p>
+                      <h4 className="text-base font-semibold text-(--color-text) tracking-tight mb-1.5">No Provider Selected</h4>
+                      <p className="text-sm text-(--color-text-tertiary) max-w-[260px] leading-relaxed">Choose a provider from the list to configure its settings.</p>
                     </div>
                   )}
                 </ScrollShadow>
@@ -336,26 +330,32 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             )}
 
             {activeTab === 'appearance' && (
-              <ScrollShadow className="p-16 max-w-3xl mx-auto animate-slide-up">
-                <div className="space-y-12">
-                  <div>
-                    <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-(--color-text-tertiary) mb-8 opacity-70">Interface Theme Architecture</h4>
-                    <div className="grid grid-cols-2 gap-8">
+              <ScrollShadow className="h-full px-12 py-10 animate-fade-in">
+                <div className="max-w-lg">
+                  <div className="mb-10">
+                    <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) mb-6">Interface Theme</h4>
+                    <div className="flex gap-4">
                       {(['light', 'dark'] as const).map((t) => (
                         <button
                           key={t}
                           onClick={() => setTheme(t)}
-                          className={`flex flex-col items-center gap-6 p-10 rounded-[40px] border-2 transition-all duration-500 ${
+                          className={`flex-1 flex flex-col items-center gap-5 p-8 rounded-3xl border-2 transition-all duration-300 ${
                             theme === t 
-                              ? 'border-(--color-accent) bg-(--color-accent-muted) shadow-2xl shadow-accent/10' 
+                              ? 'border-(--color-accent) bg-(--color-accent-muted) shadow-lg shadow-(--color-accent)/5' 
                               : 'border-(--color-border) hover:border-(--color-border-hover) bg-(--color-surface)'
                           }`}
                         >
-                          <div className={`p-6 rounded-[24px] ${theme === t ? 'bg-(--color-accent) text-white shadow-xl' : 'bg-(--color-surface-secondary) text-(--color-text-tertiary)'}`}>
-                            {t === 'light' ? <Sun size={32} /> : <Moon size={32} />}
+                          <div className={`p-5 rounded-2xl transition-all ${
+                            theme === t 
+                              ? 'bg-(--color-accent) text-white shadow-lg shadow-(--color-accent)/20' 
+                              : 'bg-(--color-surface-secondary) text-(--color-text-tertiary)'
+                          }`}>
+                            {t === 'light' ? <Sun size={28} /> : <Moon size={28} />}
                           </div>
-                          <span className={`text-base font-bold tracking-tight ${theme === t ? 'text-(--color-accent)' : 'text-(--color-text)'}`}>
-                            {t.charAt(0).toUpperCase() + t.slice(1)} Mode
+                          <span className={`text-sm font-semibold tracking-tight ${
+                            theme === t ? 'text-(--color-accent)' : 'text-(--color-text)'
+                          }`}>
+                            {t === 'light' ? 'Light Mode' : 'Dark Mode'}
                           </span>
                         </button>
                       ))}
@@ -365,32 +365,44 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               </ScrollShadow>
             )}
 
-            {activeTab === 'mcp' && <ScrollShadow className="p-10"><MCPSettings /></ScrollShadow>}
-            {activeTab === 'skills' && <ScrollShadow className="p-10"><SkillSettings /></ScrollShadow>}
+            {activeTab === 'mcp' && (
+              <ScrollShadow className="h-full px-12 py-10">
+                <MCPSettings />
+              </ScrollShadow>
+            )}
+            {activeTab === 'skills' && (
+              <ScrollShadow className="h-full px-12 py-10">
+                <SkillSettings />
+              </ScrollShadow>
+            )}
           </div>
 
-          {/* Action Footer */}
-          <footer className="h-24 px-10 border-t border-(--color-border-light) bg-(--color-surface)/30 backdrop-blur-md flex items-center justify-end gap-5 shrink-0 z-10">
-            <Button 
-              onClick={onClose} 
-              variant="ghost"
-              className="px-8 font-bold text-(--color-text-secondary)"
+          {/* Footer */}
+          <footer className="shrink-0 flex items-center justify-end gap-4 px-10 h-16 border-t border-(--color-border-light)">
+            <button
+              onClick={onClose}
+              className="px-6 py-2.5 rounded-xl text-sm font-medium text-(--color-text-secondary) hover:bg-(--color-surface-secondary) hover:text-(--color-text) transition-all"
             >
-              Dismiss
-            </Button>
-            <Button
+              Cancel
+            </button>
+            <button
               onClick={handleSave}
-              isDisabled={saving}
-              variant={saved ? 'ghost' : 'primary'}
-              className={`min-w-[180px] h-12 rounded-2xl shadow-xl shadow-accent/10 transition-all duration-500 ${
-                saved ? 'text-green-600 bg-green-500/5' : ''
+              disabled={saving}
+              className={`inline-flex items-center gap-2.5 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                saved
+                  ? 'text-green-600 bg-green-500/10'
+                  : 'bg-(--color-accent) text-white hover:bg-(--color-accent-light) shadow-md shadow-(--color-accent)/15 hover:shadow-lg hover:shadow-(--color-accent)/20'
               }`}
             >
-              {saving ? <RefreshCw size={18} className="animate-spin" /> : saved ? <CheckCircle size={18} /> : <Save size={18} />}
-              <span className="font-bold tracking-tight">
-                {saved ? 'Settings Applied' : saving ? 'Synchronizing...' : 'Apply Configuration'}
+              {saving ? (
+                <RefreshCw size={16} className="animate-spin" />
+              ) : saved ? (
+                <CheckCircle size={16} />
+              ) : null}
+              <span>
+                {saved ? 'Applied' : saving ? 'Saving...' : 'Apply'}
               </span>
-            </Button>
+            </button>
           </footer>
         </div>
       </div>
