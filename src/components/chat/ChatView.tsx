@@ -23,6 +23,7 @@ export function ChatView() {
     updateStreamingPart,
     appendStreamingDelta,
     finishStreaming,
+    commitStreamingMessage,
     addMessage,
     updateSessionTitle,
   } = useAppStore()
@@ -44,10 +45,11 @@ export function ChatView() {
 
         const streaming = useAppStore.getState().streamingMessage[localId]
         if (streaming) {
-          // Check if this part belongs to the user message by seeing if there's already a message with this ID
-          const existingMessage = useAppStore.getState().sessionMessages[localId]?.find(m => m.info.id === part.messageID)
+          // If we see a message that's already in our store as a user message, ignore it
+          const existingMessages = useAppStore.getState().sessionMessages[localId] || []
+          const isUserMessage = existingMessages.some(m => m.info.id === part.messageID && m.info.role === 'user')
           
-          if (existingMessage) {
+          if (isUserMessage) {
             ignoredMessageIDs.add(part.messageID)
             return
           }
@@ -56,7 +58,11 @@ export function ChatView() {
           if (streaming.messageID.startsWith('pending-')) {
             updateStreamingMessageID(localId, part.messageID)
           }
-          updateStreamingPart(localId, part.id, part)
+          
+          // Only process parts that belong to the current streaming message
+          if (streaming.messageID === part.messageID || streaming.messageID.startsWith('pending-')) {
+            updateStreamingPart(localId, part.id, part)
+          }
         }
       },
       onPartDelta: (kiloSessionId, messageID, partID, delta) => {
@@ -65,8 +71,15 @@ export function ChatView() {
         if (!localId) return
 
         const streaming = useAppStore.getState().streamingMessage[localId]
-        if (streaming && streaming.messageID === messageID) {
-          appendStreamingDelta(localId, partID, delta)
+        if (streaming) {
+          // If messageID is pending, this is likely the first delta for the assistant
+          if (streaming.messageID.startsWith('pending-')) {
+            updateStreamingMessageID(localId, messageID)
+          }
+          
+          if (streaming.messageID === messageID || streaming.messageID.startsWith('pending-')) {
+            appendStreamingDelta(localId, partID, delta)
+          }
         }
       },
       onMessageUpdated: (info) => {
@@ -82,16 +95,22 @@ export function ChatView() {
         if (!localId) return
 
         const streaming = useAppStore.getState().streamingMessage[localId]
-        if (streaming && (streaming.messageID.startsWith('pending-') || streaming.messageID === info.id)) {
+        if (streaming) {
+          const shouldAttachInfo =
+            streaming.messageID === info.id || streaming.messageID.startsWith('pending-')
+
           if (streaming.messageID.startsWith('pending-')) {
             updateStreamingMessageID(localId, info.id)
           }
-          useAppStore.setState((state) => ({
-            streamingMessage: {
-              ...state.streamingMessage,
-              [localId]: { ...state.streamingMessage[localId], info },
-            },
-          }))
+
+          if (shouldAttachInfo) {
+            useAppStore.setState((state) => ({
+              streamingMessage: {
+                ...state.streamingMessage,
+                [localId]: { ...state.streamingMessage[localId], info },
+              },
+            }))
+          }
         }
       },
       onSessionIdle: (kiloSessionId) => {
@@ -185,9 +204,9 @@ export function ChatView() {
 
       // Send prompt async — all updates come through SSE
       try {
-        const kiloMessageId = await Kilo.promptAsync(kiloId!, content, model)
-        if (kiloMessageId) {
-          ignoredMessageIDs.add(kiloMessageId)
+        const completedMessage = await Kilo.promptAsync(kiloId!, content, model)
+        if (completedMessage?.info?.role === 'assistant') {
+          commitStreamingMessage(activeSessionId, completedMessage)
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -207,6 +226,7 @@ export function ChatView() {
       session,
       startStreaming,
       finishStreaming,
+      commitStreamingMessage,
       addMessage,
       updateSessionTitle,
     ],

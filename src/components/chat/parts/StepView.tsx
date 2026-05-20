@@ -13,30 +13,32 @@ export function StepView({ part, isActive = false }: StepViewProps) {
   const isStillActive = isStart && isActive
 
   return (
-    <div className="my-1 flex items-center gap-2 text-sm rounded-full bg-(--color-surface-secondary) px-3 py-1.5 w-fit border border-(--color-border-light)">
-      {isStillActive && (
-        <Loader2 size={14} className="text-(--color-accent) animate-spin shrink-0" />
-      )}
-      {isStart && !isActive && (
-        <CheckCircle size={14} className="text-(--color-success) shrink-0" />
-      )}
-      {isFinish && reason === 'stop' && (
-        <CheckCircle size={14} className="text-(--color-success) shrink-0" />
-      )}
-      {isFinish && reason === 'error' && (
-        <XCircle size={14} className="text-(--color-error) shrink-0" />
-      )}
-      {isFinish && reason !== 'stop' && reason !== 'error' && (
-        <CheckCircle size={14} className="text-(--color-text-secondary) shrink-0" />
-      )}
-      <span className={
+    <div className="flex items-center gap-3 py-1.5 px-1 group">
+      <div className="flex items-center justify-center w-5 h-5 shrink-0">
+        {isStillActive && (
+          <Loader2 size={13} className="text-[var(--color-accent)] animate-spin" />
+        )}
+        {isStart && !isActive && (
+          <CheckCircle size={13} className="text-[var(--color-success)] opacity-80" />
+        )}
+        {isFinish && reason === 'stop' && (
+          <CheckCircle size={13} className="text-[var(--color-success)] opacity-80" />
+        )}
+        {isFinish && reason === 'error' && (
+          <XCircle size={13} className="text-[var(--color-error)] opacity-80" />
+        )}
+        {isFinish && reason !== 'stop' && reason !== 'error' && (
+          <CheckCircle size={13} className="text-[var(--color-text-tertiary)] opacity-80" />
+        )}
+      </div>
+      <span className={`text-[11px] uppercase tracking-wider font-bold transition-colors ${
         isStillActive
-          ? 'text-(--color-text) font-medium'
+          ? 'text-[var(--color-accent)]'
           : reason === 'error'
-            ? 'text-(--color-error)'
-            : 'text-(--color-text-secondary)'
-      }>
-        {isStillActive ? 'Processing...' : isStart ? 'Step completed' : `Done (${reason || 'completed'})`}
+            ? 'text-[var(--color-error)] opacity-90'
+            : 'text-[var(--color-text-tertiary)] group-hover:text-[var(--color-text-secondary)]'
+      }`}>
+        {isStillActive ? 'Thinking...' : isStart ? 'Sequence completed' : `Process ${reason || 'finished'}`}
       </span>
     </div>
   )

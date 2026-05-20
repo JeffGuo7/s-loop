@@ -83,7 +83,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
 
         <div className="flex-1 min-w-0">
           <div className="bg-(--color-surface) border border-(--color-border) shadow-sm px-5 py-4 rounded-[6px_20px_20px_20px]">
-          <div className="space-y-4">
+          <div className="space-y-3">
             {message.parts.length === 0 && isStreaming && (
               <div className="flex items-center gap-3 py-2">
                 <div className="flex gap-1.5">
@@ -94,12 +94,12 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
               </div>
             )}
 
-            <div className="space-y-5">
+            <div className="space-y-3">
               {message.parts.map((part, idx) => (
                 <MessagePartRenderer
                   key={part.id || idx}
                   part={part}
-                  isStreaming={isStreaming && idx === message.parts.length - 1}
+                  isStreaming={isStreaming}
                 />
               ))}
             </div>

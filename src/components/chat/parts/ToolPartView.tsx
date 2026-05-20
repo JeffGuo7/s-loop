@@ -77,57 +77,57 @@ export function ToolPartView({ part }: ToolPartViewProps) {
   const isRunning = state?.status === 'running'
 
   return (
-    <div className="my-4">
+    <div className="my-2">
       <div className={`rounded-2xl border transition-all duration-300 ${
         expanded 
-          ? 'border-(--color-accent) shadow-md' 
-          : 'border-(--color-border) hover:border-(--color-accent-light)/50'
-      } bg-(--color-surface) overflow-hidden`}>
+          ? 'border-[var(--color-accent)] shadow-sm' 
+          : 'border-[var(--color-border)] hover:border-[var(--color-border-hover)]'
+      } bg-[var(--color-surface)] overflow-hidden`}>
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-4 px-4 py-3 hover:bg-(--color-surface-secondary)/70 transition-colors text-left"
+          className="w-full flex items-center gap-4 px-4 py-2.5 hover:bg-[var(--color-surface-secondary)]/30 transition-colors text-left"
         >
-          <div className={`p-2.5 rounded-xl ${
-            expanded || isRunning ? 'bg-(--color-accent) text-white' : 'bg-(--color-surface-secondary) text-(--color-accent) shadow-sm'
+          <div className={`p-2 rounded-xl ${
+            expanded || isRunning ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-tertiary)]'
           } transition-colors`}>
-            <Icon size={16} strokeWidth={2.5} />
+            <Icon size={14} strokeWidth={2.5} />
           </div>
           
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-(--color-text-secondary) opacity-60">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">
                 Tool Call
               </span>
-              <span className="text-sm font-bold text-(--color-text-primary)">
+              <span className="text-[13px] font-bold text-[var(--color-text)]">
                 {toolName.replace(/_/g, ' ')}
               </span>
               {isRunning && (
                 <div className="flex gap-1">
-                  <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse" />
-                  <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse [animation-delay:0.2s]" />
-                  <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse [animation-delay:0.4s]" />
+                  <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-pulse" />
+                  <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-pulse [animation-delay:0.2s]" />
+                  <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-pulse [animation-delay:0.4s]" />
                 </div>
               )}
             </div>
             {subtitle && (
-              <div className="text-[11px] text-(--color-text-tertiary) truncate mt-1 font-mono opacity-80" style={{ maxWidth: 'calc(100% - 24px)' }}>
+              <div className="text-[11px] text-[var(--color-text-tertiary)] truncate mt-0.5 font-mono opacity-80" style={{ maxWidth: 'calc(100% - 24px)' }}>
                 {subtitle}
               </div>
             )}
           </div>
 
-          <div className={`transition-transform duration-300 mr-1 ${expanded ? 'rotate-180' : ''}`}>
-            <ChevronDown size={14} className="text-(--color-text-tertiary)" />
+          <div className={`transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}>
+            <ChevronDown size={14} className="text-[var(--color-text-tertiary)]" />
           </div>
         </button>
 
         {expanded && (
-          <div className="border-t border-(--color-border) bg-(--color-surface-secondary)/40 animate-slide-up">
-            <div className="p-5 space-y-4">
+          <div className="border-t border-[var(--color-border-light)] bg-[var(--color-bg)]/50 animate-fade-in">
+            <div className="p-4 space-y-4">
               {/* Input Args if available */}
               <div className="space-y-2">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-(--color-text-tertiary) ml-1">Arguments</span>
-                <pre className="font-mono text-[11px] leading-relaxed bg-(--color-surface) border border-(--color-border) rounded-2xl p-4 overflow-x-auto text-(--color-text-secondary)">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] ml-1">Arguments</span>
+                <pre className="font-mono text-[11px] leading-relaxed bg-[var(--color-surface)] border border-[var(--color-border-light)] rounded-xl p-3 overflow-x-auto text-[var(--color-text-secondary)] scrollbar-subtle">
                   {JSON.stringify(state?.input || {}, null, 2)}
                 </pre>
               </div>
@@ -135,16 +135,16 @@ export function ToolPartView({ part }: ToolPartViewProps) {
               {output && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1">
-                    <span className={`text-[9px] font-bold uppercase tracking-widest ${isError ? 'text-(--color-error)' : 'text-(--color-text-tertiary)'}`}>
+                    <span className={`text-[9px] font-bold uppercase tracking-widest ${isError ? 'text-[var(--color-error)]' : 'text-[var(--color-text-tertiary)]'}`}>
                       {isError ? 'Error Output' : 'Result Output'}
                     </span>
                     <CopyButton text={output} />
                   </div>
-                  <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto rounded-2xl p-4 border ${
+                  <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto rounded-xl p-3 border ${
                     isError 
-                      ? 'bg-(--color-error-bg) border border-(--color-error)/20 text-(--color-error)' 
-                      : 'bg-(--color-surface) border border-(--color-border) text-(--color-text-secondary)'
-                  }`}>
+                      ? 'bg-[var(--color-error-bg)] border border-[var(--color-error)]/20 text-[var(--color-error)]' 
+                      : 'bg-[var(--color-surface)] border border-[var(--color-border-light)] text-[var(--color-text-secondary)]'
+                  } scrollbar-subtle`}>
                     {output}
                   </pre>
                 </div>

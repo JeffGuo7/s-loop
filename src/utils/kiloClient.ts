@@ -192,6 +192,10 @@ function connectSSE() {
               }
             }
             _sseCallbacks?.onPartUpdated(part)
+            const delta = evt.properties?.delta as string | undefined
+            if (delta && part.sessionID && part.messageID && part.id) {
+              _sseCallbacks?.onPartDelta(part.sessionID, part.messageID, part.id, delta)
+            }
           }
           break
         }
@@ -277,7 +281,7 @@ export async function promptAsync(
   sessionId: string,
   content: string,
   model?: ModelRef,
-): Promise<string | undefined> {
+): Promise<KiloMessage | undefined> {
   const body: Record<string, unknown> = {
     parts: [{ type: 'text', text: content }],
   }
@@ -287,9 +291,12 @@ export async function promptAsync(
 
   const res = await post(`/session/${sessionId}/message`, body)
   try {
-    const data = await res.json()
-    if (data && data.info && data.info.id) {
-      return data.info.id
+    const data = (await res.json()) as Partial<KiloMessage> | undefined
+    if (data?.info?.id) {
+      return {
+        info: data.info,
+        parts: Array.isArray(data.parts) ? data.parts : [],
+      }
     }
   } catch {
     // Ignore JSON parse errors

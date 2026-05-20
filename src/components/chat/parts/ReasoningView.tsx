@@ -16,31 +16,29 @@ function getPreviewLine(text: string): string {
 export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
   const hasCompletedRef = useRef(false)
 
-  useEffect(() => {
-    if (!isActive && !hasCompletedRef.current) {
-      hasCompletedRef.current = true
-    }
-  }, [isActive])
-
+  // Use a ref to track if the entire message has finished streaming
+  // We'll pass this from MessageItem eventually, but for now we can infer it
+  // if isActive is false, it means THIS part is done.
+  
   const label = isActive ? (
     <span className="flex items-center gap-3">
       <div className="relative">
-        <Brain size={14} className="text-(--color-accent) animate-pulse" />
-        <div className="absolute inset-0 bg-(--color-accent) opacity-30 animate-pulse blur-sm" />
+        <Brain size={14} className="text-[var(--color-accent)] animate-pulse" />
+        <div className="absolute inset-0 bg-[var(--color-accent)] opacity-30 animate-pulse blur-sm" />
       </div>
-      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-(--color-accent)">Reasoning</span>
+      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-accent)]">Reasoning</span>
       <div className="flex gap-1">
-        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-bounce [animation-delay:-0.3s]" />
-        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-bounce [animation-delay:-0.15s]" />
-        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-bounce" />
+        <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-bounce [animation-delay:-0.3s]" />
+        <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-bounce [animation-delay:-0.15s]" />
+        <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-bounce" />
       </div>
     </span>
   ) : (
     <span className="flex items-center gap-3">
-      <Brain size={14} className="text-(--color-text-tertiary)" />
-      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary)">Thought Process</span>
+      <Brain size={14} className="text-[var(--color-text-tertiary)]" />
+      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-text-tertiary)]">Thought Process</span>
       {text && (
-        <span className="text-[10px] text-(--color-text-quaternary) font-mono truncate max-w-[200px] hidden sm:inline ml-2">
+        <span className="text-[10px] text-[var(--color-text-quaternary)] font-mono truncate max-w-[200px] hidden sm:inline ml-2">
           {getPreviewLine(text)}
         </span>
       )}
@@ -51,10 +49,10 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
     <Collapsible
       header={label}
       defaultExpanded={isActive}
-      className="my-3 shadow-sm"
+      className="my-2 shadow-sm"
     >
       <div
-        className="font-mono text-[11px] leading-relaxed text-(--color-text-secondary) whitespace-pre-wrap max-h-[400px] overflow-y-auto scrollbar-subtle pr-2"
+        className="font-mono text-[11px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-[400px] overflow-y-auto scrollbar-subtle pr-2"
       >
         {text}
       </div>

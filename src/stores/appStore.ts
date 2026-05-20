@@ -47,6 +47,7 @@ interface AppState {
   updateStreamingPart: (sessionId: string, partID: string, part: MessagePart) => void
   appendStreamingDelta: (sessionId: string, partID: string, delta: string) => void
   finishStreaming: (sessionId: string) => void
+  commitStreamingMessage: (sessionId: string, message: KiloMessage) => void
 
   // Actions - Provider
   setActiveProvider: (id: string) => void
@@ -248,14 +249,28 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           const streaming = state.streamingMessage[sessionId]
           if (!streaming) return state
-          
-          const parts = streaming.parts.map((p) => {
-            if (p.id !== partID) return p
-            if (p.type === 'text' || p.type === 'reasoning') {
-              return { ...p, text: p.text + delta }
-            }
-            return p
-          })
+
+          const idx = streaming.parts.findIndex((p) => p.id === partID)
+          let parts = [...streaming.parts]
+
+          if (idx === -1) {
+            parts.push({
+              id: partID,
+              type: 'text',
+              text: delta,
+              sessionID: streaming.info?.sessionID || sessionId,
+              messageID: streaming.messageID,
+            })
+          } else {
+            parts = streaming.parts.map((p) => {
+              if (p.id !== partID) return p
+              if (p.type === 'text' || p.type === 'reasoning') {
+                return { ...p, text: p.text + delta }
+              }
+              return p
+            })
+          }
+
           return {
             streamingMessage: {
               ...state.streamingMessage,
@@ -292,6 +307,28 @@ export const useAppStore = create<AppState>()(
               [sessionId]: [...(state.sessionMessages[sessionId] || []), newMessage],
             },
             streamingMessage: updated,
+          }
+        })
+      },
+
+      commitStreamingMessage: (sessionId, message) => {
+        set((state) => {
+          const updatedStreaming = { ...state.streamingMessage }
+          delete updatedStreaming[sessionId]
+
+          const existingMessages = state.sessionMessages[sessionId] || []
+          const existingIndex = existingMessages.findIndex((msg) => msg.info.id === message.info.id)
+          const nextMessages =
+            existingIndex >= 0
+              ? existingMessages.map((msg, index) => (index === existingIndex ? message : msg))
+              : [...existingMessages, message]
+
+          return {
+            sessionMessages: {
+              ...state.sessionMessages,
+              [sessionId]: nextMessages,
+            },
+            streamingMessage: updatedStreaming,
           }
         })
       },
