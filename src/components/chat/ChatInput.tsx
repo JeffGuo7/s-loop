@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Square, X, File } from 'lucide-react'
+import { Send, Square, X, File, Paperclip } from 'lucide-react'
+import { Button, Card } from '../ui'
 
 interface FileAttachment {
   path: string
@@ -163,101 +164,124 @@ export function ChatInput({
       className={
         isHero
           ? 'mx-auto max-w-4xl w-full px-6'
-          : 'mx-auto w-full max-w-(--chat-max-width) px-8 pb-8'
+          : 'mx-auto w-full max-w-(--chat-max-width) px-8 pb-10'
       }
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
       <form onSubmit={handleSubmit}>
-        <div
-          className={`relative group transition-all duration-300 ${
-            isHero
-              ? 'surface-panel px-3 py-3 shadow-lg'
-              : 'surface-panel px-3 py-3 bg-(--color-surface-elevated)'
-          } ${isDragOver ? 'ring-2 ring-(--color-accent) ring-offset-2 ring-offset-(--color-bg)' : ''}`}
+        <Card
+          variant={isHero ? 'glass' : 'default'}
+          className={`relative group p-1 transition-all duration-500 border border-(--color-border-light) ${
+            isHero ? 'shadow-2xl' : 'shadow-lg hover:shadow-xl'
+          } ${isDragOver ? 'ring-2 ring-(--color-accent) ring-offset-4 ring-offset-(--color-bg)' : ''}`}
         >
           {isDragOver && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-(--color-surface)/80 backdrop-blur-sm pointer-events-none">
-              <div className="rounded-md border border-dashed border-(--color-accent) bg-(--color-accent-muted) px-8 py-4">
-                <p className="text-sm font-semibold text-(--color-accent)">Drop file to reference</p>
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-(--color-surface)/80 backdrop-blur-md pointer-events-none">
+              <div className="rounded-2xl border-2 border-dashed border-(--color-accent)/40 bg-(--color-accent-subtle) px-10 py-6 animate-fade-in-scale">
+                <p className="text-sm font-bold text-(--color-accent) flex items-center gap-2">
+                  <Paperclip size={18} />
+                  Drop file to reference
+                </p>
               </div>
             </div>
           )}
 
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-2 pb-3">
-              {attachments.map((att, idx) => (
-                <div
-                  key={idx}
-                  className="inline-flex items-center gap-2 rounded-full border border-(--color-border) bg-(--color-surface-secondary) px-3 py-2 text-xs"
-                  title={att.path}
-                >
-                  <File size={12} className="text-(--color-accent) shrink-0" />
-                  <span className="max-w-[180px] truncate text-(--color-text-secondary)">{att.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(idx)}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full text-(--color-text-tertiary) hover:bg-(--color-surface) hover:text-(--color-text) transition-colors"
+          <div className="flex flex-col gap-1">
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2.5 px-4 pt-4 pb-2 animate-fade-in">
+                {attachments.map((att, idx) => (
+                  <div
+                    key={idx}
+                    className="group/att inline-flex items-center gap-2.5 rounded-xl border border-(--color-border-light) bg-(--color-surface-secondary)/50 pl-3 pr-2 py-2 text-xs transition-all hover:border-(--color-accent)/30 hover:bg-(--color-surface-secondary)"
+                    title={att.path}
                   >
-                    <X size={12} />
-                  </button>
+                    <File size={13} className="text-(--color-accent)" />
+                    <span className="max-w-[160px] truncate text-(--color-text-secondary) font-bold">{att.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(idx)}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-lg text-(--color-text-tertiary) hover:bg-(--color-error-bg)/50 hover:text-(--color-error) transition-all opacity-50 group-hover/att:opacity-100"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-end gap-2 px-2">
+              <div className="flex-1 px-4">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={handleCompositionEnd}
+                  placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
+                  disabled={disabled || isStreaming}
+                  rows={1}
+                  className="w-full resize-none border-none bg-transparent py-5 text-[15px] font-medium leading-relaxed min-h-[64px] max-h-[450px] custom-scrollbar text-(--color-text) placeholder-(--color-text-quaternary)/50 focus:outline-none focus:ring-0"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 p-2.5">
+                {isStreaming ? (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="icon"
+                    onClick={onAbort}
+                    className="w-11 h-11 rounded-xl shadow-lg shadow-error/10 animate-fade-in"
+                  >
+                    <Square size={16} fill="currentColor" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="icon"
+                    isDisabled={(!input.trim() && attachments.length === 0) || disabled}
+                    className={`w-11 h-11 rounded-xl shadow-lg transition-all duration-500 ${
+                      input.trim() || attachments.length > 0 
+                        ? 'shadow-accent/30 scale-100' 
+                        : 'shadow-none scale-95 opacity-30 grayscale'
+                    }`}
+                  >
+                    <Send
+                      size={18}
+                      strokeWidth={2.5}
+                      className={input.trim() || attachments.length > 0 ? 'translate-x-0.5 -translate-y-0.5' : ''}
+                    />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between px-6 pb-4 pt-1 text-[10px] font-bold tracking-[0.1em] uppercase transition-all duration-300">
+              <div className={`flex items-center gap-4 transition-opacity ${isHero ? 'opacity-40' : 'opacity-30 group-focus-within:opacity-60'}`}>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-(--color-accent)" />
+                  <span>
+                    {attachments.length > 0
+                      ? `${attachments.length} file reference${attachments.length > 1 ? 's' : ''}`
+                      : 'Shift + Enter for new line'}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-end gap-3">
-            <div className="flex-1 rounded-md bg-(--color-surface-secondary) border border-(--color-border-light) px-3">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onCompositionStart={handleCompositionStart}
-                onCompositionEnd={handleCompositionEnd}
-                placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
-                disabled={disabled || isStreaming}
-                rows={1}
-                className="w-full resize-none border-none bg-transparent px-1 py-4 text-[15px] leading-relaxed min-h-[56px] max-h-[300px] custom-scrollbar text-(--color-text) placeholder-(--color-text-quaternary) focus:outline-none focus:ring-0"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 pb-0.5">
-              {isStreaming ? (
-                <button
-                  type="button"
-                  onClick={onAbort}
-                  className="w-12 h-12 flex items-center justify-center rounded-md bg-(--color-error) text-white hover:opacity-90 transition-all shadow-md"
-                >
-                  <Square size={15} fill="currentColor" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={(!input.trim() && attachments.length === 0) || disabled}
-                  className="w-12 h-12 flex items-center justify-center rounded-md bg-(--color-accent) text-white hover:bg-(--color-accent-light) active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-md shadow-(--color-accent)/20"
-                >
-                  <Send
-                    size={18}
-                    strokeWidth={2.5}
-                    className={input.trim() || attachments.length > 0 ? 'translate-x-px -translate-y-px' : ''}
-                  />
-                </button>
-              )}
+                <div className="w-1 h-1 rounded-full bg-(--color-text-tertiary)/30" />
+                <span className="hidden sm:inline">Enter to send</span>
+              </div>
+              <div className={`transition-opacity flex items-center gap-1.5 ${isHero ? 'opacity-40' : 'opacity-30 group-focus-within:opacity-60'}`}>
+                <span className="w-1 h-1 rounded-full bg-(--color-text-tertiary)/30" />
+                Snotra AI
+              </div>
             </div>
           </div>
-
-          <div className={`flex items-center justify-between px-2 pt-3 text-[11px] text-(--color-text-tertiary) transition-opacity ${isHero ? 'opacity-70' : 'opacity-60 group-focus-within:opacity-100'}`}>
-            <span>
-              {attachments.length > 0
-                ? `${attachments.length} file reference${attachments.length > 1 ? 's' : ''} attached`
-                : 'Shift + Enter for new line'}
-            </span>
-            <span className="hidden sm:inline">Enter to send</span>
-          </div>
-        </div>
+        </Card>
       </form>
     </div>
   )
 }
+

@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
-import { Brain } from 'lucide-react'
+import { Brain, Sparkles } from 'lucide-react'
 import { Collapsible } from '../shared/Collapsible'
+import { useEffect, useState } from 'react'
 
 interface ReasoningViewProps {
   text: string
@@ -14,31 +14,38 @@ function getPreviewLine(text: string): string {
 }
 
 export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
-  const hasCompletedRef = useRef(false)
+  const [isExpanded, setIsExpanded] = useState(isActive)
 
-  // Use a ref to track if the entire message has finished streaming
-  // We'll pass this from MessageItem eventually, but for now we can infer it
-  // if isActive is false, it means THIS part is done.
-  
+  // Auto-collapse when active state ends
+  useEffect(() => {
+    if (isActive) {
+      setIsExpanded(true)
+    } else {
+      // Small delay for smooth transition after completion
+      const timer = setTimeout(() => setIsExpanded(false), 500)
+      return () => clearTimeout(timer)
+    }
+  }, [isActive])
+
   const label = isActive ? (
     <span className="flex items-center gap-3">
-      <div className="relative">
-        <Brain size={14} className="text-[var(--color-accent)] animate-pulse" />
-        <div className="absolute inset-0 bg-[var(--color-accent)] opacity-30 animate-pulse blur-sm" />
+      <div className="relative flex items-center justify-center">
+        <Sparkles size={13} className="text-(--color-accent) animate-spin-slow" />
+        <div className="absolute inset-0 bg-(--color-accent) opacity-20 animate-pulse blur-md" />
       </div>
-      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-accent)]">Reasoning</span>
-      <div className="flex gap-1">
-        <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-bounce [animation-delay:-0.3s]" />
-        <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-bounce [animation-delay:-0.15s]" />
-        <div className="w-1 h-1 bg-[var(--color-accent)] rounded-full animate-bounce" />
+      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-(--color-accent)">Thinking</span>
+      <div className="flex gap-1.5 ml-1">
+        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse" />
+        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse [animation-delay:0.2s]" />
+        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse [animation-delay:0.4s]" />
       </div>
     </span>
   ) : (
     <span className="flex items-center gap-3">
-      <Brain size={14} className="text-[var(--color-text-tertiary)]" />
-      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-text-tertiary)]">Thought Process</span>
+      <Brain size={13} className="text-(--color-text-tertiary)" />
+      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-(--color-text-tertiary)">Thought Process</span>
       {text && (
-        <span className="text-[10px] text-[var(--color-text-quaternary)] font-mono truncate max-w-[200px] hidden sm:inline ml-2">
+        <span className="text-[10px] text-(--color-text-quaternary) font-mono truncate max-w-[240px] hidden sm:inline ml-2 opacity-60">
           {getPreviewLine(text)}
         </span>
       )}
@@ -46,16 +53,22 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
   )
 
   return (
-    <Collapsible
-      header={label}
-      defaultExpanded={isActive}
-      className="my-2 shadow-sm"
-    >
-      <div
-        className="font-mono text-[11px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-[400px] overflow-y-auto scrollbar-subtle pr-2"
+    <div className="my-2 group/reasoning">
+      <Collapsible
+        header={label}
+        expanded={isExpanded}
+        onToggle={setIsExpanded}
+        className={`transition-all duration-500 border border-black/[0.03] dark:border-white/[0.03] ${
+          isActive ? 'bg-(--color-surface-secondary)/50' : 'bg-transparent'
+        }`}
       >
-        {text}
-      </div>
-    </Collapsible>
+        <div
+          className="font-mono text-[11px] leading-relaxed text-(--color-text-secondary) whitespace-pre-wrap max-h-[400px] overflow-y-auto scrollbar-subtle pr-4 py-2 mt-2 border-t border-black/[0.03] dark:border-white/[0.03]"
+        >
+          {text}
+        </div>
+      </Collapsible>
+    </div>
   )
 }
+

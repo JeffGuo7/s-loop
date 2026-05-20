@@ -1,4 +1,4 @@
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, Play } from 'lucide-react'
 import type { StepStartPart, StepFinishPart } from '../../../types'
 
 interface StepViewProps {
@@ -13,33 +13,47 @@ export function StepView({ part, isActive = false }: StepViewProps) {
   const isStillActive = isStart && isActive
 
   return (
-    <div className="flex items-center gap-3 py-1.5 px-1 group">
-      <div className="flex items-center justify-center w-5 h-5 shrink-0">
+    <div className="flex items-center gap-3 py-2 px-2 group transition-all hover:translate-x-0.5">
+      <div className={`flex items-center justify-center w-6 h-6 shrink-0 rounded-lg transition-all duration-500 ${
+        isStillActive 
+          ? 'bg-(--color-accent)/10 text-(--color-accent) ring-1 ring-(--color-accent)/20' 
+          : reason === 'error'
+            ? 'bg-red-500/10 text-red-500'
+            : 'bg-(--color-surface-secondary) text-(--color-text-tertiary)'
+      }`}>
         {isStillActive && (
-          <Loader2 size={13} className="text-[var(--color-accent)] animate-spin" />
+          <Loader2 size={13} className="animate-spin" />
         )}
         {isStart && !isActive && (
-          <CheckCircle size={13} className="text-[var(--color-success)] opacity-80" />
+          <CheckCircle size={13} className="text-green-500 opacity-80" />
         )}
         {isFinish && reason === 'stop' && (
-          <CheckCircle size={13} className="text-[var(--color-success)] opacity-80" />
+          <CheckCircle size={13} className="text-green-500 opacity-80" />
         )}
         {isFinish && reason === 'error' && (
-          <XCircle size={13} className="text-[var(--color-error)] opacity-80" />
+          <XCircle size={13} />
         )}
         {isFinish && reason !== 'stop' && reason !== 'error' && (
-          <CheckCircle size={13} className="text-[var(--color-text-tertiary)] opacity-80" />
+          <Play size={11} className="fill-current" />
         )}
       </div>
-      <span className={`text-[11px] uppercase tracking-wider font-bold transition-colors ${
-        isStillActive
-          ? 'text-[var(--color-accent)]'
-          : reason === 'error'
-            ? 'text-[var(--color-error)] opacity-90'
-            : 'text-[var(--color-text-tertiary)] group-hover:text-[var(--color-text-secondary)]'
-      }`}>
-        {isStillActive ? 'Thinking...' : isStart ? 'Sequence completed' : `Process ${reason || 'finished'}`}
-      </span>
+      
+      <div className="flex flex-col">
+        <span className={`text-[11px] font-bold uppercase tracking-[0.1em] transition-colors ${
+          isStillActive
+            ? 'text-(--color-accent)'
+            : reason === 'error'
+              ? 'text-red-500 opacity-90'
+              : 'text-(--color-text-tertiary) group-hover:text-(--color-text-secondary)'
+        }`}>
+          {isStillActive ? 'Running sequence...' : isStart ? 'Sequence initialized' : `Step ${reason || 'finalized'}`}
+        </span>
+        {isStillActive && (
+          <span className="text-[10px] text-(--color-text-tertiary) opacity-60 animate-pulse">
+            Executing operations...
+          </span>
+        )}
+      </div>
     </div>
   )
 }

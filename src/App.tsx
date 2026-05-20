@@ -63,8 +63,8 @@ function App() {
         onToggleCollapse={toggleSidebar}
       />
 
-      <main className="flex-1 flex min-w-0 relative p-2 gap-2">
-        <div className="flex-1 flex flex-col min-w-0 surface-panel overflow-hidden">
+      <main className="flex-1 flex min-w-0 relative">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {currentPage === 'chat' && <ChatView />}
           {currentPage === 'tasks' && <TasksPage />}
         </div>

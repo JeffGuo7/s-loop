@@ -94,18 +94,20 @@ export function WorkspacePanel() {
 
   if (collapsed) {
     return (
-      <button
-        onClick={() => setCollapsed(false)}
-        className="w-10 surface-panel flex items-center justify-center text-(--color-text-tertiary) hover:text-(--color-text) hover:bg-(--color-surface-secondary) transition-colors"
-        title="Show workspace panel"
-      >
-        <Folder size={14} />
-      </button>
+      <div className="w-12 border-l border-(--color-border) flex flex-col items-center pt-6 bg-(--color-surface)/50">
+        <button
+          onClick={() => setCollapsed(false)}
+          className="p-2.5 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
+          title="Show workspace panel"
+        >
+          <Folder size={18} />
+        </button>
+      </div>
     )
   }
 
   return (
-    <div className="w-72 surface-panel flex flex-col overflow-hidden shrink-0 animate-slide-in-right">
+    <div className="w-80 border-l border-(--color-border) flex flex-col overflow-hidden shrink-0 animate-slide-in-right bg-(--color-surface)/30 backdrop-blur-xl">
       {/* Hidden file input for browser fallback */}
       <input
         ref={hiddenInputRef}
@@ -118,32 +120,32 @@ export function WorkspacePanel() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-(--color-border-light) bg-(--color-surface-secondary)/55">
-        <div className="flex items-center gap-2 text-sm font-semibold text-(--color-text)">
-          <Folder size={14} className="text-(--color-accent)" />
+      <div className="flex items-center justify-between px-6 py-5 border-b border-(--color-border-light) bg-transparent">
+        <div className="flex items-center gap-2.5 text-[15px] font-bold tracking-tight text-(--color-text)">
+          <Folder size={18} className="text-(--color-accent)" />
           Workspace
         </div>
         <button
           onClick={() => setCollapsed(true)}
-          className="p-1 rounded-md hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-colors"
+          className="p-1.5 rounded-lg hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
           title="Collapse workspace panel"
         >
-          <X size={14} />
+          <X size={16} />
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-5 scrollbar-subtle">
+      <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-subtle">
         {workspaceDir ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Directory path display */}
-            <div className="surface-panel-subtle flex items-start gap-3 p-4">
-              <FolderOpen size={16} className="text-(--color-accent) shrink-0 mt-0.5" />
+            <div className="rounded-2xl border border-(--color-border-light) bg-(--color-surface-secondary)/30 flex items-start gap-3.5 p-4.5 transition-all hover:border-(--color-accent)/20">
+              <FolderOpen size={18} className="text-(--color-accent) shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-(--color-text-tertiary) mb-1">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-(--color-text-tertiary) mb-1.5 opacity-60">
                   Project Root
                 </div>
-                <p className="text-xs font-mono text-(--color-text-secondary) break-all leading-relaxed whitespace-pre-wrap">
+                <p className="text-[13px] font-mono text-(--color-text-secondary) break-all leading-relaxed whitespace-pre-wrap">
                   {workspaceDir}
                 </p>
                 {workspaceDir.startsWith('selected://') && !isTauri() && (
@@ -155,28 +157,28 @@ export function WorkspacePanel() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2">
+            <div className="flex gap-2.5">
               <button
                 onClick={handleSelectDir}
-                className="flex-1 text-xs px-3 py-2 rounded-2xl bg-(--color-accent) text-white font-semibold hover:opacity-90 transition-opacity"
+                className="flex-1 text-xs px-4 py-3 rounded-xl bg-(--color-accent) text-white font-bold hover:opacity-90 transition-all shadow-lg shadow-accent/15 active:scale-95"
               >
                 Change
               </button>
               <button
                 onClick={handleClear}
-                className="text-xs px-3 py-2 rounded-2xl bg-(--color-surface-secondary) text-(--color-text-secondary) hover:text-(--color-error) hover:bg-(--color-error-bg) border border-(--color-border-light) transition-colors font-medium"
+                className="text-xs px-4 py-3 rounded-xl bg-(--color-surface-secondary) text-(--color-text-secondary) hover:text-(--color-error) hover:bg-(--color-error-bg)/50 border border-(--color-border-light) transition-all font-bold active:scale-95"
               >
                 Clear
               </button>
             </div>
 
             {/* File Tree */}
-            <div>
-              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-(--color-text-tertiary) mb-1 px-1">
-                <Files size={12} />
+            <div className="pt-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) mb-3 px-1 opacity-60">
+                <Files size={14} />
                 Explorer
               </div>
-              <div className="-mx-2">
+              <div className="-mx-2 px-1">
                 <FileTree
                   rootPath={workspaceDir.startsWith('selected://') ? '' : workspaceDir}
                 />

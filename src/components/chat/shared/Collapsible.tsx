@@ -5,24 +5,31 @@ interface CollapsibleProps {
   header: ReactNode
   children: ReactNode
   defaultExpanded?: boolean
-  className?: string
+  expanded?: boolean
   onToggle?: (expanded: boolean) => void
+  className?: string
 }
 
 export function Collapsible({
   header,
   children,
   defaultExpanded = false,
-  className = '',
+  expanded: controlledExpanded,
   onToggle,
+  className = '',
 }: CollapsibleProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded)
+  const isControlled = controlledExpanded !== undefined
+  const expanded = isControlled ? controlledExpanded : internalExpanded
+
   const contentRef = useRef<HTMLDivElement>(null)
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined)
 
   useEffect(() => {
-    setExpanded(defaultExpanded)
-  }, [defaultExpanded])
+    if (!isControlled) {
+      setInternalExpanded(defaultExpanded)
+    }
+  }, [defaultExpanded, isControlled])
 
   useEffect(() => {
     if (!contentRef.current) return
@@ -34,12 +41,12 @@ export function Collapsible({
   }, [])
 
   const handleToggle = useCallback(() => {
-    setExpanded((prev) => {
-      const next = !prev
-      onToggle?.(next)
-      return next
-    })
-  }, [onToggle])
+    const next = !expanded
+    if (!isControlled) {
+      setInternalExpanded(next)
+    }
+    onToggle?.(next)
+  }, [expanded, isControlled, onToggle])
 
   return (
     <div className={`border border-(--color-border) rounded-xl overflow-hidden transition-colors hover:border-(--color-border-hover) ${className}`}>

@@ -13,7 +13,10 @@ import {
   Clock,
   type LucideIcon,
 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Listbox, ListboxItem } from "@heroui/react"
 import { useAppStore, usePetStore, useTelegramStore } from '../../stores'
+import { Button } from '../ui'
 import type { Page } from '../../App'
 
 interface SidebarProps {
@@ -74,37 +77,54 @@ export function Sidebar({
       style={{ width }}
     >
       {/* Top Actions */}
-      <div className="px-4 pt-5 pb-4 border-b border-(--color-border-light)">
+      <div className="px-4 pt-8 pb-4">
         {!collapsed && (
           <>
-            <button
-              onClick={handleNewChat}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-(--color-accent) text-white text-sm font-semibold hover:bg-(--color-accent-light) active:scale-[0.98] transition-all shadow-sm shadow-(--color-accent)/20"
+            <motion.div
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
             >
-              <Plus size={18} />
-              New Chat
-            </button>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="section-kicker">Conversations</span>
+              <Button
+                onClick={handleNewChat}
+                variant="primary"
+                className="w-full gap-2 rounded-xl shadow-lg shadow-accent/15 py-6 group relative overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-linear-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Plus size={18} strokeWidth={2.5} />
+                <span className="font-bold tracking-tight">New Chat</span>
+              </Button>
+            </motion.div>
+            
+            <div className="mt-8 flex items-center justify-between px-1">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-(--color-text-tertiary) opacity-60">
+                Recent Conversations
+              </span>
               <button
                 onClick={onToggleCollapse}
-                className="p-2 rounded-lg hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) transition-all"
+                className="p-1.5 rounded-lg hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) transition-all hover:text-(--color-text-secondary)"
                 title="Collapse sidebar"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={14} />
               </button>
             </div>
           </>
         )}
         {collapsed && (
-          <div className="flex flex-col gap-3 w-full items-center pt-2">
-            <button
-              onClick={handleNewChat}
-              className="p-3 rounded-xl bg-(--color-accent) text-white hover:bg-(--color-accent-light) active:scale-[0.95] transition-all"
-              title="New Chat"
+          <div className="flex flex-col gap-4 w-full items-center pt-1">
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
-              <Plus size={20} />
-            </button>
+              <Button
+                onClick={handleNewChat}
+                variant="primary"
+                size="icon"
+                className="w-12 h-12 rounded-xl shadow-lg shadow-accent/15"
+                title="New Chat"
+              >
+                <Plus size={22} strokeWidth={2.5} />
+              </Button>
+            </motion.div>
             <button
               onClick={onToggleCollapse}
               className="p-2 rounded-lg hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) transition-all"
@@ -117,62 +137,62 @@ export function Sidebar({
       </div>
 
       {/* Session list */}
-      <div className="flex-1 overflow-y-auto px-3 pb-3 pt-2 scrollbar-subtle space-y-1">
-        {sessions.map((session) => {
-          const isActive = session.id === activeSessionId
-          const title = session.title || 'New Chat'
+      <div className="flex-1 overflow-y-auto px-3 pb-3 pt-2 scrollbar-subtle">
+        <Listbox
+          aria-label="Chat Sessions"
+          variant="flat"
+          onAction={(key) => handleSelect(key as string)}
+          selectedKeys={activeSessionId ? [activeSessionId] : []}
+          classNames={{
+            base: "p-0",
+            list: "gap-1",
+          }}
+        >
+          {sessions.map((session) => {
+            const isActive = session.id === activeSessionId
+            const title = session.title || 'New Chat'
 
-          if (collapsed) {
             return (
-              <button
+              <ListboxItem
                 key={session.id}
-                onClick={() => handleSelect(session.id)}
-                className={`w-full aspect-square flex items-center justify-center rounded-xl transition-all ${
-                  isActive
-                    ? 'bg-(--color-accent-muted) text-(--color-accent) shadow-sm'
-                    : 'text-(--color-text-tertiary) hover:bg-(--color-surface-secondary)'
+                textValue={title}
+                className={`group relative h-12 rounded-xl transition-all duration-300 ${
+                  isActive 
+                    ? 'bg-(--color-accent-muted) text-(--color-accent)' 
+                    : 'text-(--color-text-secondary) hover:bg-(--color-surface-secondary)'
                 }`}
-                title={title}
+                startContent={
+                  <MessageSquare
+                    size={16}
+                    strokeWidth={isActive ? 2.5 : 1.5}
+                    className={isActive ? 'text-(--color-accent)' : 'text-(--color-text-quaternary) group-hover:text-(--color-text-secondary)'}
+                  />
+                }
+                endContent={
+                  !collapsed && (
+                    <button
+                      onClick={(e) => handleDelete(e, session.id)}
+                      className="p-1.5 rounded-lg text-(--color-text-quaternary) hover:text-(--color-error) hover:bg-(--color-error-bg) opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-100"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )
+                }
               >
-                <MessageSquare size={18} strokeWidth={isActive ? 2 : 1.5} />
-              </button>
+                {!collapsed && (
+                  <span className={`text-sm truncate tracking-tight ${isActive ? 'font-bold' : 'font-medium'}`}>
+                    {title}
+                  </span>
+                )}
+              </ListboxItem>
             )
-          }
-
-          return (
-            <div key={session.id} className="group relative flex items-center">
-              <button
-                onClick={() => handleSelect(session.id)}
-                className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
-                  isActive
-                    ? 'bg-(--color-accent-muted) text-(--color-accent) border border-(--color-accent)/20'
-                    : 'text-(--color-text-secondary) hover:bg-(--color-surface-secondary) border border-transparent'
-                }`}
-              >
-                <MessageSquare
-                  size={16}
-                  strokeWidth={isActive ? 2 : 1.5}
-                  className={isActive ? 'text-(--color-accent)' : 'text-(--color-text-quaternary)'}
-                />
-                <span className={`flex-1 text-sm truncate ${isActive ? 'font-medium' : ''}`}>
-                  {title}
-                </span>
-              </button>
-              <button
-                onClick={(e) => handleDelete(e, session.id)}
-                className="absolute right-2 p-1.5 rounded-md text-(--color-text-quaternary) hover:text-(--color-error) hover:bg-(--color-error-bg) opacity-0 group-hover:opacity-100 transition-all"
-                title="Delete"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          )
-        })}
+          })}
+        </Listbox>
       </div>
 
       {/* Footer */}
-      <div className="p-3 space-y-2 border-t border-(--color-border-light)">
-        <div className="surface-panel-subtle p-1.5">
+      <div className="p-4 space-y-4 border-t border-black/[0.02] dark:border-white/[0.02]">
+        <div className="bg-(--color-surface-secondary)/40 rounded-2xl p-1 border border-black/[0.02] dark:border-white/[0.02]">
           <NavItem
             icon={Clock}
             label="Tasks"
@@ -197,24 +217,28 @@ export function Sidebar({
           />
         </div>
 
-        <div className="flex gap-1.5">
-          <button
+        <div className="flex gap-2">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-            className={`flex items-center justify-center rounded-lg hover:bg-(--color-surface-hover) text-(--color-text-tertiary) hover:text-(--color-text-secondary) transition-all ${
-              collapsed ? 'w-full h-9' : 'flex-1 h-9'
+            className={`flex items-center justify-center rounded-xl hover:bg-(--color-surface-hover) text-(--color-text-tertiary) hover:text-(--color-accent) transition-all border border-transparent hover:border-(--color-accent)/10 ${
+              collapsed ? 'w-full h-11' : 'flex-1 h-11'
             }`}
             title={theme === 'light' ? 'Dark mode' : 'Light mode'}
           >
             {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
-          </button>
+          </motion.button>
           {!collapsed && (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onSettingsOpen}
-              className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-(--color-surface-hover) text-(--color-text-tertiary) hover:text-(--color-text-secondary) transition-all"
+              className="flex items-center justify-center w-11 h-11 rounded-xl hover:bg-(--color-surface-hover) text-(--color-text-tertiary) hover:text-(--color-text-secondary) transition-all border border-transparent hover:border-black/[0.05]"
               title="Settings"
             >
               <Settings size={16} />
-            </button>
+            </motion.button>
           )}
         </div>
       </div>
@@ -235,17 +259,17 @@ function NavItem({ icon: Icon, label, active, onClick, collapsed, badge }: NavIt
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 rounded-lg transition-all w-full relative group ${
+      className={`flex items-center gap-3 rounded-xl transition-all w-full relative group ${
         active
-          ? 'bg-(--color-accent-muted) text-(--color-accent)'
-          : 'hover:bg-(--color-surface-hover) text-(--color-text-tertiary)'
-      } ${collapsed ? 'aspect-square justify-center' : 'px-4 py-2.5'}`}
+          ? 'bg-(--color-surface) text-(--color-accent) shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]'
+          : 'hover:bg-(--color-surface-hover)/60 text-(--color-text-tertiary) hover:text-(--color-text-secondary)'
+      } ${collapsed ? 'aspect-square justify-center' : 'px-3.5 py-2.5'}`}
       title={label}
     >
-      <Icon size={16} strokeWidth={active ? 2 : 1.5} />
-      {!collapsed && <span className="text-sm">{label}</span>}
+      <Icon size={16} strokeWidth={active ? 2.5 : 1.5} />
+      {!collapsed && <span className="text-sm font-bold tracking-tight">{label}</span>}
       {badge && !active && (
-        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-(--color-success) ring-2 ring-(--color-surface-secondary)" />
+        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-(--color-success) ring-2 ring-(--color-surface-secondary) animate-pulse" />
       )}
     </button>
   )

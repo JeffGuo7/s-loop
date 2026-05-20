@@ -275,20 +275,25 @@ export function ChatView() {
 
       {/* Messages or hero empty state */}
       {isEmpty ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-8">
-          <div className="text-center space-y-4 mb-10">
-            <div className="w-16 h-16 mx-auto rounded-md bg-(--color-surface-secondary) border border-(--color-border) flex items-center justify-center shadow-sm">
-              <Cpu size={24} className="text-(--color-text-tertiary)" />
+        <div className="flex-1 flex flex-col items-center justify-center px-8 relative overflow-hidden">
+          {/* Subtle background element */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
+          
+          <div className="text-center space-y-6 mb-12 relative z-10">
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-(--color-surface-secondary)/80 border border-(--color-border-light) flex items-center justify-center shadow-2xl shadow-accent/5 backdrop-blur-xl animate-float">
+              <Cpu size={32} className="text-(--color-accent)" />
             </div>
-            <div className="space-y-2">
-              <p className="section-kicker">Snotra Workspace</p>
-              <h2 className="text-[32px] font-bold tracking-[-0.03em]">How can I help?</h2>
-              <p className="text-sm text-(--color-text-secondary) max-w-md mx-auto">
-                Ask questions, inspect files, and orchestrate tools from one calm workspace.
+            <div className="space-y-3">
+              <p className="section-kicker tracking-[0.3em]">Snotra Workspace</p>
+              <h2 className="text-[42px] font-black tracking-[-0.04em] text-(--color-text) leading-tight">
+                How can I help?
+              </h2>
+              <p className="text-[15px] text-(--color-text-tertiary) max-w-lg mx-auto leading-relaxed">
+                Seamlessly orchestrate your workspace, files, and AI agents from one minimalist interface.
               </p>
             </div>
           </div>
-          <div className="w-full max-w-4xl">
+          <div className="w-full max-w-4xl relative z-10">
             <ChatInput
               onSubmit={handleSubmit}
               onAbort={abort}
@@ -316,7 +321,7 @@ export function ChatView() {
           )}
 
           {/* Input Area Wrapper */}
-          <div className="shrink-0 pt-3 relative z-10 before:absolute before:inset-x-0 before:-top-10 before:h-10 before:bg-linear-to-t before:from-(--color-surface) before:to-transparent">
+          <div className="shrink-0 pt-3 relative z-10 bg-linear-to-t from-(--color-surface) via-(--color-surface)/95 to-transparent">
             {/* Input */}
             <ChatInput
               onSubmit={handleSubmit}
@@ -326,11 +331,13 @@ export function ChatView() {
             />
 
             {/* Model info */}
-            <div className="px-4 pb-5 text-[11px] text-(--color-text-tertiary) text-center flex items-center justify-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity">
-              <Cpu size={12} />
-              <span className="font-medium">{providerConfigs[activeProvider]?.model || 'No model'}</span>
-              <span className="mx-1 opacity-50">via</span>
-              <span className="font-bold">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
+            <div className="px-4 pb-6 text-[10px] text-(--color-text-tertiary) text-center flex items-center justify-center gap-2 opacity-50 hover:opacity-100 transition-all duration-500">
+              <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-(--color-surface-secondary)/60 border border-(--color-border-light) backdrop-blur-md">
+                <Cpu size={11} className="text-(--color-accent)/70" />
+                <span className="font-bold uppercase tracking-widest">{providerConfigs[activeProvider]?.model || 'No model'}</span>
+                <span className="opacity-40 px-1.5">•</span>
+                <span className="font-bold uppercase tracking-widest">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
+              </div>
             </div>
           </div>
         </>
