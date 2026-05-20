@@ -280,7 +280,7 @@ export function ChatView() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
           
           <div className="text-center space-y-6 mb-12 relative z-10">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-(--color-surface-secondary)/80 border border-(--color-border-light) flex items-center justify-center shadow-2xl shadow-accent/5 backdrop-blur-xl animate-float">
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-(--color-surface-secondary)/80 border border-(--color-border-light) flex items-center justify-center shadow-2xl shadow-accent/5 backdrop-blur-xl">
               <Cpu size={32} className="text-(--color-accent)" />
             </div>
             <div className="space-y-3">
