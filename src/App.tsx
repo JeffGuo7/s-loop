@@ -23,7 +23,6 @@ function App() {
   // (Workspace Panel Width - Sidebar Width) / 2
   const sWidth = sidebarCollapsed ? 72 : 280
   const wWidth = workspaceCollapsed ? 48 : 320
-  const centeringOffset = (wWidth - sWidth) / 2
 
   useTaskScheduler()
 
@@ -69,13 +68,17 @@ function App() {
         onToggleCollapse={toggleSidebar}
       />
 
-      <main className="flex-1 flex min-w-0 relative">
-        <div 
-          className="flex-1 flex flex-col min-w-0 overflow-hidden transition-transform duration-500 ease-[var(--ease-out)]"
-          style={{ transform: `translateX(${centeringOffset}px)` }}
-        >
-          {currentPage === 'chat' && <ChatView />}
-          {currentPage === 'tasks' && <TasksPage />}
+      <main 
+        className="flex-1 flex min-w-0 relative sidebar-transition"
+        style={{ 
+          paddingRight: workspaceCollapsed ? 'var(--workspace-panel-collapsed)' : 'var(--workspace-panel-width)' 
+        }}
+      >
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden items-center">
+          <div className="w-full max-w-(--chat-max-width) flex flex-col h-full">
+            {currentPage === 'chat' && <ChatView />}
+            {currentPage === 'tasks' && <TasksPage />}
+          </div>
         </div>
         <WorkspacePanel />
       </main>

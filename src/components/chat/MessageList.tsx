@@ -42,7 +42,7 @@ export function MessageList({ sessionId }: MessageListProps) {
         }}
         itemContent={(index, message) => {
           return (
-            <div className="mx-auto max-w-(--chat-max-width) px-8">
+            <div className="px-8">
               <MessageItem
                 message={message}
                 isStreaming={

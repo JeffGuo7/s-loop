@@ -264,7 +264,7 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-transparent h-full">
+    <div className="flex-1 flex flex-col bg-transparent h-full w-full">
       {/* Offline status bar */}
       {!serverOnline && (
         <div className="mx-6 mt-5 rounded-xl px-4 py-2 text-xs flex items-center gap-2 bg-(--color-error)/10 text-(--color-error) border border-(--color-error)/20">

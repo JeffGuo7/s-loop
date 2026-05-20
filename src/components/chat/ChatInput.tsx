@@ -158,7 +158,7 @@ export function ChatInput({
 
   return (
     <div
-      className="mx-auto w-full max-w-(--chat-max-width) px-12 pb-10"
+      className="w-full px-12 pb-10"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

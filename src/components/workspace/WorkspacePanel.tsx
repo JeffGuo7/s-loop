@@ -94,7 +94,7 @@ export function WorkspacePanel() {
   if (collapsed) {
     return (
       <div 
-        className="flex flex-col items-center pt-6 bg-(--color-surface)/50 border-l border-(--color-border)"
+        className="absolute right-0 top-0 bottom-0 flex flex-col items-center pt-6 bg-(--color-surface)/50 border-l border-(--color-border) z-10"
         style={{ width: 'var(--workspace-panel-collapsed)' }}
       >
         <button
@@ -110,7 +110,7 @@ export function WorkspacePanel() {
 
   return (
     <div 
-      className="border-l border-(--color-border) flex flex-col overflow-hidden shrink-0 animate-slide-in-right bg-(--color-surface)/30 backdrop-blur-xl"
+      className="absolute right-0 top-0 bottom-0 border-l border-(--color-border) flex flex-col overflow-hidden shrink-0 animate-slide-in-right bg-(--color-surface)/30 backdrop-blur-xl z-10"
       style={{ width: 'var(--workspace-panel-width)' }}
     >
       {/* Hidden file input for browser fallback */}
