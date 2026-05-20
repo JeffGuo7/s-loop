@@ -249,20 +249,50 @@ export function ChatView() {
   if (!activeSessionId) {
     return (
       <div className="flex-1 flex items-center justify-center bg-(--color-bg) relative overflow-hidden">
-        {/* Ambient glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-(--color-accent)/3 rounded-full blur-[100px] pointer-events-none" />
+        {/* Deep ambient background glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-(--color-accent)/5 rounded-full blur-[140px] pointer-events-none" />
 
-        <div className="text-center space-y-8 relative z-10 px-8">
-          <div className="w-24 h-24 mx-auto rounded-3xl bg-(--color-surface) border border-(--color-border-light) flex items-center justify-center shadow-lg shadow-(--color-accent)/5">
-            <Cpu size={40} className="text-(--color-accent)" />
+        <div className="text-center relative z-10 px-8 max-w-lg">
+          {/* Main Visual Group */}
+          <div className="flex justify-center w-full mb-12">
+            <div className="relative group">
+              {/* Pulsing Back Glow */}
+              <div className="absolute inset-0 bg-(--color-accent) opacity-10 blur-3xl group-hover:opacity-20 transition-opacity duration-700 rounded-full scale-150" />
+              
+              {/* Icon Container with Fluid Shape */}
+              <div className="relative w-28 h-28 mx-auto rounded-[30%_70%_70%_30%_/_30%_30%_70%_70%] bg-white/60 dark:bg-white/5 border border-white/40 dark:border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-2xl animate-float overflow-hidden">
+                <Cpu size={48} className="text-(--color-accent) relative z-10 drop-shadow-[0_0_15px_rgba(var(--color-accent-rgb),0.4)]" />
+                
+                {/* Internal Animated Shimmer */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
+              </div>
+
+              {/* Orbiting Tech Particles */}
+              <div className="absolute top-0 -right-4 w-5 h-5 rounded-full bg-(--color-accent) opacity-40 animate-pulse blur-[1px]" />
+              <div className="absolute bottom-4 -left-6 w-3 h-3 rounded-full bg-(--color-accent-light) opacity-30 animate-bounce [animation-delay:0.8s] blur-[1px]" />
+            </div>
           </div>
-          <div className="space-y-3">
-            <h2 className="text-[28px] font-bold tracking-[-0.03em] text-(--color-text)">Welcome to Snotra</h2>
-            <p className="text-sm text-(--color-text-tertiary) max-w-sm mx-auto leading-relaxed">
-              Start a new conversation to begin chatting with AI
+
+          {/* Typography */}
+          <div className="space-y-4 mb-12">
+            <h2 className="text-[36px] font-bold tracking-[-0.04em] text-(--color-text) leading-tight">
+              Welcome to Snotra
+            </h2>
+            <p className="text-[15px] text-(--color-text-tertiary) leading-relaxed">
+              Experience a calm, orchestrated workspace. Start a new conversation to begin your journey with AI.
             </p>
           </div>
-          <ServerStatus online={serverOnline} />
+
+          {/* Connection Status & CTA */}
+          <div className="flex flex-col items-center gap-6">
+            <ServerStatus online={serverOnline} />
+            
+            <div className="h-[1px] w-12 bg-(--color-border-light)" />
+            
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-(--color-text-quaternary) animate-pulse">
+              Select a session from the sidebar to start
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -289,8 +319,23 @@ export function ChatView() {
             <p className="section-kicker tracking-[0.3em] mb-6">Snotra Workspace</p>
 
             {/* Centered icon */}
-            <div className="w-24 h-24 mx-auto rounded-3xl bg-(--color-surface) border border-(--color-border-light) flex items-center justify-center shadow-lg shadow-(--color-accent)/5 mb-8">
-              <Cpu size={40} className="text-(--color-accent)" />
+            <div className="flex justify-center w-full mb-8">
+              <div className="relative group">
+                {/* Background Glow Effect */}
+                <div className="absolute inset-0 bg-(--color-accent) opacity-20 blur-2xl group-hover:opacity-30 transition-opacity duration-500 rounded-full" />
+                
+                {/* Main Glass Icon Container */}
+                <div className="relative w-24 h-24 rounded-[28%_72%_71%_29%_/_44%_40%_60%_56%] bg-white/80 dark:bg-white/10 border border-white/40 dark:border-white/20 flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl animate-float overflow-hidden">
+                  <Cpu size={40} className="text-(--color-accent) relative z-10 drop-shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
+                  
+                  {/* Internal Shimmering Effect */}
+                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
+                </div>
+
+                {/* Orbiting dots for extra "AI" tech feel */}
+                <div className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-(--color-accent) animate-pulse" />
+                <div className="absolute -bottom-1 -left-1 w-2 h-2 rounded-full bg-(--color-accent-light) animate-bounce [animation-delay:0.5s]" />
+              </div>
             </div>
 
             {/* Heading below icon */}
