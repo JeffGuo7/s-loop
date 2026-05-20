@@ -111,12 +111,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         
         {/* Settings Sidebar */}
         <aside className="w-64 bg-(--color-surface) border-r border-(--color-border) flex flex-col shrink-0">
-          <div className="px-8 pt-10 pb-6">
-            <h2 className="text-xl font-bold text-(--color-text) tracking-tight">Settings</h2>
-            <p className="text-[10px] text-(--color-text-tertiary) mt-1.5 font-semibold uppercase tracking-[0.15em]">Intelligence Hub</p>
+          <div className="px-8 pt-9 pb-6">
+            <h2 className="text-xl font-bold text-(--color-text) tracking-tight ml-2.5">Settings</h2>
+            <p className="text-[10px] text-(--color-text-tertiary) mt-1.5 ml-0.5 font-semibold uppercase tracking-[0.15em]">Intelligence Hub</p>
           </div>
 
-          <nav className="flex-1 px-4 space-y-1 overflow-y-auto scrollbar-subtle">
+          <nav className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-subtle">
             {[
               { id: 'provider', icon: Cpu, label: 'AI Providers' },
               { id: 'mcp', icon: Server, label: 'MCP Servers' },
@@ -126,7 +126,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-semibold tracking-tight transition-all duration-200 ${
+                className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-semibold tracking-tight transition-all duration-200 ${
                   activeTab === item.id
                     ? 'bg-(--color-accent-muted) text-(--color-accent)'
                     : 'text-(--color-text-secondary) hover:bg-(--color-surface-secondary) hover:text-(--color-text)'
@@ -138,8 +138,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             ))}
           </nav>
 
-          <div className="px-6 pb-8 pt-4">
-            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-(--color-surface-secondary)/60 border border-(--color-border-light)">
+          <div className="px-7 pb-9 pt-2">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-(--color-surface-secondary)/60 border border-(--color-border-light) ml-5">
               <div className={`w-2 h-2 rounded-full ${providerList.length > 0 ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.4)]' : 'bg-red-400'}`} />
               <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${
                 providerList.length > 0 ? 'text-green-600' : 'text-red-400'
@@ -154,7 +154,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         <div className="flex-1 flex flex-col min-w-0 bg-(--color-bg)">
           {/* Header */}
           <header className="shrink-0 flex items-center justify-between px-10 h-16 border-b border-(--color-border-light)">
-            <h3 className="text-[15px] font-semibold text-(--color-text) tracking-tight">
+            <h3 className="text-[15px] font-semibold text-(--color-text) tracking-tight ml-1">
               {activeTab === 'provider' && 'AI Model Providers'}
               {activeTab === 'mcp' && 'MCP Servers'}
               {activeTab === 'skills' && 'Skills'}
@@ -162,9 +162,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             </h3>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
+              className="p-2 mr-1 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
             >
-              <X size={18} />
+              <X size={18} className="mr-3.5 mb-8" />
             </button>
           </header>
 
@@ -399,7 +399,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               ) : saved ? (
                 <CheckCircle size={16} />
               ) : null}
-              <span>
+              <span className="mr-1">
                 {saved ? 'Applied' : saving ? 'Saving...' : 'Apply'}
               </span>
             </button>

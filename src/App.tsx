@@ -19,11 +19,6 @@ function App() {
   const [showHatchModal, setShowHatchModal] = useState(false)
   const [showTelegramModal, setShowTelegramModal] = useState(false)
 
-  // Calculate the offset to center content in the window
-  // (Workspace Panel Width - Sidebar Width) / 2
-  const sWidth = sidebarCollapsed ? 72 : 280
-  const wWidth = workspaceCollapsed ? 48 : 320
-
   useTaskScheduler()
 
   useEffect(() => {
