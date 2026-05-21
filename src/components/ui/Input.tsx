@@ -21,8 +21,8 @@ export function Input({ className = '', variant = 'primary', size = 'md', startC
   }
 
   const variantClasses = {
-    primary: "bg-(--color-surface-secondary)/50 border-(--color-border) hover:border-(--color-accent)/40 focus-within:!border-(--color-accent)",
-    secondary: "bg-transparent border-(--color-border) focus-within:!border-(--color-accent)",
+    primary: "bg-surface-secondary/50 border-border hover:border-accent/40 focus-within:!border-accent shadow-sm",
+    secondary: "bg-transparent border-border focus-within:!border-accent",
     flat: "",
     bordered: "",
     faded: "",
@@ -34,15 +34,15 @@ export function Input({ className = '', variant = 'primary', size = 'md', startC
     : ''
 
   return (
-    <div className={`w-full flex flex-col gap-1.5 ${className}`}>
+    <div className={`w-full flex flex-col gap-2.5 ${className}`}>
       {props.label && (
-        <label className="text-[11px] font-bold uppercase tracking-widest text-(--color-text-tertiary) ml-1 opacity-70">
+        <label className="text-[12px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-2 opacity-70">
           {props.label}
         </label>
       )}
-      <div className={`relative flex items-center rounded-xl transition-all duration-300 ${customClass} ${isDisabled ? 'opacity-50' : ''}`}>
+      <div className={`relative flex items-center rounded-2xl transition-all duration-500 ${customClass} ${isDisabled ? 'opacity-50' : ''}`}>
         {startContent && (
-          <div className="pl-4 text-(--color-text-tertiary)">
+          <div className="pl-6 text-text-tertiary">
             {startContent}
           </div>
         )}
@@ -52,13 +52,13 @@ export function Input({ className = '', variant = 'primary', size = 'md', startC
           disabled={isDisabled}
           className="w-full"
           classNames={{
-            input: "text-sm px-4 py-2.5",
+            input: "text-[16px] px-6 py-4 font-bold tracking-tight",
             ...props.classNames
           }}
           {...props}
         />
         {endContent && (
-          <div className="pr-4 text-(--color-text-tertiary)">
+          <div className="pr-6 text-text-tertiary">
             {endContent}
           </div>
         )}

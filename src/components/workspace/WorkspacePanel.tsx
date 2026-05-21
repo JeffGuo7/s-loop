@@ -94,15 +94,15 @@ export function WorkspacePanel() {
   if (collapsed) {
     return (
       <div 
-        className="absolute right-0 top-0 bottom-0 flex flex-col items-center pt-6 bg-(--color-surface)/50 border-l border-(--color-border) z-10"
+        className="absolute right-0 top-0 bottom-0 flex flex-col items-center pt-8 bg-surface/50 border-l border-border z-10"
         style={{ width: 'var(--workspace-panel-collapsed)' }}
       >
         <button
           onClick={toggleWorkspace}
-          className="p-2.5 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
+          className="p-3 rounded-xl hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all"
           title="Show workspace panel"
         >
-          <Folder size={18} />
+          <Folder size={20} />
         </button>
       </div>
     )
@@ -110,7 +110,7 @@ export function WorkspacePanel() {
 
   return (
     <div 
-      className="absolute right-0 top-0 bottom-0 border-l border-(--color-border) flex flex-col overflow-hidden shrink-0 animate-slide-in-right bg-(--color-surface)/30 backdrop-blur-xl z-10"
+      className="absolute right-0 top-0 bottom-0 border-l border-border flex flex-col overflow-hidden shrink-0 animate-slide-in-right bg-surface/30 backdrop-blur-xl z-10"
       style={{ width: 'var(--workspace-panel-width)' }}
     >
       {/* Hidden file input for browser fallback */}
@@ -125,36 +125,36 @@ export function WorkspacePanel() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-(--color-border-light) bg-transparent">
-        <div className="flex items-center gap-2.5 text-[15px] font-bold tracking-tight text-(--color-text)">
-          <Folder size={18} className="text-(--color-accent)" />
+      <div className="flex items-center justify-between px-8 py-6 border-b border-border-light bg-transparent">
+        <div className="flex items-center gap-3 text-[16px] font-bold tracking-tight text-text">
+          <Folder size={18} className="text-accent" />
           Workspace
         </div>
         <button
           onClick={toggleWorkspace}
-          className="p-1.5 rounded-lg hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
+          className="p-2 rounded-lg hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all"
           title="Collapse workspace panel"
         >
-          <X size={16} />
+          <X size={18} />
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-subtle">
+      <div className="flex-1 overflow-y-auto px-8 py-8 scrollbar-subtle">
         {workspaceDir ? (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* Directory path display */}
-            <div className="rounded-2xl border border-(--color-border-light) bg-(--color-surface-secondary)/30 flex items-start gap-3.5 p-4.5 transition-all hover:border-(--color-accent)/20">
-              <FolderOpen size={18} className="text-(--color-accent) shrink-0 mt-0.5" />
+            <div className="rounded-[24px] border border-border-light bg-surface-secondary/30 flex items-start gap-4 p-5 transition-all hover:border-accent/20">
+              <FolderOpen size={20} className="text-accent shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-(--color-text-tertiary) mb-1.5 opacity-60">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-text-tertiary mb-2 opacity-60">
                   Project Root
                 </div>
-                <p className="text-[13px] font-mono text-(--color-text-secondary) break-all leading-relaxed whitespace-pre-wrap">
+                <p className="text-[13px] font-mono text-text-secondary break-all leading-relaxed whitespace-pre-wrap font-medium">
                   {workspaceDir}
                 </p>
                 {workspaceDir.startsWith('selected://') && !isTauri() && (
-                  <p className="text-[10px] text-(--color-warning) mt-1">
+                  <p className="text-[10px] text-red-400 mt-2 font-bold">
                     Full path unavailable in browser. Use Tauri app or enter path manually.
                   </p>
                 )}
@@ -162,25 +162,25 @@ export function WorkspacePanel() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2.5">
+            <div className="flex gap-3">
               <button
                 onClick={handleSelectDir}
-                className="flex-1 text-xs px-4 py-3 rounded-xl bg-(--color-accent) text-white font-bold hover:opacity-90 transition-all shadow-lg shadow-accent/15 active:scale-95"
+                className="flex-1 text-xs px-5 py-3.5 rounded-2xl bg-accent text-white font-bold hover:opacity-90 transition-all shadow-lg shadow-accent/15 active:scale-95"
               >
                 Change
               </button>
               <button
                 onClick={handleClear}
-                className="text-xs px-4 py-3 rounded-xl bg-(--color-surface-secondary) text-(--color-text-secondary) hover:text-(--color-error) hover:bg-(--color-error-bg)/50 border border-(--color-border-light) transition-all font-bold active:scale-95"
+                className="text-xs px-5 py-3.5 rounded-2xl bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all font-bold active:scale-95"
               >
                 Clear
               </button>
             </div>
 
             {/* File Tree */}
-            <div className="pt-2">
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) mb-3 px-1 opacity-60">
-                <Files size={14} />
+            <div className="pt-4">
+              <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.2em] text-accent mb-4 px-1 opacity-60">
+                <Files size={16} />
                 Explorer
               </div>
               <div className="-mx-2 px-1">
@@ -191,19 +191,19 @@ export function WorkspacePanel() {
             </div>
           </div>
         ) : showInput ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <button
               onClick={() => setShowInput(false)}
-              className="flex items-center gap-1 text-[11px] font-medium text-(--color-text-tertiary) hover:text-(--color-text) transition-colors"
+              className="flex items-center gap-2 text-[12px] font-bold text-text-tertiary hover:text-text transition-all"
             >
-              <ChevronLeft size={14} />
+              <ChevronLeft size={16} />
               Back
             </button>
-            <p className="text-xs font-medium text-(--color-text-secondary)">
+            <p className="text-sm font-bold text-text tracking-tight">
               Enter workspace path
             </p>
-            <p className="text-[10px] text-(--color-text-tertiary) leading-relaxed">
-              Example: <code className="text-[10px]">C:\Users\name\project</code> on Windows
+            <p className="text-[11px] text-text-tertiary leading-relaxed font-medium">
+              Example: <code className="text-[11px] bg-surface-secondary px-1 rounded">C:\Users\name\project</code>
             </p>
             <input
               type="text"
@@ -211,39 +211,39 @@ export function WorkspacePanel() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit()}
               placeholder="C:\\Users\\...\\project"
-              className="w-full px-3 py-2 rounded-2xl bg-(--color-surface) border border-(--color-border) text-xs font-mono focus:ring-2 focus:ring-(--color-accent) outline-none transition-all"
+              className="w-full px-5 py-4 rounded-[18px] bg-surface border border-border text-xs font-mono focus:ring-4 focus:ring-accent-subtle focus:border-accent/40 outline-none transition-all shadow-inner"
               autoFocus
             />
             <button
               onClick={handleInputSubmit}
               disabled={!inputValue.trim()}
-              className="w-full flex items-center justify-center gap-1.5 text-xs px-4 py-2.5 rounded-2xl bg-(--color-accent) text-white font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
+              className="w-full flex items-center justify-center gap-2 text-xs px-6 py-4 rounded-[18px] bg-accent text-white font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-xl shadow-accent/20"
             >
-              <Check size={14} />
-              Confirm
+              <Check size={16} strokeWidth={2.5} />
+              Confirm Path
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center text-center py-8">
-            <div className="w-12 h-12 rounded-2xl bg-(--color-surface-secondary) border border-(--color-border) flex items-center justify-center mb-4">
-              <FolderOpen size={24} className="text-(--color-text-tertiary) opacity-50" />
+          <div className="flex flex-col items-center text-center py-16">
+            <div className="w-16 h-16 rounded-[22px] bg-surface-secondary border border-border flex items-center justify-center mb-8 shadow-sm">
+              <FolderOpen size={32} className="text-text-tertiary opacity-40" />
             </div>
-            <p className="text-sm font-semibold text-(--color-text-secondary) mb-1">
+            <h3 className="text-lg font-bold text-text mb-2 tracking-tight">
               No Workspace
-            </p>
-            <p className="text-[11px] text-(--color-text-tertiary) mb-5 max-w-[180px] leading-relaxed">
+            </h3>
+            <p className="text-[13px] text-text-tertiary mb-10 max-w-[200px] leading-relaxed font-medium opacity-70">
               Select a project directory to enable workspace features
             </p>
             <button
               onClick={handleSelectDir}
-              className="flex items-center gap-2 text-xs px-5 py-2.5 rounded-2xl bg-(--color-accent) text-white font-semibold hover:opacity-90 transition-opacity shadow-sm shadow-(--color-accent)/20"
+              className="flex items-center gap-3 text-xs px-8 py-4 rounded-2xl bg-accent text-white font-bold hover:opacity-90 transition-all shadow-2xl shadow-accent/20 active:scale-95"
             >
-              <Folder size={14} />
+              <Folder size={16} />
               Select Folder
             </button>
             <button
               onClick={() => setShowInput(true)}
-              className="mt-2 text-[11px] text-(--color-text-tertiary) hover:text-(--color-text) underline underline-offset-2 transition-colors"
+              className="mt-4 text-[12px] text-text-tertiary hover:text-accent underline underline-offset-4 transition-all font-bold opacity-60 hover:opacity-100"
             >
               Or enter path manually
             </button>

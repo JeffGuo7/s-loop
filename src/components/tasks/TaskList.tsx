@@ -41,127 +41,133 @@ export function TaskList({ onCreateTask }: TaskListProps) {
   const getStatusColor = (status: ScheduledTask['status']) => {
     switch (status) {
       case 'running':
-        return 'text-(--color-accent)';
+        return 'text-accent';
       case 'completed':
-        return 'text-(--color-success)';
+        return 'text-green-500';
       case 'failed':
-        return 'text-(--color-error)';
+        return 'text-red-500';
       case 'cancelled':
-        return 'text-(--color-text-tertiary)';
+        return 'text-text-tertiary';
       default:
-        return 'text-(--color-text-secondary)';
+        return 'text-text-secondary';
     }
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden bg-bg">
       {/* Header */}
-      <div className="shrink-0 px-8 pt-8 pb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="section-kicker mb-2">Automation Desk</p>
-            <h1 className="section-heading">Scheduled Tasks</h1>
-            <p className="text-sm text-(--color-text-secondary) mt-2">
-              Automate AI tasks to run at specific times
+      <div className="shrink-0 px-40 pt-48 pb-32">
+        <div className="flex items-center justify-between gap-20">
+          <div className="space-y-12">
+            <p className="text-[16px] font-bold uppercase tracking-[0.7em] text-accent opacity-50">Automation Desk</p>
+            <h1 className="text-8xl font-bold tracking-tightest text-text leading-none drop-shadow-sm">Scheduled Tasks</h1>
+            <p className="text-[24px] text-text-tertiary font-medium opacity-70 max-w-3xl leading-relaxed">
+              Automate complex AI workflows and agents to run at specific intervals with surgical precision.
             </p>
           </div>
           <MagicButton
             onClick={onCreateTask}
-            className="gap-2 shrink-0"
+            className="gap-8 shrink-0 px-20 py-10 rounded-[44px] shadow-3xl shadow-accent/15 hover:shadow-accent/35 transition-all duration-700 hover:-translate-y-3 group"
           >
-            <Plus size={18} />
-            New Task
+            <Plus size={40} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
+            <span className="font-extrabold text-2xl tracking-tight">New Task</span>
           </MagicButton>
         </div>
       </div>
 
       {/* Task List */}
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
+      <div className="flex-1 overflow-y-auto px-40 pb-40 scrollbar-subtle">
         {tasks.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center">
-            <div className="relative group mb-8">
-              <div className="absolute inset-0 bg-(--color-accent) opacity-[0.04] blur-3xl rounded-full scale-150" />
-              <div className="relative w-32 h-32 rounded-[40%_60%_55%_45%_/_50%_45%_55%_50%] bg-white/50 dark:bg-white/5 border border-(--color-border-light) flex items-center justify-center shadow-xl backdrop-blur-2xl overflow-hidden">
-                <Clock size={52} className="text-(--color-text-secondary) opacity-40" />
+          <div className="h-full flex flex-col items-center justify-center py-64">
+            <div className="relative group mb-24">
+              <div className="absolute inset-0 bg-accent opacity-20 blur-[180px] rounded-full scale-150 group-hover:opacity-30 transition-opacity duration-1000" />
+              <div className="relative w-64 h-64 rounded-[40%_60%_60%_40%/40%_40%_60%_60%] bg-white/90 dark:bg-white/5 border border-white/50 dark:border-white/10 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
+                <Clock size={120} className="text-accent opacity-40 drop-shadow-[0_0_35px_rgba(var(--color-accent-rgb),0.5)]" />
+                <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_4s_infinite]" />
               </div>
             </div>
-            <h3 className="text-xl font-semibold mb-3 text-(--color-text)">No scheduled tasks</h3>
-            <p className="text-sm text-(--color-text-tertiary) mb-8 max-w-xs text-center leading-relaxed">
-              Create your first task to automate AI workflows and let Snotra handle the heavy lifting.
+            <h3 className="text-6xl font-bold mb-10 text-text tracking-tighter">No tasks scheduled yet</h3>
+            <p className="text-[24px] text-text-tertiary mb-24 max-w-2xl text-center leading-relaxed font-bold opacity-60">
+              Create your first automation to streamline your workflow and let Snotra handle the heavy lifting.
             </p>
             <button
               onClick={onCreateTask}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-(--color-accent) text-(--color-accent-foreground) font-medium text-sm shadow-lg shadow-(--color-accent)/20 hover:shadow-xl hover:shadow-(--color-accent)/30 hover:-translate-y-0.5 transition-all"
+              className="inline-flex items-center gap-8 px-24 py-10 rounded-[48px] bg-accent text-accent-foreground font-extrabold text-2xl shadow-4xl shadow-accent/20 hover:shadow-accent/40 hover:-translate-y-3 transition-all duration-700 group"
             >
-              <Plus size={18} />
-              Create a task
+              <Plus size={40} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
+              Create your first task
             </button>
           </div>
         ) : (
-          <div className="max-w-4xl space-y-2">
+          <div className="max-w-7xl space-y-12">
             {tasks.map((task) => (
               <div
                 key={task.id}
                 className={`
-                  group flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200
+                  group flex items-center gap-16 p-14 rounded-[64px] border transition-all duration-700
                   ${task.enabled
-                    ? 'bg-(--color-surface) border-(--color-border) hover:border-(--color-border-hover) hover:shadow-md'
-                    : 'bg-(--color-surface-secondary) border-(--color-border) opacity-60 hover:opacity-80'
+                    ? 'bg-surface border-border hover:border-accent/25 hover:shadow-4xl hover:shadow-accent/10 hover:-translate-y-3'
+                    : 'bg-surface-secondary/60 border-border-light opacity-50 hover:opacity-80'
                   }
                 `}
               >
                 {/* Status Indicator Dot */}
-                <div className={`
-                  w-2.5 h-2.5 rounded-full shrink-0
-                  ${task.status === 'running' ? 'bg-(--color-accent) animate-pulse' : ''}
-                  ${task.status === 'completed' ? 'bg-(--color-success)' : ''}
-                  ${task.status === 'failed' ? 'bg-(--color-error)' : ''}
-                  ${task.status === 'pending' ? 'bg-(--color-text-tertiary)' : ''}
-                  ${task.status === 'cancelled' ? 'bg-(--color-text-quaternary)' : ''}
-                `} />
+                <div className="relative flex items-center justify-center shrink-0 ml-6">
+                  <div className={`
+                    w-6 h-6 rounded-full relative z-10
+                    ${task.status === 'running' ? 'bg-accent animate-pulse shadow-[0_0_24px_var(--color-accent)]' : ''}
+                    ${task.status === 'completed' ? 'bg-green-500 shadow-[0_0_24px_rgba(34,197,94,0.7)]' : ''}
+                    ${task.status === 'failed' ? 'bg-red-500 shadow-[0_0_24px_rgba(200,48,48,0.7)]' : ''}
+                    ${task.status === 'pending' ? 'bg-text-tertiary opacity-40' : ''}
+                    ${task.status === 'cancelled' ? 'bg-text-quaternary opacity-30' : ''}
+                  `} />
+                  {task.status === 'running' && (
+                    <div className="absolute inset-0 bg-accent/40 rounded-full animate-ping scale-150" />
+                  )}
+                </div>
 
                 {/* Task Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold text-[15px] text-(--color-text) truncate">{task.name}</h3>
-                    <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] px-2.5 py-0.5 rounded-full bg-(--color-surface-secondary) border border-(--color-border-light) text-(--color-text-tertiary)">
+                  <div className="flex items-center gap-10">
+                    <h3 className="font-bold text-4xl text-text truncate tracking-tighter">{task.name}</h3>
+                    <span className="shrink-0 text-[14px] font-bold uppercase tracking-[0.4em] px-8 py-3 rounded-full bg-accent-subtle text-accent border border-accent/15 shadow-sm">
                       {getFrequencyLabel(task)}
                     </span>
                   </div>
-                  <p className="text-sm text-(--color-text-secondary) truncate mt-1 leading-relaxed">
-                    {task.description || task.prompt.slice(0, 120)}
+                  <p className="text-[20px] text-text-tertiary truncate mt-5 leading-relaxed font-bold opacity-70">
+                    {task.description || task.prompt.slice(0, 150)}
                   </p>
                 </div>
 
                 {/* Status & Time */}
-                <div className="text-right shrink-0 hidden sm:block">
-                  <p className={`text-sm font-medium capitalize ${getStatusColor(task.status)}`}>
+                <div className="text-right shrink-0 hidden lg:block px-10">
+                  <p className={`text-[17px] font-bold uppercase tracking-[0.5em] ${getStatusColor(task.status)}`}>
                     {task.status}
                   </p>
-                  <p className="text-xs text-(--color-text-tertiary) mt-0.5 whitespace-nowrap">
+                  <p className="text-[15px] text-text-quaternary mt-5 whitespace-nowrap font-bold opacity-50">
                     {formatNextRun(task.nextRun)}
                   </p>
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-8 shrink-0 pr-6">
                   <button
                     onClick={() => toggleTask(task.id)}
                     className={`
-                      p-2 rounded-xl transition-all duration-200
+                      p-9 rounded-[36px] transition-all duration-500
                       ${task.enabled
-                        ? 'bg-(--color-accent)/10 text-(--color-accent) hover:bg-(--color-accent)/20'
-                        : 'bg-(--color-surface-secondary) text-(--color-text-secondary) hover:bg-(--color-surface)'
+                        ? 'bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground shadow-sm'
+                        : 'bg-surface-tertiary text-text-tertiary hover:bg-surface hover:text-text-secondary'
                       }
                     `}
                   >
-                    {task.enabled ? <Play size={15} /> : <Pause size={15} />}
+                    {task.enabled ? <Pause size={36} /> : <Play size={36} />}
                   </button>
                   <button
                     onClick={() => deleteTask(task.id)}
-                    className="p-2 rounded-xl hover:bg-(--color-error)/10 text-(--color-text-tertiary) hover:text-(--color-error) transition-all duration-200 opacity-0 group-hover:opacity-100"
+                    className="p-9 rounded-[36px] hover:bg-red-500/10 text-text-quaternary hover:text-red-500 transition-all duration-700 opacity-0 group-hover:opacity-100 scale-90 hover:scale-100"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={36} />
                   </button>
                 </div>
               </div>
@@ -171,12 +177,15 @@ export function TaskList({ onCreateTask }: TaskListProps) {
 
         {/* Notice */}
         {tasks.length > 0 && (
-          <div className="mt-6 max-w-4xl p-4 rounded-2xl bg-(--color-warning)/[0.06] border border-(--color-warning)/[0.12]">
-            <div className="flex items-start gap-3">
-              <RefreshCw size={16} className="mt-0.5 text-(--color-warning) shrink-0" />
-              <span className="text-sm text-(--color-text-secondary) leading-relaxed">
-                Tasks run while the application is open. Make sure Snotra is running at the scheduled time.
-              </span>
+          <div className="mt-32 max-w-7xl p-20 rounded-[64px] bg-accent-subtle border border-accent/15 backdrop-blur-3xl shadow-[0_32px_96px_rgba(var(--color-accent-rgb),0.08)]">
+            <div className="flex items-start gap-12">
+              <RefreshCw size={40} className="mt-1.5 text-accent shrink-0 animate-spin-slow opacity-50" />
+              <div className="space-y-6">
+                <p className="text-[18px] font-bold text-accent uppercase tracking-[0.6em]">Automation Engine Status</p>
+                <p className="text-[21px] text-text-tertiary leading-relaxed font-bold opacity-60">
+                  Your tasks are being orchestrated in real-time. Please maintain the application's activity for continuous scheduling and reliable execution of background workflows.
+                </p>
+              </div>
             </div>
           </div>
         )}

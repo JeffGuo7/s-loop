@@ -150,7 +150,7 @@ export function ChatInput({
     const textarea = textareaRef.current
     if (textarea) {
       textarea.style.height = 'auto'
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 300)}px`
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 400)}px`
     }
   }, [input])
 
@@ -158,7 +158,7 @@ export function ChatInput({
 
   return (
     <div
-      className="w-full px-12 pb-10"
+      className="w-full max-w-[1000px] mx-auto px-12 pb-20"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -166,15 +166,15 @@ export function ChatInput({
       <form onSubmit={handleSubmit}>
         <Card
           variant={isHero ? 'glass' : 'default'}
-          className={`relative group p-1.5 transition-all duration-500 border border-(--color-border-light) ${
-            isHero ? 'shadow-2xl' : 'shadow-lg hover:shadow-xl'
-          } ${isDragOver ? 'ring-2 ring-(--color-accent) ring-offset-4 ring-offset-(--color-bg)' : ''}`}
+          className={`relative group p-4 transition-all duration-700 border border-border-light ${
+            isHero ? 'shadow-[0_48px_128px_rgba(0,0,0,0.15)]' : 'shadow-3xl hover:shadow-accent/10'
+          } ${isDragOver ? 'ring-2 ring-accent ring-offset-[12px] ring-offset-bg' : ''} rounded-[48px] bg-surface/90 backdrop-blur-3xl`}
         >
           {isDragOver && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-(--color-surface)/80 backdrop-blur-md pointer-events-none">
-              <div className="rounded-2xl border-2 border-dashed border-(--color-accent)/40 bg-(--color-accent-subtle) px-10 py-6 animate-fade-in-scale">
-                <p className="text-sm font-bold text-(--color-accent) flex items-center gap-2">
-                  <Paperclip size={18} />
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-surface/95 backdrop-blur-2xl pointer-events-none">
+              <div className="rounded-[32px] border-2 border-dashed border-accent/40 bg-accent-subtle px-16 py-10 animate-fade-in-scale">
+                <p className="text-lg font-bold text-accent flex items-center gap-4">
+                  <Paperclip size={26} />
                   Drop file to reference
                 </p>
               </div>
@@ -183,28 +183,28 @@ export function ChatInput({
 
           <div className="flex flex-col">
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2.5 px-4 pt-4 pb-1 animate-fade-in">
+              <div className="flex flex-wrap gap-5 px-10 pt-8 pb-4 animate-fade-in">
                 {attachments.map((att, idx) => (
                   <div
                     key={idx}
-                    className="group/att inline-flex items-center gap-2.5 rounded-xl border border-(--color-border-light) bg-(--color-surface-secondary)/50 pl-3 pr-2 py-2 text-xs transition-all hover:border-(--color-accent)/30 hover:bg-(--color-surface-secondary)"
+                    className="group/att inline-flex items-center gap-5 rounded-[22px] border border-border-light bg-surface-secondary/60 pl-6 pr-5 py-4 text-[14px] transition-all hover:border-accent/50 hover:bg-surface-secondary shadow-sm"
                     title={att.path}
                   >
-                    <File size={13} className="text-(--color-accent)" />
-                    <span className="max-w-[160px] truncate text-(--color-text-secondary) font-bold">{att.name}</span>
+                    <File size={18} className="text-accent" />
+                    <span className="max-w-[240px] truncate text-text-secondary font-bold tracking-tight">{att.name}</span>
                     <button
                       type="button"
                       onClick={() => removeAttachment(idx)}
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-lg text-(--color-text-tertiary) hover:bg-(--color-error-bg)/50 hover:text-(--color-error) transition-all opacity-50 group-hover/att:opacity-100"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-tertiary hover:bg-red-500/10 hover:text-red-500 transition-all opacity-40 group-hover/att:opacity-100"
                     >
-                      <X size={13} />
+                      <X size={18} />
                     </button>
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="flex items-end px-1">
+            <div className="flex items-end px-4">
               <div className="flex-1">
                 <TextField
                   value={input}
@@ -218,22 +218,22 @@ export function ChatInput({
                     onCompositionStart={handleCompositionStart}
                     onCompositionEnd={handleCompositionEnd}
                     placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
-                    className="w-full bg-transparent hover:bg-transparent focus:outline-none shadow-none border-none p-4 min-h-[56px] text-[15px] font-medium leading-relaxed custom-scrollbar text-(--color-text) placeholder:text-(--color-text-quaternary)/40 resize-none"
+                    className="w-full bg-transparent hover:bg-transparent focus:outline-none shadow-none border-none p-10 min-h-[100px] text-[19px] font-bold leading-relaxed custom-scrollbar text-text placeholder:text-text-quaternary/30 resize-none tracking-tight"
                     rows={1}
                   />
                 </TextField>
               </div>
 
-              <div className="flex items-center p-2">
+              <div className="flex items-center p-6">
                 {isStreaming ? (
                   <Button
                     type="button"
                     variant="danger"
                     size="icon"
                     onClick={onAbort}
-                    className="w-11 h-11 rounded-xl shadow-lg shadow-error/10 animate-fade-in"
+                    className="w-16 h-16 rounded-[24px] shadow-3xl shadow-red-500/30 animate-fade-in"
                   >
-                    <Square size={16} fill="currentColor" />
+                    <Square size={24} fill="currentColor" />
                   </Button>
                 ) : (
                   <Button
@@ -241,15 +241,15 @@ export function ChatInput({
                     variant="primary"
                     size="icon"
                     isDisabled={(!input.trim() && attachments.length === 0) || disabled}
-                    className={`w-11 h-11 rounded-xl shadow-lg transition-all duration-500 ${
+                    className={`w-16 h-16 rounded-[24px] shadow-3xl transition-all duration-700 ${
                       input.trim() || attachments.length > 0 
-                        ? 'shadow-accent/30 scale-100' 
-                        : 'shadow-none scale-95 opacity-30 grayscale'
+                        ? 'shadow-accent/50 scale-100 hover:scale-110 active:scale-95' 
+                        : 'shadow-none scale-90 opacity-20 grayscale pointer-events-none'
                     }`}
                   >
                     <Send
-                      size={18}
-                      strokeWidth={2.5}
+                      size={28}
+                      strokeWidth={3}
                       className={input.trim() || attachments.length > 0 ? 'translate-x-0.5 -translate-y-0.5' : ''}
                     />
                   </Button>
@@ -257,22 +257,22 @@ export function ChatInput({
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-6 pb-4 pt-0 text-[10px] font-bold tracking-[0.1em] uppercase transition-all duration-300">
-              <div className={`flex items-center gap-4 transition-opacity ${isHero ? 'opacity-40' : 'opacity-30 group-focus-within:opacity-60'}`}>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-(--color-accent)" />
-                  <span>
+            <div className="flex items-center justify-between px-14 pb-10 pt-4 text-[12px] font-bold tracking-[0.4em] uppercase transition-all duration-300">
+              <div className={`flex items-center gap-8 transition-opacity ${isHero ? 'opacity-60' : 'opacity-40 group-focus-within:opacity-90'}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-2.5 h-2.5 rounded-full ${input.trim() || attachments.length > 0 ? 'bg-accent shadow-[0_0_12px_var(--color-accent)]' : 'bg-text-quaternary opacity-40'}`} />
+                  <span className="tracking-widest">
                     {attachments.length > 0
                       ? `${attachments.length} file reference${attachments.length > 1 ? 's' : ''}`
                       : 'Shift + Enter for new line'}
                   </span>
                 </div>
-                <div className="w-1 h-1 rounded-full bg-(--color-text-tertiary)/30" />
-                <span className="hidden sm:inline">Enter to send</span>
+                <div className="w-2 h-2 rounded-full bg-border-light" />
+                <span className="hidden sm:inline tracking-widest">Enter to send</span>
               </div>
-              <div className={`transition-opacity flex items-center gap-1.5 ${isHero ? 'opacity-40' : 'opacity-30 group-focus-within:opacity-60'}`}>
-                <span className="w-1 h-1 rounded-full bg-(--color-text-tertiary)/30" />
-                Snotra AI
+              <div className={`transition-opacity flex items-center gap-4 ${isHero ? 'opacity-60' : 'opacity-40 group-focus-within:opacity-90'}`}>
+                <span className="w-2 h-2 rounded-full bg-border-light" />
+                <span className="tracking-widest">Snotra Intelligence</span>
               </div>
             </div>
           </div>

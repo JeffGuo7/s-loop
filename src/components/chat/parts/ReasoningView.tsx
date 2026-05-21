@@ -28,24 +28,24 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
   }, [isActive])
 
   const label = isActive ? (
-    <span className="flex items-center gap-3">
+    <span className="flex items-center gap-6">
       <div className="relative flex items-center justify-center">
-        <Sparkles size={13} className="text-(--color-accent) animate-spin-slow" />
-        <div className="absolute inset-0 bg-(--color-accent) opacity-20 animate-pulse blur-md" />
+        <Sparkles size={20} className="text-accent animate-spin-slow" />
+        <div className="absolute inset-0 bg-accent opacity-30 animate-pulse blur-lg" />
       </div>
-      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-(--color-accent)">Thinking</span>
-      <div className="flex gap-1.5 ml-1">
-        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse" />
-        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse [animation-delay:0.2s]" />
-        <div className="w-1 h-1 bg-(--color-accent) rounded-full animate-pulse [animation-delay:0.4s]" />
+      <span className="text-[14px] font-bold uppercase tracking-[0.3em] text-accent">Thinking</span>
+      <div className="flex gap-2.5 ml-2">
+        <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+        <div className="w-2 h-2 bg-accent rounded-full animate-pulse [animation-delay:0.2s]" />
+        <div className="w-2 h-2 bg-accent rounded-full animate-pulse [animation-delay:0.4s]" />
       </div>
     </span>
   ) : (
-    <span className="flex items-center gap-3">
-      <Brain size={13} className="text-(--color-text-tertiary)" />
-      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-(--color-text-tertiary)">Thought Process</span>
+    <span className="flex items-center gap-6">
+      <Brain size={20} className="text-text-tertiary" />
+      <span className="text-[14px] font-bold uppercase tracking-[0.3em] text-text-tertiary">Thought Process</span>
       {text && (
-        <span className="text-[10px] text-(--color-text-quaternary) font-mono truncate max-w-[240px] hidden sm:inline ml-2 opacity-60">
+        <span className="text-[14px] text-text-quaternary font-mono truncate max-w-[320px] hidden sm:inline ml-4 opacity-50">
           {getPreviewLine(text)}
         </span>
       )}
@@ -53,17 +53,17 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
   )
 
   return (
-    <div className="my-2 group/reasoning">
+    <div className="my-6 group/reasoning">
       <Collapsible
         header={label}
         expanded={isExpanded}
         onToggle={setIsExpanded}
-        className={`transition-all duration-500 border border-black/[0.03] dark:border-white/[0.03] ${
-          isActive ? 'bg-(--color-surface-secondary)/50' : 'bg-transparent'
+        className={`transition-all duration-700 border border-black/[0.04] dark:border-white/[0.04] rounded-[24px] overflow-hidden ${
+          isActive ? 'bg-accent-subtle/30 shadow-sm' : 'bg-transparent'
         }`}
       >
         <div
-          className="font-mono text-[11px] leading-relaxed text-(--color-text-secondary) whitespace-pre-wrap max-h-[400px] overflow-y-auto scrollbar-subtle pr-4 py-2 mt-2 border-t border-black/[0.03] dark:border-white/[0.03]"
+          className="font-mono text-[15px] leading-relaxed text-text-secondary whitespace-pre-wrap max-h-[600px] overflow-y-auto scrollbar-subtle pr-8 py-6 px-6 mt-6 border-t border-black/[0.04] dark:border-white/[0.04] bg-surface-secondary/20"
         >
           {text}
         </div>

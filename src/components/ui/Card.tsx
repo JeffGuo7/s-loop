@@ -8,10 +8,10 @@ interface CardProps extends Omit<CardRootProps, 'variant'> {
 
 export function Card({ children, className = '', variant = 'primary', ...props }: CardProps) {
   const variantStyles = {
-    primary: "bg-(--color-surface) border-(--color-border) shadow-sm",
-    default: "bg-(--color-surface) border-(--color-border) shadow-sm",
-    secondary: "bg-(--color-surface-secondary)/50 border-(--color-border-light)",
-    tertiary: "bg-(--color-surface-tertiary)/30 border-(--color-border-light)",
+    primary: "bg-surface border-border shadow-sm",
+    default: "bg-surface border-border shadow-sm",
+    secondary: "bg-surface-secondary/50 border-border-light",
+    tertiary: "bg-surface-tertiary/30 border-border-light",
     glass: "glass-card border-white/10"
   }
 

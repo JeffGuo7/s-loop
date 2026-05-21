@@ -46,11 +46,11 @@ function App() {
   }, [])
 
   return (
-    <div className="app-shell flex h-screen w-screen overflow-hidden bg-(--color-bg)">
-      {/* Subtle ambient background glow */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-[0.02] dark:opacity-[0.04]">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-(--color-accent) blur-[150px]" />
-        <div className="absolute bottom-[10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-(--color-accent) blur-[120px]" />
+    <div className="app-shell flex h-screen w-screen overflow-hidden bg-bg">
+      {/* Dynamic Background Accents */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-accent/10 blur-[150px]" />
+        <div className="absolute bottom-[10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-accent/8 blur-[120px]" />
       </div>
 
       <Sidebar

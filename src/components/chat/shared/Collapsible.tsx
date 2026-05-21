@@ -49,17 +49,17 @@ export function Collapsible({
   }, [expanded, isControlled, onToggle])
 
   return (
-    <div className={`border border-(--color-border) rounded-xl overflow-hidden transition-colors hover:border-(--color-border-hover) ${className}`}>
+    <div className={`border border-border rounded-2xl overflow-hidden transition-colors hover:border-border-hover ${className}`}>
       <button
         onClick={handleToggle}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-(--color-surface-secondary)/30 hover:bg-(--color-surface-secondary)/80 transition-colors text-left"
+        className="w-full flex items-center gap-4 px-6 py-4 bg-surface-secondary/30 hover:bg-surface-secondary/80 transition-colors text-left"
       >
         <ChevronRight
-          size={16}
-          className="text-(--color-text-tertiary) transition-transform duration-300"
+          size={18}
+          className="text-text-tertiary transition-transform duration-300"
           style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
         />
-        <span className="text-sm flex-1 min-w-0">{header}</span>
+        <span className="text-[15px] font-bold tracking-tight flex-1 min-w-0">{header}</span>
       </button>
       <div
         style={{
@@ -68,7 +68,7 @@ export function Collapsible({
           transition: 'max-height var(--motion-collapse)',
         }}
       >
-        <div ref={contentRef} className="px-4 py-4 border-t border-(--color-border-light) bg-(--color-surface)/50">
+        <div ref={contentRef} className="px-6 py-6 border-t border-border-light bg-surface/50">
           {children}
         </div>
       </div>

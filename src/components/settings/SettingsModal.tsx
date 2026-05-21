@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
+import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores'
 import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon } from 'lucide-react'
 import type { ProviderConfig } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
 import { Kilo } from '../../utils'
-import { Input } from '../ui'
 import { ScrollShadow, Select, SelectTrigger, SelectValue, SelectPopover, ListBox, ListBoxItem } from "@heroui/react"
 
 interface SettingsModalProps {
@@ -106,18 +107,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const modelKeys = provider ? Object.keys(provider.models || {}) : []
   const envVar = provider?.env || ''
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-10 bg-black/20 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-5xl h-[85vh] flex flex-row overflow-hidden bg-(--color-bg) shadow-2xl rounded-[28px] border border-(--color-border-light) animate-scale-in">
+  return createPortal(
+    <div className="fixed inset-0 z-100 flex items-center justify-center p-8 sm:p-20 bg-black/50 backdrop-blur-xl animate-fade-in">
+      <div className="w-full max-w-7xl h-[88vh] flex flex-row bg-bg shadow-[0_32px_128px_rgba(0,0,0,0.3)] rounded-[56px] border border-border-light animate-scale-in relative overflow-hidden">
         
         {/* Settings Sidebar */}
-        <aside className="w-64 bg-(--color-surface) border-r border-(--color-border) flex flex-col shrink-0">
-          <div className="px-8 pt-9 pb-6">
-            <h2 className="text-xl font-bold text-(--color-text) tracking-tight">Settings</h2>
-            <p className="text-[10px] text-(--color-text-tertiary) mt-1.5 font-semibold uppercase tracking-[0.15em]">Intelligence Hub</p>
+        <aside className="w-[480px] bg-linear-to-b from-surface-secondary/90 to-surface-tertiary/90 border-r border-border flex flex-col shrink-0 relative backdrop-blur-3xl">
+          <div className="px-32 pt-64 pb-40 relative z-10">
+            <h2 className="text-8xl font-bold text-text tracking-tighter leading-none drop-shadow-sm">Settings</h2>
+            <p className="text-[14px] text-accent font-bold uppercase tracking-[0.7em] mt-12 opacity-50">Intelligence Hub</p>
           </div>
 
-          <nav className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-subtle">
+          <nav className="flex-1 px-20 space-y-12 overflow-y-auto scrollbar-subtle">
             {[
               { id: 'provider', icon: Cpu, label: 'AI Providers' },
               { id: 'mcp', icon: Server, label: 'MCP Servers' },
@@ -127,45 +128,57 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-semibold tracking-tight transition-all duration-200 ${
+                className={`w-full flex items-center gap-10 px-16 py-10 rounded-[36px] text-[18px] font-bold tracking-tight transition-all duration-500 group relative ${
                   activeTab === item.id
-                    ? 'bg-(--color-accent-muted) text-(--color-accent)'
-                    : 'text-(--color-text-secondary) hover:bg-(--color-surface-secondary) hover:text-(--color-text)'
+                    ? 'text-accent'
+                    : 'text-text-secondary hover:bg-surface-tertiary/70 hover:text-text'
                 }`}
               >
-                <item.icon size={17} className={activeTab === item.id ? 'text-(--color-accent)' : 'text-(--color-text-tertiary)'} />
-                {item.label}
+                {activeTab === item.id && (
+                  <motion.div 
+                    layoutId="activeTab"
+                    className="absolute inset-0 bg-accent-subtle rounded-[36px] ring-1 ring-accent/25 shadow-[0_12px_40px_rgb(var(--color-accent-rgb),0.06)]"
+                  />
+                )}
+                <item.icon size={28} className={`relative z-10 transition-colors duration-500 ${activeTab === item.id ? 'text-accent' : 'text-text-tertiary group-hover:text-text-secondary'}`} />
+                <span className="relative z-10">{item.label}</span>
               </button>
             ))}
           </nav>
 
-          <div className="px-7 pb-9 pt-2">
-            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-(--color-surface-secondary)/60 border border-(--color-border-light) ml-5">
-              <div className={`w-2 h-2 rounded-full ${providerList.length > 0 ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.4)]' : 'bg-red-400'}`} />
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${
-                providerList.length > 0 ? 'text-green-600' : 'text-red-400'
+          <div className="px-32 pb-32 pt-16">
+            <div className="flex items-center gap-8 px-14 py-8 rounded-[32px] bg-surface/50 border border-border-light backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.03)] ring-1 ring-black/[0.03]">
+              <div className="relative">
+                <div className={`w-4 h-4 rounded-full ${providerList.length > 0 ? 'bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.6)]' : 'bg-red-400'}`} />
+                {providerList.length > 0 && <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-30" />}
+              </div>
+              <span className={`text-[14px] font-bold uppercase tracking-[0.35em] ${
+                providerList.length > 0 ? 'text-green-600/90' : 'text-red-400/90'
               }`}>
-                Kilo {providerList.length > 0 ? 'Connected' : 'Offline'}
+                Kilo {providerList.length > 0 ? 'Online' : 'Offline'}
               </span>
             </div>
           </div>
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-(--color-bg)">
+        <div className="flex-1 flex flex-col min-w-0 bg-bg/98 backdrop-blur-md">
           {/* Header */}
-          <header className="shrink-0 flex items-center justify-between px-10 h-16 border-b border-(--color-border-light)">
-            <h3 className="text-[15px] font-semibold text-(--color-text) tracking-tight ml-1">
-              {activeTab === 'provider' && 'AI Model Providers'}
-              {activeTab === 'mcp' && 'MCP Servers'}
-              {activeTab === 'skills' && 'Skills'}
-              {activeTab === 'appearance' && 'Appearance'}
-            </h3>
+          <header className="shrink-0 flex items-center justify-between px-40 h-48 border-b border-border-light">
+            <div className="flex flex-col">
+              <h3 className="text-5xl font-bold text-text tracking-tighter">
+                {activeTab === 'provider' && 'AI Model Providers'}
+                {activeTab === 'mcp' && 'MCP Servers'}
+                {activeTab === 'skills' && 'Skills'}
+                {activeTab === 'appearance' && 'Appearance'}
+              </h3>
+              <p className="text-[17px] text-text-tertiary font-medium mt-4 tracking-tight opacity-70">Manage your {activeTab} settings and preferences</p>
+            </div>
             <button
               onClick={onClose}
-              className="p-2 mr-1 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-text) transition-all"
+              className="p-8 rounded-[32px] bg-surface-secondary/50 text-text-tertiary hover:text-text hover:bg-surface-secondary hover:rotate-90 transition-all duration-700 shadow-sm border border-border-light group"
             >
-              <X size={18} className="mr-3.5 mb-8" />
+              <X size={32} className="group-hover:scale-110 transition-transform" />
             </button>
           </header>
 
@@ -174,32 +187,32 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             {activeTab === 'provider' && (
               <div className="flex h-full">
                 {/* Provider List */}
-                <aside className="w-[280px] border-r border-(--color-border-light) flex flex-col shrink-0">
-                  <div className="px-5 py-5 border-b border-(--color-border-light) space-y-3">
+                <aside className="w-[480px] border-r border-border-light flex flex-col shrink-0 bg-surface-secondary/15">
+                  <div className="px-24 py-20 space-y-12">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-(--color-text-tertiary) uppercase tracking-[0.15em]">
-                        {providerList.length} Available
+                      <span className="text-[14px] font-bold text-text-tertiary uppercase tracking-[0.3em] opacity-60">
+                        {providerList.length} Available Models
                       </span>
                       <button
                         onClick={fetchProviders}
                         disabled={fetching}
-                        className="p-1.5 rounded-xl hover:bg-(--color-surface-secondary) text-(--color-text-tertiary) hover:text-(--color-accent) transition-all disabled:opacity-40"
+                        className="p-6 rounded-2xl hover:bg-surface-tertiary text-text-tertiary hover:text-accent transition-all disabled:opacity-40"
                       >
-                        <RefreshCw size={13} className={fetching ? 'animate-spin' : ''} />
+                        <RefreshCw size={24} className={fetching ? 'animate-spin' : ''} />
                       </button>
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-(--color-surface) border border-(--color-border-light) focus-within:border-(--color-accent)/40 focus-within:shadow-[0_0_0_3px_var(--color-accent-muted)] transition-all">
-                      <Search size={14} className="text-(--color-text-quaternary) shrink-0" />
+                    <div className="flex items-center gap-6 px-12 py-7 rounded-[32px] bg-surface border border-border-light focus-within:border-accent/50 focus-within:ring-[16px] focus-within:ring-accent-subtle transition-all duration-500 shadow-[inset_0_2px_12px_rgba(0,0,0,0.02)]">
+                      <Search size={26} className="text-text-quaternary shrink-0" />
                       <input
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search providers..."
-                        className="flex-1 bg-transparent text-sm text-(--color-text) placeholder:text-(--color-text-quaternary) outline-none min-w-0"
+                        className="flex-1 bg-transparent text-[18px] text-text placeholder:text-text-quaternary outline-none min-w-0 font-bold tracking-tight"
                       />
                     </div>
                   </div>
                   
-                  <ScrollShadow className="flex-1 px-2.5 py-3 space-y-0.5">
+                  <ScrollShadow className="flex-1 px-16 pb-20 space-y-6">
                     {filteredProviders.map((p) => {
                       const isActive = expandedProvider === p.id
                       const isConfigured = !!localConfigs[p.id]?.apiKey
@@ -207,25 +220,30 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         <button
                           key={p.id}
                           onClick={() => setExpandedProvider(p.id)}
-                          className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl transition-all duration-200 text-left ${
+                          className={`w-full flex items-center gap-8 px-10 py-8 rounded-[40px] transition-all duration-500 text-left group relative ${
                             isActive 
-                              ? 'bg-(--color-accent-muted)' 
-                              : 'hover:bg-(--color-surface-secondary)'
+                              ? 'bg-accent-subtle shadow-[0_16px_48px_rgba(var(--color-accent-rgb),0.08)] ring-1 ring-accent/25' 
+                              : 'hover:bg-surface-secondary/90'
                           }`}
                         >
-                          <div className={`p-2 rounded-xl transition-all duration-200 ${
+                          <div className={`p-6 rounded-[28px] transition-all duration-500 ${
                             isActive 
-                              ? 'bg-(--color-accent) text-white shadow-sm shadow-(--color-accent)/20' 
-                              : 'bg-(--color-surface-secondary) text-(--color-text-tertiary)'
+                              ? 'bg-accent text-accent-foreground shadow-2xl shadow-accent/40' 
+                              : 'bg-surface-tertiary text-text-tertiary group-hover:text-text group-hover:bg-surface-tertiary/95'
                           }`}>
-                            <Cpu size={13} />
+                            <Cpu size={24} />
                           </div>
-                          <span className={`flex-1 text-sm font-medium tracking-tight ${
-                            isActive ? 'text-(--color-accent)' : 'text-(--color-text-secondary)'
-                          }`}>{p.name}</span>
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className={`text-[18px] font-bold tracking-tight truncate ${
+                              isActive ? 'text-accent' : 'text-text-secondary'
+                            }`}>{p.name}</span>
+                            <span className="text-[14px] text-text-tertiary font-bold uppercase tracking-widest mt-2 opacity-40">
+                              {p.source || 'Cloud API'}
+                            </span>
+                          </div>
                           {isConfigured && (
-                            <div className="w-4 h-4 rounded-full bg-green-500/10 flex items-center justify-center">
-                              <Check size={8} className="text-green-500" />
+                            <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/20 shadow-sm">
+                              <Check size={20} className="text-green-500" />
                             </div>
                           )}
                         </button>
@@ -235,129 +253,159 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </aside>
 
                 {/* Provider Detail Form */}
-                <ScrollShadow className="flex-1 px-12 py-10">
-                  {expandedProvider && provider && cfg ? (
-                    <div className="max-w-lg mx-auto space-y-10 animate-fade-in">
-                      <div className="flex items-center gap-4 pb-2">
-                        <div className="p-3 rounded-2xl bg-(--color-accent-muted) text-(--color-accent)">
-                          <Cpu size={22} />
-                        </div>
-                        <div>
-                          <h2 className="text-xl font-bold text-(--color-text) tracking-tight">{provider.name}</h2>
-                          <p className="text-xs text-(--color-text-tertiary) mt-0.5">Configure API credentials and operational parameters</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-7">
-                        <div className="space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) ml-0.5">
-                              API Key {envVar && <span className="opacity-40 lowercase ml-1 font-mono">({envVar})</span>}
-                            </label>
+                <ScrollShadow className="flex-1">
+                  <div className="max-w-4xl mx-auto px-48 py-48 space-y-48">
+                    {expandedProvider && provider && cfg ? (
+                      <div className="animate-fade-in-up space-y-48">
+                        <div className="flex items-center gap-16">
+                          <div className="p-12 rounded-[48px] bg-accent text-accent-foreground shadow-2xl shadow-accent/40">
+                            <Cpu size={72} />
                           </div>
-                          <div className="relative">
-                            <input
-                              type={showKey ? 'text' : 'password'}
-                              value={cfg.apiKey}
-                              onChange={(e) => handleConfigChange(expandedProvider, 'apiKey', e.target.value)}
-                              placeholder="sk-..."
-                              className="w-full px-4 py-3.5 rounded-2xl bg-(--color-surface) border border-(--color-border-light) text-sm font-mono text-(--color-text) placeholder:text-(--color-text-quaternary) outline-none focus:border-(--color-accent)/30 focus:shadow-[0_0_0_3px_var(--color-accent-muted)] transition-all pr-12"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowKey(!showKey)}
-                              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-(--color-text-tertiary) hover:text-(--color-text) hover:bg-(--color-surface-secondary) transition-all"
-                            >
-                              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
+                          <div>
+                            <h2 className="text-7xl font-bold text-text tracking-tighter leading-tight">{provider.name}</h2>
+                            <div className="flex items-center gap-6 mt-6">
+                              <span className="px-8 py-3 rounded-full bg-accent-subtle text-accent text-[15px] font-bold uppercase tracking-[0.3em] border border-accent/25 shadow-sm">
+                                {provider.id}
+                              </span>
+                              <span className="text-[17px] text-text-tertiary font-bold opacity-50 uppercase tracking-widest">Configuration Profile</span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="space-y-2.5">
-                          <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) ml-0.5">Model</label>
-                          {modelKeys.length > 0 ? (
-                            <Select
-                              selectedKey={cfg.model}
-                              onSelectionChange={(key: any) => {
-                                if (key) handleConfigChange(expandedProvider, 'model', key as string);
-                              }}
-                              placeholder="Select a model"
-                            >
-                              <SelectTrigger className="w-full px-4 py-3.5 rounded-2xl bg-(--color-surface) border border-(--color-border-light) outline-none focus:border-(--color-accent)/30 text-sm transition-all data-[open=true]:border-(--color-accent)/30">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectPopover>
-                                <ListBox items={modelKeys.map(m => ({ id: m, name: m }))}>
-                                  {(item) => (
-                                    <ListBoxItem key={item.id} id={item.id} textValue={item.name}>
-                                      {item.name}
-                                    </ListBoxItem>
-                                  )}
-                                </ListBox>
-                              </SelectPopover>
-                            </Select>
-                          ) : (
-                            <input
-                              value={cfg.model}
-                              onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
-                              placeholder="e.g., gpt-4-turbo"
-                              className="w-full px-4 py-3.5 rounded-2xl bg-(--color-surface) border border-(--color-border-light) text-sm text-(--color-text) placeholder:text-(--color-text-quaternary) outline-none focus:border-(--color-accent)/30 focus:shadow-[0_0_0_3px_var(--color-accent-muted)] transition-all"
-                            />
-                          )}
-                        </div>
+                        <div className="space-y-24">
+                          <div className="space-y-12">
+                            <div className="flex items-center justify-between ml-6">
+                              <label className="text-[15px] font-bold uppercase tracking-[0.5em] text-text-tertiary opacity-70">
+                                API Access Key
+                              </label>
+                              {envVar && <span className="text-[14px] font-mono text-accent opacity-70 px-6 py-2.5 bg-accent-subtle rounded-2xl border border-accent/20 shadow-sm">{envVar}</span>}
+                            </div>
+                            <div className="relative group">
+                              <input
+                                type={showKey ? 'text' : 'password'}
+                                value={cfg.apiKey}
+                                onChange={(e) => handleConfigChange(expandedProvider, 'apiKey', e.target.value)}
+                                placeholder="Paste your secret token here..."
+                                className="w-full px-16 py-10 rounded-[44px] bg-surface-secondary/50 border border-border-light text-[19px] font-mono text-text placeholder:text-text-quaternary outline-none focus:bg-surface focus:border-accent/50 focus:ring-[24px] focus:ring-accent-subtle transition-all duration-500 pr-32 shadow-[inset_0_2px_12px_rgba(0,0,0,0.02)]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowKey(!showKey)}
+                                className="absolute right-12 top-1/2 -translate-y-1/2 p-7 rounded-2xl text-text-tertiary hover:text-text hover:bg-surface-tertiary transition-all duration-300"
+                              >
+                                {showKey ? <EyeOff size={32} /> : <Eye size={32} />}
+                              </button>
+                            </div>
+                          </div>
 
-                        <div className="space-y-2.5">
-                          <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) ml-0.5">Base URL (Optional)</label>
-                          <input
-                            value={cfg.baseUrl || ''}
-                            onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
-                            placeholder="https://api.openai.com/v1"
-                            className="w-full px-4 py-3.5 rounded-2xl bg-(--color-surface) border border-(--color-border-light) text-sm font-mono text-(--color-text) placeholder:text-(--color-text-quaternary) outline-none focus:border-(--color-accent)/30 focus:shadow-[0_0_0_3px_var(--color-accent-muted)] transition-all"
-                          />
+                          <div className="space-y-12">
+                            <label className="text-[15px] font-bold uppercase tracking-[0.5em] text-text-tertiary ml-6 opacity-70">Preferred Model Selection</label>
+                            {modelKeys.length > 0 ? (
+                              <Select
+                                selectedKey={cfg.model}
+                                onSelectionChange={(key: any) => {
+                                  if (key) handleConfigChange(expandedProvider, 'model', key as string);
+                                }}
+                                placeholder="Choose a model capability..."
+                              >
+                                <SelectTrigger className="w-full px-16 py-10 rounded-[44px] bg-surface-secondary/50 border border-border-light outline-none focus:bg-surface focus:border-accent/50 text-[19px] font-bold tracking-tight transition-all duration-500 h-auto shadow-[inset_0_2px_12px_rgba(0,0,0,0.02)]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectPopover className="bg-surface/95 border border-border shadow-[0_32px_128px_rgba(0,0,0,0.15)] rounded-[44px] overflow-hidden backdrop-blur-3xl">
+                                  <ListBox items={modelKeys.map(m => ({ id: m, name: m }))} className="p-8">
+                                    {(item: any) => (
+                                      <ListBoxItem 
+                                        key={item.id} 
+                                        id={item.id} 
+                                        textValue={item.name}
+                                        className="rounded-[32px] px-10 py-8 text-[18px] text-text-secondary hover:text-text hover:bg-surface-secondary data-[selected=true]:text-accent data-[selected=true]:bg-accent-subtle transition-all duration-300"
+                                      >
+                                        <div className="flex items-center gap-8">
+                                          <Sparkles size={24} className="text-accent opacity-60" />
+                                          <span className="font-bold tracking-tight">{item.name}</span>
+                                        </div>
+                                      </ListBoxItem>
+                                    )}
+                                  </ListBox>
+                                </SelectPopover>
+                              </Select>
+                            ) : (
+                              <input
+                                value={cfg.model}
+                                onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
+                                placeholder="e.g., gpt-4-turbo"
+                                className="w-full px-16 py-10 rounded-[44px] bg-surface-secondary/50 border border-border-light text-[19px] font-bold text-text placeholder:text-text-quaternary outline-none focus:bg-surface focus:border-accent/50 focus:ring-[24px] focus:ring-accent-subtle transition-all duration-500 shadow-[inset_0_2px_12px_rgba(0,0,0,0.02)]"
+                              />
+                            )}
+                          </div>
+
+                          <div className="space-y-12">
+                            <label className="text-[15px] font-bold uppercase tracking-[0.5em] text-text-tertiary ml-6 opacity-70">Custom API Gateway</label>
+                            <div className="relative">
+                              <input
+                                value={cfg.baseUrl || ''}
+                                onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
+                                placeholder="https://api.custom-proxy.com/v1"
+                                className="w-full px-16 py-10 rounded-[44px] bg-surface-secondary/50 border border-border-light text-[19px] font-mono text-text placeholder:text-text-quaternary outline-none focus:bg-surface focus:border-accent/50 focus:ring-[24px] focus:ring-accent-subtle transition-all duration-500 shadow-[inset_0_2px_12px_rgba(0,0,0,0.02)]"
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center px-8">
-                      <div className="w-20 h-20 rounded-[30%_70%_60%_40%_/_50%_40%_60%_50%] bg-(--color-surface-secondary)/80 border border-(--color-border-light) flex items-center justify-center mb-6 backdrop-blur-xl">
-                        <Cpu size={36} className="text-(--color-text-tertiary) opacity-40" />
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center px-24 py-64">
+                        <div className="relative mb-24">
+                          <div className="absolute inset-0 bg-accent/25 blur-[160px] rounded-full scale-150 animate-pulse" />
+                          <div className="relative w-64 h-64 rounded-[42%] bg-surface border border-border-light flex items-center justify-center backdrop-blur-3xl shadow-4xl animate-float">
+                            <Cpu size={120} className="text-accent opacity-40" />
+                          </div>
+                        </div>
+                        <h4 className="text-6xl font-bold text-text tracking-tighter mb-10">Select a Model Provider</h4>
+                        <p className="text-[20px] text-text-tertiary max-w-[480px] leading-relaxed font-bold opacity-60">Choose an AI orchestration provider from the left to configure your neural workspace.</p>
                       </div>
-                      <h4 className="text-base font-semibold text-(--color-text) tracking-tight mb-1.5">No Provider Selected</h4>
-                      <p className="text-sm text-(--color-text-tertiary) max-w-[260px] leading-relaxed">Choose a provider from the list to configure its settings.</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </ScrollShadow>
               </div>
             )}
 
             {activeTab === 'appearance' && (
-              <ScrollShadow className="h-full px-12 py-10 animate-fade-in">
-                <div className="max-w-lg">
-                  <div className="mb-10">
-                    <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] text-(--color-text-tertiary) mb-6">Interface Theme</h4>
-                    <div className="flex gap-4">
+              <ScrollShadow className="h-full px-32 py-32 animate-fade-in">
+                <div className="max-w-4xl mx-auto">
+                  <div className="mb-24">
+                    <div className="flex flex-col mb-20">
+                      <h4 className="text-[13px] font-bold uppercase tracking-[0.5em] text-accent mb-6 opacity-60">Visual Style</h4>
+                      <h2 className="text-6xl font-bold text-text tracking-tighter">Interface Theme</h2>
+                      <p className="text-[18px] text-text-tertiary mt-4 font-medium opacity-70 tracking-tight">Customize the look and feel of your orchestration workspace</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-16">
                       {(['light', 'dark'] as const).map((t) => (
                         <button
                           key={t}
                           onClick={() => setTheme(t)}
-                          className={`flex-1 flex flex-col items-center gap-5 p-8 rounded-3xl border-2 transition-all duration-300 ${
+                          className={`group relative flex flex-col items-center gap-12 p-24 rounded-[64px] border-2 transition-all duration-700 ${
                             theme === t 
-                              ? 'border-(--color-accent) bg-(--color-accent-muted) shadow-lg shadow-(--color-accent)/5' 
-                              : 'border-(--color-border) hover:border-(--color-border-hover) bg-(--color-surface)'
+                              ? 'border-accent bg-accent-subtle shadow-[0_48px_128px_rgba(var(--color-accent-rgb),0.15)] -translate-y-4' 
+                              : 'border-border-light hover:border-border-hover bg-surface hover:-translate-y-2 shadow-sm'
                           }`}
                         >
-                          <div className={`p-5 rounded-2xl transition-all ${
+                          <div className={`p-14 rounded-[40px] transition-all duration-700 ${
                             theme === t 
-                              ? 'bg-(--color-accent) text-white shadow-lg shadow-(--color-accent)/20' 
-                              : 'bg-(--color-surface-secondary) text-(--color-text-tertiary)'
+                              ? 'bg-accent text-accent-foreground shadow-3xl shadow-accent/50' 
+                              : 'bg-surface-secondary text-text-tertiary group-hover:text-text group-hover:bg-surface-tertiary'
                           }`}>
-                            {t === 'light' ? <Sun size={28} /> : <Moon size={28} />}
+                            {t === 'light' ? <Sun size={64} /> : <Moon size={64} />}
                           </div>
-                          <span className={`text-sm font-semibold tracking-tight ${
-                            theme === t ? 'text-(--color-accent)' : 'text-(--color-text)'
-                          }`}>
-                            {t === 'light' ? 'Light Mode' : 'Dark Mode'}
-                          </span>
+                          <div className="text-center">
+                            <span className={`text-4xl font-bold tracking-tighter block ${
+                              theme === t ? 'text-accent' : 'text-text'
+                            }`}>
+                              {t === 'light' ? 'Daylight' : 'Midnight'}
+                            </span>
+                            <span className="text-[14px] text-text-tertiary font-bold uppercase tracking-[0.4em] mt-4 block opacity-40">
+                              {t === 'light' ? 'Clean & Crisp' : 'Deep & Focused'}
+                            </span>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -367,46 +415,51 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             )}
 
             {activeTab === 'mcp' && (
-              <ScrollShadow className="h-full px-12 py-10">
+              <ScrollShadow className="h-full px-32 py-24">
                 <MCPSettings />
               </ScrollShadow>
             )}
             {activeTab === 'skills' && (
-              <ScrollShadow className="h-full px-12 py-10">
+              <ScrollShadow className="h-full px-32 py-24">
                 <SkillSettings />
               </ScrollShadow>
             )}
           </div>
 
           {/* Footer */}
-          <footer className="shrink-0 flex items-center justify-end gap-4 px-10 h-16 border-t border-(--color-border-light)">
+          <footer className="shrink-0 flex items-center justify-end gap-12 px-48 h-44 border-t border-border-light bg-surface/50 backdrop-blur-3xl">
             <button
               onClick={onClose}
-              className="px-6 py-2.5 rounded-xl text-sm font-medium text-(--color-text-secondary) hover:bg-(--color-surface-secondary) hover:text-(--color-text) transition-all"
+              className="px-18 py-8 rounded-2xl text-[17px] font-bold text-text-secondary hover:bg-surface-secondary hover:text-text transition-all duration-400 border border-transparent hover:border-border-light"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className={`inline-flex items-center gap-2.5 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+              className={`inline-flex items-center gap-8 px-24 py-8 rounded-[32px] text-[17px] font-bold transition-all duration-700 relative overflow-hidden group ${
                 saved
-                  ? 'text-green-600 bg-green-500/10'
-                  : 'bg-(--color-accent) text-white hover:bg-(--color-accent-light) shadow-md shadow-(--color-accent)/15 hover:shadow-lg hover:shadow-(--color-accent)/20'
+                  ? 'text-green-600 bg-green-500/10 border border-green-500/20 shadow-[0_0_64px_rgba(34,197,94,0.15)]'
+                  : 'bg-accent text-accent-foreground hover:bg-accent-light shadow-[0_24px_64px_rgba(var(--color-accent-rgb),0.3)] hover:shadow-[0_32px_96px_rgba(var(--color-accent-rgb),0.4)] hover:-translate-y-2 active:translate-y-0'
               }`}
             >
               {saving ? (
-                <RefreshCw size={16} className="animate-spin" />
+                <RefreshCw size={28} className="animate-spin" />
               ) : saved ? (
-                <CheckCircle size={16} />
+                <CheckCircle size={28} className="animate-fade-in" />
               ) : null}
-              <span className="mr-1">
-                {saved ? 'Applied' : saving ? 'Saving...' : 'Apply'}
+              <span className="relative z-10">
+                {saved ? 'Changes Applied' : saving ? 'Synchronizing...' : 'Apply & Save'}
               </span>
+              {!saved && !saving && (
+                <div className="absolute inset-0 bg-linear-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+              )}
             </button>
           </footer>
         </div>
+
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

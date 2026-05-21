@@ -5,6 +5,7 @@ interface ButtonProps extends Omit<HeroButtonProps, 'variant' | 'color' | 'size'
   size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm'
   isDisabled?: boolean
   title?: string
+  children?: React.ReactNode
 }
 
 export function Button({ 

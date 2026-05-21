@@ -30,13 +30,13 @@ export function StreamingIndicator({
   }, [])
 
   return (
-    <div className="flex justify-center py-2">
-      <div className="inline-flex items-center gap-2 rounded-full border border-(--color-border)/50 bg-(--color-surface-secondary) px-3 py-1 text-xs text-(--color-text-secondary)">
-        <span className="animate-shimmer text-(--color-accent)">✦</span>
+    <div className="flex justify-center py-3">
+      <div className="inline-flex items-center gap-3 rounded-full border border-border/50 bg-surface-secondary px-5 py-2 text-[13px] font-bold tracking-tight text-text-secondary shadow-sm">
+        <span className="animate-shimmer text-accent">✦</span>
         <span>{verb}...</span>
-        <span className="text-(--color-text-tertiary)">{formatElapsed(elapsed)}</span>
+        <span className="text-text-tertiary opacity-60 ml-1">{formatElapsed(elapsed)}</span>
         {tokenCount !== undefined && tokenCount > 0 && (
-          <span className="text-(--color-text-tertiary)">{tokenCount} tokens</span>
+          <span className="text-text-tertiary opacity-60 ml-1">{tokenCount} tokens</span>
         )}
       </div>
     </div>

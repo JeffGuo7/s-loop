@@ -18,7 +18,7 @@ const PROSE_BASE = 'prose max-w-none break-words'
 const PROSE_VARIANTS = {
   default: 'prose-sm',
   document: 'prose-base leading-relaxed',
-  compact: 'prose-sm text-(--color-text-secondary)',
+  compact: 'prose-sm text-text-secondary',
 }
 
 function CodeBlockComponent({ lang, code }: CodeBlock) {
@@ -55,7 +55,7 @@ function CodeBlockComponent({ lang, code }: CodeBlock) {
         <span>{lang || 'text'}</span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] hover:bg-(--color-border) transition-colors"
+          className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] hover:bg-border transition-colors"
         >
           {copied ? '✓ Copied' : 'Copy'}
         </button>
@@ -74,7 +74,7 @@ function CodeBlockComponent({ lang, code }: CodeBlock) {
 
 function InlineCode({ children }: { children: string }) {
   return (
-    <code className="bg-(--color-surface-secondary) text-(--color-accent) px-1.5 py-0.5 rounded text-[0.875em] font-mono">
+    <code className="bg-surface-secondary text-accent px-1.5 py-0.5 rounded text-[0.875em] font-mono">
       {children}
     </code>
   )
@@ -100,7 +100,7 @@ const customRenderer = {
   image({ href, text }: { href: string; text: string }) {
     // Let images render normally, but add sensible max dimensions to prevent breaking layout
     const label = text || 'image'
-    return `<img src="${href}" alt="${label}" class="max-w-full h-auto max-h-[400px] rounded-lg border border-(--color-border) shadow-sm object-contain my-4" />`
+    return `<img src="${href}" alt="${label}" class="max-w-full h-auto max-h-[400px] rounded-lg border border-border shadow-sm object-contain my-4" />`
   },
 }
 

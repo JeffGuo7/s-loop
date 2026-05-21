@@ -13,43 +13,43 @@ export function StepView({ part, isActive = false }: StepViewProps) {
   const isStillActive = isStart && isActive
 
   return (
-    <div className="flex items-center gap-3 py-2 px-2 group transition-all hover:translate-x-0.5">
-      <div className={`flex items-center justify-center w-6 h-6 shrink-0 rounded-lg transition-all duration-500 ${
+    <div className="flex items-center gap-6 py-5 px-4 group transition-all hover:translate-x-2">
+      <div className={`flex items-center justify-center w-9 h-9 shrink-0 rounded-[14px] transition-all duration-500 ${
         isStillActive 
-          ? 'bg-(--color-accent)/10 text-(--color-accent) ring-1 ring-(--color-accent)/20' 
+          ? 'bg-accent/10 text-accent ring-2 ring-accent/20 shadow-lg shadow-accent/10' 
           : reason === 'error'
-            ? 'bg-red-500/10 text-red-500'
-            : 'bg-(--color-surface-secondary) text-(--color-text-tertiary)'
+            ? 'bg-red-500/10 text-red-500 shadow-sm shadow-red-500/5'
+            : 'bg-surface-secondary text-text-tertiary border border-border-light shadow-sm'
       }`}>
         {isStillActive && (
-          <Loader2 size={13} className="animate-spin" />
+          <Loader2 size={18} className="animate-spin" />
         )}
         {isStart && !isActive && (
-          <CheckCircle size={13} className="text-green-500 opacity-80" />
+          <CheckCircle size={18} className="text-green-500" />
         )}
         {isFinish && reason === 'stop' && (
-          <CheckCircle size={13} className="text-green-500 opacity-80" />
+          <CheckCircle size={18} className="text-green-500" />
         )}
         {isFinish && reason === 'error' && (
-          <XCircle size={13} />
+          <XCircle size={18} />
         )}
         {isFinish && reason !== 'stop' && reason !== 'error' && (
-          <Play size={11} className="fill-current" />
+          <Play size={16} className="fill-current" />
         )}
       </div>
       
       <div className="flex flex-col">
-        <span className={`text-[11px] font-bold uppercase tracking-[0.1em] transition-colors ${
+        <span className={`text-[14px] font-bold uppercase tracking-[0.2em] transition-colors ${
           isStillActive
-            ? 'text-(--color-accent)'
+            ? 'text-accent'
             : reason === 'error'
-              ? 'text-red-500 opacity-90'
-              : 'text-(--color-text-tertiary) group-hover:text-(--color-text-secondary)'
+              ? 'text-red-500'
+              : 'text-text-tertiary group-hover:text-text-secondary'
         }`}>
           {isStillActive ? 'Running sequence...' : isStart ? 'Sequence initialized' : `Step ${reason || 'finalized'}`}
         </span>
         {isStillActive && (
-          <span className="text-[10px] text-(--color-text-tertiary) opacity-60 animate-pulse">
+          <span className="text-[13px] text-text-tertiary opacity-50 animate-pulse font-bold mt-1 tracking-tight">
             Executing operations...
           </span>
         )}

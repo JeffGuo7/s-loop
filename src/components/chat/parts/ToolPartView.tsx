@@ -78,61 +78,61 @@ export function ToolPartView({ part }: ToolPartViewProps) {
   const isRunning = state?.status === 'running'
 
   return (
-    <div className="my-3 animate-fade-in">
+    <div className="my-8 animate-fade-in">
       <Card
-        className={`overflow-hidden transition-all duration-500 border border-black/[0.04] dark:border-white/[0.04] ${
-          expanded ? 'ring-1 ring-(--color-accent)/20 shadow-md' : 'hover:border-(--color-accent)/20'
+        className={`overflow-hidden transition-all duration-700 border border-black/[0.04] dark:border-white/[0.04] rounded-[40px] ${
+          expanded ? 'ring-2 ring-accent/20 shadow-2xl' : 'hover:border-accent/30 hover:shadow-xl'
         }`}
       >
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-4 px-4 py-3 hover:bg-(--color-surface-secondary)/50 transition-all text-left group/toolbtn"
+          className="w-full flex items-center gap-8 px-8 py-6 hover:bg-surface-secondary/60 transition-all text-left group/toolbtn"
         >
-          <div className={`p-2.5 rounded-xl transition-all duration-500 ${
+          <div className={`p-4 rounded-[20px] transition-all duration-500 ${
             isRunning 
-              ? 'bg-(--color-accent) text-white shadow-lg shadow-accent/20 animate-pulse' 
+              ? 'bg-accent text-white shadow-xl shadow-accent/30 animate-pulse' 
               : expanded 
-                ? 'bg-(--color-accent) text-white shadow-md shadow-accent/10' 
-                : 'bg-(--color-surface-secondary) text-(--color-text-tertiary) group-hover/toolbtn:bg-(--color-surface-tertiary)'
+                ? 'bg-accent text-white shadow-lg shadow-accent/20' 
+                : 'bg-surface-secondary text-text-tertiary group-hover/toolbtn:bg-surface-tertiary group-hover/toolbtn:text-text'
           }`}>
-            {isRunning ? <Activity size={15} strokeWidth={2.5} className="animate-spin-slow" /> : <Icon size={15} strokeWidth={2.5} />}
+            {isRunning ? <Activity size={22} strokeWidth={3} className="animate-spin-slow" /> : <Icon size={22} strokeWidth={3} />}
           </div>
           
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2.5">
-              <span className={`text-[10px] font-bold uppercase tracking-[0.15em] opacity-70 ${isRunning ? 'text-(--color-accent)' : 'text-(--color-text-tertiary)'}`}>
+            <div className="flex items-center gap-4">
+              <span className={`text-[12px] font-bold uppercase tracking-[0.3em] opacity-50 ${isRunning ? 'text-accent' : 'text-text-tertiary'}`}>
                 {isRunning ? 'Executing' : isError ? 'Execution Failed' : 'Tool Call'}
               </span>
-              <span className="text-[14px] font-semibold text-(--color-text) tracking-tight">
+              <span className="text-[18px] font-bold text-text tracking-tight group-hover/toolbtn:text-accent transition-colors">
                 {toolName.replace(/_/g, ' ')}
               </span>
             </div>
             {subtitle && (
-              <div className="text-[11px] text-(--color-text-tertiary) truncate mt-0.5 font-mono opacity-60 group-hover/toolbtn:opacity-90 transition-opacity" style={{ maxWidth: 'calc(100% - 24px)' }}>
+              <div className="text-[14px] text-text-tertiary truncate mt-2 font-mono opacity-50 group-hover/toolbtn:opacity-80 transition-opacity" style={{ maxWidth: 'calc(100% - 32px)' }}>
                 {subtitle}
               </div>
             )}
           </div>
 
-          <div className={`transition-all duration-500 rounded-full p-1.5 ${expanded ? 'rotate-180 bg-(--color-accent-muted) text-(--color-accent)' : 'text-(--color-text-quaternary) group-hover/toolbtn:text-(--color-text-secondary)'}`}>
-            <ChevronDown size={16} strokeWidth={2.5} />
+          <div className={`transition-all duration-500 rounded-full p-3 ${expanded ? 'rotate-180 bg-accent-subtle text-accent shadow-sm' : 'text-text-quaternary group-hover/toolbtn:text-text-secondary group-hover/toolbtn:bg-surface-tertiary'}`}>
+            <ChevronDown size={24} strokeWidth={3} />
           </div>
         </button>
 
         {expanded && (
-          <div className="border-t border-black/[0.03] dark:border-white/[0.03] bg-(--color-surface-secondary)/30 animate-fade-in">
-            <div className="p-5 space-y-6">
+          <div className="border-t border-black/[0.04] dark:border-white/[0.04] bg-surface-secondary/40 animate-fade-in">
+            <div className="p-10 space-y-10">
               {/* Input Args */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 ml-1">
-                  <div className="w-1 h-3 rounded-full bg-(--color-accent)/30" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-(--color-text-tertiary)">Input Parameters</span>
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 ml-2">
+                  <div className="w-2 h-5 rounded-full bg-accent/30" />
+                  <span className="text-[12px] font-bold uppercase tracking-[0.5em] text-text-tertiary">Input Parameters</span>
                 </div>
                 <div className="relative group/input">
-                  <pre className="font-mono text-[11px] leading-relaxed bg-(--color-surface) border border-black/[0.04] dark:border-white/[0.04] rounded-xl p-4 overflow-x-auto text-(--color-text-secondary) shadow-inner scrollbar-subtle">
+                  <pre className="font-mono text-[14px] leading-relaxed bg-surface border border-black/[0.04] dark:border-white/[0.04] rounded-[24px] p-8 overflow-x-auto text-text-secondary shadow-inner scrollbar-subtle">
                     {JSON.stringify(state?.input || {}, null, 2)}
                   </pre>
-                  <div className="absolute top-2 right-2 opacity-0 group-hover/input:opacity-100 transition-opacity">
+                  <div className="absolute top-6 right-6 opacity-0 group-hover/input:opacity-100 transition-opacity">
                     <CopyButton text={JSON.stringify(state?.input || {}, null, 2)} />
                   </div>
                 </div>
@@ -140,20 +140,20 @@ export function ToolPartView({ part }: ToolPartViewProps) {
 
               {/* Output */}
               {output && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1 h-3 rounded-full ${isError ? 'bg-error/40' : 'bg-success/40'}`} />
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${isError ? 'text-error/80' : 'text-(--color-text-tertiary)'}`}>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between px-2">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-2 h-5 rounded-full ${isError ? 'bg-red-500/40' : 'bg-green-500/40'}`} />
+                      <span className={`text-[12px] font-bold uppercase tracking-[0.5em] ${isError ? 'text-red-500/80' : 'text-text-tertiary'}`}>
                         {isError ? 'Error Response' : 'Execution Result'}
                       </span>
                     </div>
                     <CopyButton text={output} />
                   </div>
-                  <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[500px] overflow-y-auto rounded-xl p-4 border shadow-inner ${
+                  <pre className={`font-mono text-[14px] leading-relaxed whitespace-pre-wrap max-h-[700px] overflow-y-auto rounded-[24px] p-8 border shadow-inner ${
                     isError 
-                      ? 'bg-error-bg/30 border-error/10 text-error/90' 
-                      : 'bg-(--color-surface) border-black/[0.04] dark:border-white/[0.04] text-(--color-text-secondary)'
+                      ? 'bg-red-500/5 border-red-500/10 text-red-500/90' 
+                      : 'bg-surface border-black/[0.04] dark:border-white/[0.04] text-text-secondary'
                   } scrollbar-subtle`}>
                     {output}
                   </pre>
