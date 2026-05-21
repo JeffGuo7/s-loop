@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Sidebar } from './components/layout'
+import { Sidebar, TitleBar } from './components/layout'
 import { ChatView } from './components/chat'
 import { SettingsModal } from './components/settings'
 import { PetCompanion, PetHatchModal } from './components/companion'
@@ -46,6 +46,8 @@ function App() {
 
   return (
     <div className="app-shell flex h-screen w-screen overflow-hidden bg-bg relative">
+      <TitleBar />
+      
       {/* Global Unified Background - Provides the "How can I help" vibe everywhere */}
       <div className="fixed inset-0 pointer-events-none z-0">
         {/* Main Center Glow */}
@@ -63,9 +65,10 @@ function App() {
         onNavigate={setCurrentPage}
         collapsed={sidebarCollapsed}
         onToggleCollapse={toggleSidebar}
+        className="pt-10"
       />
 
-      <main className="flex-1 min-w-0 h-full relative z-10 flex flex-col items-center justify-center">
+      <main className="flex-1 min-w-0 h-full relative z-10 flex flex-col items-center justify-center pt-10">
         <div className="w-full h-full flex flex-col items-center justify-center bg-transparent">
           {currentPage === 'chat' && <ChatView />}
           {currentPage === 'tasks' && (

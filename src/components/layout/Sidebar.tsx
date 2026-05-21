@@ -26,6 +26,7 @@ interface SidebarProps {
   onNavigate: (page: Page) => void
   collapsed?: boolean
   onToggleCollapse?: () => void
+  className?: string
 }
 
 export function Sidebar({
@@ -35,6 +36,7 @@ export function Sidebar({
   onNavigate,
   collapsed = false,
   onToggleCollapse,
+  className = '',
 }: SidebarProps) {
   const sessions = useAppStore((s) => s.sessions)
   const activeSessionId = useAppStore((s) => s.activeSessionId)
@@ -71,7 +73,7 @@ export function Sidebar({
 
   return (
     <aside
-      className="h-full flex flex-col bg-transparent sidebar-transition shrink-0 z-20 relative group/sidebar"
+      className={`h-full flex flex-col bg-transparent sidebar-transition shrink-0 z-20 relative group/sidebar ${className}`}
       style={{ width }}
     >
       {/* Background Layer - Removed for consistency */}

@@ -75,7 +75,7 @@ export function WorkspacePanel() {
   if (collapsed) {
     return (
       <aside 
-        className="h-full flex flex-col items-center pt-6 bg-transparent sidebar-transition relative shrink-0"
+        className="h-full flex flex-col items-center pt-10 bg-transparent sidebar-transition relative shrink-0"
         style={{ width: 'var(--spacing-workspace-panel-collapsed)' }}
       >
         <motion.button
@@ -93,7 +93,7 @@ export function WorkspacePanel() {
 
   return (
     <aside 
-      className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-transparent relative"
+      className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-transparent relative pt-10"
       style={{ width: 'var(--spacing-workspace-panel)' }}
     >
       {/* Left Edge - Removed for consistency */}
