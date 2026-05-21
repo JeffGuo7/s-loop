@@ -73,9 +73,11 @@ export function Sidebar({
 
   return (
     <aside
-      className="h-full flex flex-col bg-surface border-r border-border sidebar-transition shrink-0 z-20"
+      className="h-full flex flex-col bg-surface/40 backdrop-blur-3xl sidebar-transition shrink-0 z-20 relative"
       style={{ width }}
     >
+      {/* Subtle blend shadow instead of hard border */}
+      <div className="absolute inset-y-0 right-0 w-px bg-linear-to-b from-transparent via-black/[0.03] dark:via-white/[0.05] to-transparent" />
       {/* Top Actions */}
       <div className="px-6 pt-12 pb-6">
         {!collapsed && (
@@ -256,17 +258,28 @@ function NavItem({ icon: Icon, label, active, onClick, collapsed, badge }: NavIt
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 rounded-xl transition-all w-full relative group ${
+      className={`flex items-center gap-4 rounded-[22px] transition-all duration-500 w-full relative group ${
         active
-          ? 'bg-surface text-accent shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]'
-          : 'hover:bg-surface-hover/60 text-text-tertiary hover:text-text-secondary'
-      } ${collapsed ? 'aspect-square justify-center' : 'px-4 py-3'}`}
+          ? 'bg-white dark:bg-white/10 text-accent shadow-[0_8px_32px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] dark:ring-white/[0.05]'
+          : 'hover:bg-surface-hover/80 text-text-tertiary hover:text-text-secondary'
+      } ${collapsed ? 'aspect-square justify-center' : 'px-5 py-3.5'}`}
       title={label}
     >
-      <Icon size={16} strokeWidth={active ? 2.5 : 1.5} />
-      {!collapsed && <span className="text-sm font-bold tracking-tight">{label}</span>}
+      <Icon 
+        size={20} 
+        strokeWidth={active ? 2.5 : 1.5} 
+        className={`transition-transform duration-500 ${active ? 'scale-110' : 'group-hover:scale-110'}`}
+      />
+      {!collapsed && <span className="text-[15px] font-bold tracking-tight">{label}</span>}
       {badge && !active && (
-        <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-green-500 ring-2 ring-surface-secondary animate-pulse" />
+        <span className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-green-500 ring-4 ring-surface-secondary animate-pulse shadow-[0_0_12px_rgba(34,197,94,0.4)]" />
+      )}
+      {active && (
+        <motion.div
+          layoutId="activeNavIndicator"
+          className="absolute left-1.5 w-1 h-6 bg-accent rounded-full shadow-[0_0_12px_rgba(var(--color-accent-rgb),0.4)]"
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        />
       )}
     </button>
   )

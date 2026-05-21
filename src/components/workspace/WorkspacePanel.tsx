@@ -94,9 +94,10 @@ export function WorkspacePanel() {
   if (collapsed) {
     return (
       <div 
-        className="absolute right-0 top-0 bottom-0 flex flex-col items-center pt-8 bg-surface/50 border-l border-border z-10"
+        className="h-full flex flex-col items-center pt-8 bg-surface/10 sidebar-transition relative shrink-0"
         style={{ width: 'var(--workspace-panel-collapsed)' }}
       >
+        <div className="absolute inset-y-0 left-0 w-px bg-linear-to-b from-transparent via-black/[0.02] dark:via-white/[0.02] to-transparent" />
         <button
           onClick={toggleWorkspace}
           className="p-3 rounded-xl hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all"
@@ -110,9 +111,10 @@ export function WorkspacePanel() {
 
   return (
     <div 
-      className="absolute right-0 top-0 bottom-0 border-l border-border flex flex-col overflow-hidden shrink-0 animate-slide-in-right bg-surface/30 backdrop-blur-xl z-10"
+      className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-surface/20 backdrop-blur-3xl relative"
       style={{ width: 'var(--workspace-panel-width)' }}
     >
+      <div className="absolute inset-y-0 left-0 w-px bg-linear-to-b from-transparent via-black/[0.03] dark:via-white/[0.05] to-transparent" />
       {/* Hidden file input for browser fallback */}
       <input
         ref={hiddenInputRef}
@@ -125,55 +127,56 @@ export function WorkspacePanel() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-6 border-b border-border-light bg-transparent">
-        <div className="flex items-center gap-3 text-[16px] font-bold tracking-tight text-text">
-          <Folder size={18} className="text-accent" />
+      <div className="flex items-center justify-between px-10 h-48 border-b border-border-light bg-surface-secondary/20 backdrop-blur-3xl">
+        <div className="flex items-center gap-4 text-[17px] font-bold tracking-tightest text-text uppercase tracking-[0.1em]">
+          <Files size={20} className="text-accent/60" />
           Workspace
         </div>
         <button
           onClick={toggleWorkspace}
-          className="p-2 rounded-lg hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all"
+          className="p-2.5 rounded-2xl hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all duration-500 hover:rotate-90"
           title="Collapse workspace panel"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-8 py-8 scrollbar-subtle">
+      <div className="flex-1 overflow-y-auto px-10 py-10 scrollbar-subtle space-y-12">
         {workspaceDir ? (
-          <div className="space-y-8">
-            {/* Directory path display */}
-            <div className="rounded-[24px] border border-border-light bg-surface-secondary/30 flex items-start gap-4 p-5 transition-all hover:border-accent/20">
-              <FolderOpen size={20} className="text-accent shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-text-tertiary mb-2 opacity-60">
-                  Project Root
+          <div className="space-y-12 animate-fade-in-up">
+            {/* Directory path display - Poster style */}
+            <div className="group relative rounded-[32px] border border-border-light bg-white dark:bg-white/5 p-6 transition-all duration-700 hover:shadow-2xl hover:shadow-accent/5 hover:-translate-y-2 overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-accent/10 transition-colors" />
+              
+              <div className="flex items-start gap-5 relative z-10">
+                <div className="p-3.5 rounded-[20px] bg-accent-subtle text-accent shadow-sm">
+                  <FolderOpen size={24} strokeWidth={2.5} />
                 </div>
-                <p className="text-[13px] font-mono text-text-secondary break-all leading-relaxed whitespace-pre-wrap font-medium">
-                  {workspaceDir}
-                </p>
-                {workspaceDir.startsWith('selected://') && !isTauri() && (
-                  <p className="text-[10px] text-red-400 mt-2 font-bold">
-                    Full path unavailable in browser. Use Tauri app or enter path manually.
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.5em] text-accent/60 mb-3">
+                    Active Environment
+                  </div>
+                  <p className="text-[14px] font-mono text-text-secondary break-all leading-relaxed font-bold bg-surface-secondary/50 p-4 rounded-[18px] border border-black/[0.02] dark:border-white/[0.02] shadow-inner">
+                    {workspaceDir}
                   </p>
-                )}
+                </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-3">
+            {/* Actions - Gallery buttons */}
+            <div className="flex gap-4 px-2">
               <button
                 onClick={handleSelectDir}
-                className="flex-1 text-xs px-5 py-3.5 rounded-2xl bg-accent text-white font-bold hover:opacity-90 transition-all shadow-lg shadow-accent/15 active:scale-95"
+                className="flex-1 text-[14px] px-6 py-4 rounded-[22px] bg-accent text-white font-extrabold hover:bg-accent-light transition-all duration-500 shadow-xl shadow-accent/20 hover:shadow-accent/40 hover:-translate-y-2 active:translate-y-0"
               >
-                Change
+                Switch Path
               </button>
               <button
                 onClick={handleClear}
-                className="text-xs px-5 py-3.5 rounded-2xl bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all font-bold active:scale-95"
+                className="text-[14px] px-6 py-4 rounded-[22px] bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all duration-500 font-extrabold hover:-translate-y-2 active:translate-y-0"
               >
-                Clear
+                Reset
               </button>
             </div>
 

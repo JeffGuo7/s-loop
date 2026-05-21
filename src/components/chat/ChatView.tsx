@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAppStore } from '../../stores'
-import { Cpu, Wifi, WifiOff } from 'lucide-react'
+import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import * as Kilo from '../../utils/kiloClient'
+import { motion } from 'framer-motion'
 
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
@@ -248,52 +249,43 @@ export function ChatView() {
 
   if (!activeSessionId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-bg relative overflow-hidden">
-        {/* Deep ambient background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1400px] h-[1400px] bg-accent/5 rounded-full blur-[240px] pointer-events-none" />
+      <div className="flex-1 flex flex-col items-center justify-center bg-bg relative overflow-hidden selection:bg-accent/10">
+        {/* Complex Layered Ambient Glow */}
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-accent/3 rounded-full blur-[180px] pointer-events-none animate-pulse-slow" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-accent/4 rounded-full blur-[160px] pointer-events-none animate-pulse-slow [animation-delay:2s]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1400px] h-[1400px] bg-accent/[0.02] rounded-full blur-[240px] pointer-events-none" />
 
-        <div className="text-center relative z-10 px-32 max-w-5xl">
+        <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-6 sm:px-12 max-w-5xl mx-auto h-full">
           {/* Main Visual Group */}
-          <div className="flex justify-center w-full mb-32">
-            <div className="relative group">
-              {/* Pulsing Back Glow */}
-              <div className="absolute inset-0 bg-accent opacity-25 blur-[120px] group-hover:opacity-40 transition-opacity duration-1000 rounded-full scale-150" />
-              
-              {/* Icon Container with Fluid Shape - Fine-tuned for visual centering */}
-              <div className="relative w-56 h-56 mx-auto rounded-[38%_62%_63%_37%/41%_44%_56%_59%] bg-white/90 dark:bg-white/5 border border-white/50 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
-                <div className="relative z-10 flex items-center justify-center">
-                  <Cpu size={96} className="text-accent drop-shadow-[0_0_40px_rgba(var(--color-accent-rgb),0.6)]" />
-                </div>
-                
-                {/* Internal Animated Shimmer */}
-                <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_4s_infinite]" />
+          <div className="mb-8 sm:mb-20 shrink-0">
+            <div className="relative group scale-90 sm:scale-100 transition-transform duration-700">
+              <div className="absolute inset-0 bg-accent/10 blur-[80px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-150" />
+              <div className="relative w-36 h-36 sm:w-56 sm:h-56 rounded-[32%_68%_55%_45%/45%_35%_65%_55%] bg-white/95 dark:bg-white/5 border border-white/40 dark:border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-3xl animate-liquid overflow-hidden">
+                <Cpu size={60} className="sm:hidden text-accent drop-shadow-[0_8px_24px_rgba(var(--color-accent-rgb),0.4)]" />
+                <Cpu size={84} className="hidden sm:block text-accent drop-shadow-[0_12px_32px_rgba(var(--color-accent-rgb),0.5)]" />
               </div>
-
-              {/* Orbiting Tech Particles */}
-              <div className="absolute -top-10 -right-12 w-12 h-12 rounded-full bg-accent opacity-50 animate-pulse blur-[1.5px]" />
-              <div className="absolute bottom-12 -left-20 w-10 h-10 rounded-full bg-accent-light opacity-40 animate-bounce [animation-delay:1.2s] blur-[1.5px]" />
             </div>
           </div>
 
           {/* Typography */}
-          <div className="space-y-12 mb-32">
-            <h2 className="text-9xl font-bold tracking-tightest text-text leading-none drop-shadow-sm">
-              Welcome to Snotra
+          <div className="space-y-4 sm:space-y-10 mb-10 sm:mb-24 w-full">
+            <h2 className="text-4xl sm:text-7xl lg:text-[8rem] font-bold tracking-tight text-text leading-tight drop-shadow-sm select-none">
+              Welcome to <span className="text-accent italic font-serif px-2">Snotra</span>
             </h2>
-            <p className="text-[26px] text-text-tertiary leading-relaxed max-w-2xl mx-auto font-bold opacity-70">
-              Experience a calm, orchestrated workspace. Start a new conversation to begin your journey with AI.
-            </p>
+            <div className="flex justify-center w-full">
+              <p className="text-base sm:text-xl lg:text-2xl text-text-tertiary leading-relaxed max-w-xl sm:max-w-2xl font-medium tracking-tight opacity-70 text-center">
+                Your intelligent orchestration workspace. Seamlessly manage <span className="text-text font-bold">agents</span>, <span className="text-text font-bold">files</span>, and <span className="text-text font-bold">workflows</span>.
+              </p>
+            </div>
           </div>
 
-          {/* Connection Status & CTA */}
-          <div className="flex flex-col items-center gap-16">
+          <div className="flex flex-col items-center gap-12 sm:gap-20">
             <ServerStatus online={serverOnline} />
-            
-            <div className="h-px w-48 bg-border-light opacity-50" />
-            
-            <p className="text-[14px] font-bold uppercase tracking-[0.6em] text-accent animate-pulse opacity-50">
-              Select a session from the sidebar to start
-            </p>
+            <div className="flex items-center gap-12">
+              <div className="h-px w-24 bg-border-light" />
+              <p className="text-[13px] font-bold uppercase tracking-[0.8em] text-accent/40">New Conversation</p>
+              <div className="h-px w-24 bg-border-light" />
+            </div>
           </div>
         </div>
       </div>
@@ -316,7 +308,7 @@ export function ChatView() {
           {/* Ambient glow */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[1200px] bg-accent/6 rounded-full blur-[200px] pointer-events-none" />
 
-          <div className="text-center relative z-10 w-full">
+          <div className="text-center relative z-10 w-full flex flex-col items-center">
             {/* Label ABOVE icon */}
             <p className="text-[14px] font-bold tracking-[0.7em] uppercase text-accent opacity-50 mb-20">Snotra Workspace</p>
 
@@ -343,15 +335,15 @@ export function ChatView() {
             </div>
 
             {/* Heading below icon */}
-            <h2 className="text-[96px] font-bold tracking-tightest text-text leading-none mb-12 drop-shadow-sm">
+            <h2 className="text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight text-text leading-none mb-12 drop-shadow-sm text-center">
               How can I help?
             </h2>
-            <p className="text-[24px] text-text-tertiary max-w-3xl mx-auto leading-relaxed mb-32 font-bold opacity-70">
+            <p className="text-base sm:text-xl lg:text-2xl text-text-tertiary max-w-3xl leading-relaxed mb-32 font-bold opacity-70 text-center">
               Seamlessly orchestrate your workspace, files, and AI agents from one minimalist interface.
             </p>
           </div>
 
-          <div className="w-full max-w-[1000px] relative z-10">
+          <div className="w-full max-w-[1000px] relative z-10 mx-auto">
             <ChatInput
               onSubmit={handleSubmit}
               onAbort={abort}
@@ -362,7 +354,7 @@ export function ChatView() {
           </div>
         </div>
       ) : (
-        <>
+        <div className="flex-1 flex flex-col w-full max-w-(--chat-max-width) mx-auto relative">
           <MessageList sessionId={activeSessionId} />
 
           {/* Error Display */}
@@ -398,7 +390,7 @@ export function ChatView() {
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
 
