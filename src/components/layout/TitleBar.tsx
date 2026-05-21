@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Minus, Square, X, Copy, Cpu } from 'lucide-react'
 
@@ -12,9 +12,9 @@ export function TitleBar() {
       const maximized = await appWindow.isMaximized()
       setIsMaximized(maximized)
     }
-    
+
     updateMaximized()
-    
+
     const unlisten = appWindow.onResized(() => {
       updateMaximized()
     })
@@ -30,17 +30,29 @@ export function TitleBar() {
   }
   const handleClose = () => appWindow.close()
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Double-click to maximize
+    if (e.detail === 2) {
+      handleMaximize()
+      return
+    }
+    // Only start drag when clicking the outer div background (not on buttons)
+    if (e.target === e.currentTarget) {
+      appWindow.startDragging().catch(() => {})
+    }
+  }, [])
+
   return (
-    <div 
-      data-tauri-drag-region 
-      className="h-10 w-full flex items-center justify-between bg-transparent select-none fixed top-0 left-0 right-0 z-[100] px-4"
+    <div
+      className="h-10 w-full flex items-center justify-between bg-transparent select-none fixed top-0 left-0 right-0 z-[100] px-4 cursor-default"
+      onMouseDown={handleMouseDown}
     >
       {/* Irregular Static Logo with S */}
-      <div className="flex items-center gap-3 pointer-events-none">
+      <div className="flex items-center gap-3 pointer-events-none select-none">
         <div className="relative w-8 h-8 flex items-center justify-center">
           {/* Irregular Shape (Static) */}
           <div className="absolute inset-0 bg-accent rounded-[38%_62%_63%_37%/41%_44%_56%_59%] shadow-lg shadow-accent/10" />
-          <span className="relative text-[18px] font-serif italic font-black text-white leading-none translate-y-[0.5px] select-none">
+          <span className="relative text-[18px] font-serif italic font-black text-white leading-none translate-y-[0.5px]">
             S
           </span>
         </div>
@@ -50,7 +62,7 @@ export function TitleBar() {
       </div>
 
       {/* Window Controls - Simple & Clean (Matching User's Screenshot) */}
-      <div className="flex items-center -mr-4 h-full">
+      <div className="flex items-center -mr-4 h-full relative z-50">
         {/* Minimize */}
         <button
           onClick={handleMinimize}
