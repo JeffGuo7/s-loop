@@ -127,54 +127,52 @@ export function WorkspacePanel() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-10 h-48 border-b border-border-light bg-surface-secondary/20 backdrop-blur-3xl">
-        <div className="flex items-center gap-4 text-[17px] font-bold tracking-tightest text-text uppercase tracking-[0.1em]">
-          <Files size={20} className="text-accent/60" />
+      <div className="flex items-center justify-between px-8 h-48 border-b border-border-light bg-surface-secondary/20 backdrop-blur-3xl">
+        <div className="flex items-center gap-3 text-[15px] font-bold tracking-tight text-text uppercase tracking-[0.05em]">
+          <Files size={18} className="text-accent/60" />
           Workspace
         </div>
         <button
           onClick={toggleWorkspace}
-          className="p-2.5 rounded-2xl hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all duration-500 hover:rotate-90"
+          className="p-1.5 rounded-lg hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all duration-500"
           title="Collapse workspace panel"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-10 py-10 scrollbar-subtle space-y-12">
+      <div className="flex-1 overflow-y-auto px-8 py-8 scrollbar-subtle space-y-8">
         {workspaceDir ? (
-          <div className="space-y-12 animate-fade-in-up">
-            {/* Directory path display - Poster style */}
-            <div className="group relative rounded-[32px] border border-border-light bg-white dark:bg-white/5 p-6 transition-all duration-700 hover:shadow-2xl hover:shadow-accent/5 hover:-translate-y-2 overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-accent/10 transition-colors" />
-              
-              <div className="flex items-start gap-5 relative z-10">
-                <div className="p-3.5 rounded-[20px] bg-accent-subtle text-accent shadow-sm">
-                  <FolderOpen size={24} strokeWidth={2.5} />
+          <div className="space-y-8 animate-fade-in-up">
+            {/* Directory path display - Refined style */}
+            <div className="group relative rounded-2xl border border-border-light bg-white dark:bg-white/5 p-5 transition-all duration-500 hover:shadow-lg hover:shadow-accent/5 overflow-hidden">
+              <div className="flex items-start gap-4 relative z-10">
+                <div className="p-2.5 rounded-xl bg-accent-subtle text-accent">
+                  <FolderOpen size={20} strokeWidth={2} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.5em] text-accent/60 mb-3">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent/60 mb-2">
                     Active Environment
                   </div>
-                  <p className="text-[14px] font-mono text-text-secondary break-all leading-relaxed font-bold bg-surface-secondary/50 p-4 rounded-[18px] border border-black/[0.02] dark:border-white/[0.02] shadow-inner">
+                  <p className="text-[13px] font-mono text-text-secondary break-all leading-relaxed font-semibold bg-surface-secondary/40 p-3 rounded-lg border border-black/[0.01] dark:border-white/[0.01]">
                     {workspaceDir}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Actions - Gallery buttons */}
-            <div className="flex gap-4 px-2">
+            {/* Actions - Refined buttons */}
+            <div className="flex gap-3 px-1">
               <button
                 onClick={handleSelectDir}
-                className="flex-1 text-[14px] px-6 py-4 rounded-[22px] bg-accent text-white font-extrabold hover:bg-accent-light transition-all duration-500 shadow-xl shadow-accent/20 hover:shadow-accent/40 hover:-translate-y-2 active:translate-y-0"
+                className="flex-1 text-[13px] px-5 py-3 rounded-xl bg-accent text-white font-bold hover:bg-accent-light transition-all duration-500 shadow-md shadow-accent/10 hover:shadow-accent/20 hover:-translate-y-1 active:translate-y-0"
               >
                 Switch Path
               </button>
               <button
                 onClick={handleClear}
-                className="text-[14px] px-6 py-4 rounded-[22px] bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all duration-500 font-extrabold hover:-translate-y-2 active:translate-y-0"
+                className="text-[13px] px-5 py-3 rounded-xl bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all duration-500 font-bold hover:-translate-y-1 active:translate-y-0"
               >
                 Reset
               </button>

@@ -264,6 +264,14 @@ export function ChatView() {
                 <Cpu size={60} className="sm:hidden text-accent drop-shadow-[0_8px_24px_rgba(var(--color-accent-rgb),0.4)]" />
                 <Cpu size={84} className="hidden sm:block text-accent drop-shadow-[0_12px_32px_rgba(var(--color-accent-rgb),0.5)]" />
               </div>
+              <motion.div 
+                animate={{ y: [0, -12, 0], x: [0, 8, 0] }}
+                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute -top-4 -right-4 sm:-top-8 sm:-right-8 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl"
+              >
+                <Sparkles size={20} className="sm:hidden" />
+                <Sparkles size={28} className="hidden sm:block" />
+              </motion.div>
             </div>
           </div>
 

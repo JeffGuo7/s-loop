@@ -35,6 +35,7 @@ interface AppState {
   deleteSession: (id: string) => void
   setActiveSession: (id: string | null) => void
   updateSessionTitle: (id: string, title: string) => void
+  clearSessions: () => void
 
   // Actions - Messages
   addMessage: (sessionId: string, message: KiloMessage) => void
@@ -126,6 +127,15 @@ export const useAppStore = create<AppState>()(
             s.id === id ? { ...s, title, updatedAt: Date.now() } : s,
           ),
         }))
+      },
+
+      clearSessions: () => {
+        set({
+          sessions: [],
+          activeSessionId: null,
+          sessionMessages: {},
+          streamingMessage: {},
+        })
       },
 
       // Message actions

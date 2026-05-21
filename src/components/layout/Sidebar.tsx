@@ -11,9 +11,10 @@ import {
   Moon,
   Sun,
   Clock,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ListBox, ListBoxItem } from "@heroui/react"
 import { useAppStore, usePetStore, useTelegramStore } from '../../stores'
 import { MagicButton } from '../ui'
@@ -73,135 +74,180 @@ export function Sidebar({
 
   return (
     <aside
-      className="h-full flex flex-col bg-surface/40 backdrop-blur-3xl sidebar-transition shrink-0 z-20 relative"
+      className="h-full flex flex-col bg-surface/30 backdrop-blur-3xl sidebar-transition shrink-0 z-20 relative group/sidebar"
       style={{ width }}
     >
-      {/* Subtle blend shadow instead of hard border */}
-      <div className="absolute inset-y-0 right-0 w-px bg-linear-to-b from-transparent via-black/[0.03] dark:via-white/[0.05] to-transparent" />
-      {/* Top Actions */}
-      <div className="px-6 pt-12 pb-6">
-        {!collapsed && (
-          <>
+      {/* Dynamic Accent Background Layer */}
+      <div className="absolute inset-0 bg-linear-to-b from-accent/3 via-transparent to-accent/2 pointer-events-none opacity-50" />
+      
+      {/* Right Edge Glow Indicator */}
+      <div className="absolute inset-y-0 right-0 w-px bg-linear-to-b from-transparent via-accent/15 to-transparent shadow-[0_0_15px_rgba(var(--color-accent-rgb),0.1)]" />
+
+      {/* Header: New Chat & Title */}
+      <div className="px-6 pt-12 pb-10 relative z-10">
+        {!collapsed ? (
+          <div className="space-y-12">
             <motion.div
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
             >
               <MagicButton
                 onClick={handleNewChat}
-                className="w-full gap-3 rounded-2xl shadow-xl shadow-accent/10 py-8 group relative overflow-hidden"
+                className="w-full gap-4 rounded-xl py-6.5 shadow-lg shadow-accent/10 group relative overflow-hidden transition-all duration-500 hover:shadow-accent/20 hover:scale-[1.01] active:scale-98"
               >
-                <div className="absolute inset-0 bg-linear-to-tr from-white/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <Plus size={22} strokeWidth={3} />
-                <span className="font-extrabold tracking-tight text-lg">New Chat</span>
+                <div className="absolute inset-0 bg-linear-to-tr from-white/10 via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                <div className="relative z-10 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center backdrop-blur-md group-hover:rotate-6 transition-transform duration-500">
+                    <Plus size={20} strokeWidth={2.5} className="text-white" />
+                  </div>
+                  <span className="font-bold tracking-tight text-base text-white">New Chat</span>
+                </div>
               </MagicButton>
             </motion.div>
-            
-            <div className="mt-12 flex items-center justify-between px-2">
-              <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-text-tertiary opacity-50">
-                Recent Conversations
-              </span>
-              <button
+
+            <div className="flex items-center justify-between px-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-accent opacity-50">
+                  Workspace
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[14px] font-bold text-text tracking-tight">
+                    Recent Activity
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Clear all conversations?')) {
+                        useAppStore.getState().clearSessions()
+                      }
+                    }}
+                    className="p-1 rounded-md text-text-quaternary hover:text-red-500 hover:bg-red-500/10 transition-all duration-300 group/clear"
+                    title="Clear all sessions"
+                  >
+                    <Trash2 size={12} strokeWidth={2} className="group-hover/clear:scale-110 transition-transform" />
+                  </button>
+                </div>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05, x: -2 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={onToggleCollapse}
-                className="p-2 rounded-xl hover:bg-surface-secondary text-text-tertiary transition-all hover:text-text-secondary"
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-secondary/80 text-text-tertiary hover:text-accent transition-all duration-300 shadow-sm border border-black/5 dark:border-white/5"
                 title="Collapse sidebar"
               >
-                <ChevronLeft size={16} />
-              </button>
+                <ChevronLeft size={16} strokeWidth={2.5} />
+              </motion.button>
             </div>
-          </>
-        )}
-        {collapsed && (
-          <div className="flex flex-col gap-6 w-full items-center pt-2">
-            <motion.div
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              whileTap={{ scale: 0.9 }}
-            >
+          </div>
+        ) : (
+          <div className="flex flex-col gap-8 w-full items-center pt-2">
+            <motion.div whileHover={{ scale: 1.15, rotate: 10 }} whileTap={{ scale: 0.9 }}>
               <MagicButton
                 onClick={handleNewChat}
-                className="w-14 h-14 rounded-2xl shadow-xl shadow-accent/10"
+                className="w-14 h-14 rounded-2xl shadow-xl shadow-accent/20"
               >
-                <Plus size={28} strokeWidth={3} />
+                <Plus size={28} strokeWidth={3} className="text-white" />
               </MagicButton>
             </motion.div>
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05, x: 2 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onToggleCollapse}
-              className="p-2.5 rounded-xl hover:bg-surface-secondary text-text-tertiary transition-all"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-secondary/80 text-text-tertiary hover:text-accent transition-all duration-300 shadow-md border border-black/5 dark:border-white/5"
               title="Expand sidebar"
             >
-              <ChevronRight size={20} />
-            </button>
+              <ChevronRight size={18} strokeWidth={2.5} />
+            </motion.button>
           </div>
         )}
       </div>
 
-      {/* Session list */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4 scrollbar-subtle">
+      {/* Main Content: Session list */}
+      <div className="flex-1 overflow-y-auto px-6 pb-6 pt-1 scrollbar-subtle space-y-2">
         <ListBox
           aria-label="Chat Sessions"
           items={sessions}
           onAction={(key: React.Key) => handleSelect(key as string)}
           selectedKeys={activeSessionId ? [activeSessionId] : []}
-          className="p-0"
+          className="p-0 gap-2"
         >
           {(session: any) => {
             const isActive = session.id === activeSessionId
-            const title = session.title || 'New Chat'
+            const title = session.title || 'Untitled Chat'
 
             return (
               <ListBoxItem
                 key={session.id}
                 id={session.id}
                 textValue={title}
-                className={`group relative h-16 rounded-[24px] transition-all duration-500 mb-4 ${
+                className={`group relative min-h-[48px] rounded-xl transition-all duration-500 mb-1.5 overflow-hidden border ${
                   isActive 
-                    ? 'bg-accent-muted text-accent shadow-sm ring-1 ring-accent/20' 
-                    : 'text-text-secondary hover:bg-surface-secondary/80'
+                    ? 'bg-white dark:bg-white/10 border-accent/25 shadow-md ring-1 ring-accent/5' 
+                    : 'bg-transparent border-transparent hover:bg-surface-secondary/80 hover:border-black/5 dark:hover:border-white/5'
                 }`}
               >
-                <div className="flex items-center gap-5 w-full px-3">
-                  <div className="flex items-center justify-center w-8 h-8 shrink-0">
-                    <MessageSquare
-                      size={20}
-                      strokeWidth={isActive ? 2.5 : 1.5}
-                      className={isActive ? 'text-accent' : 'text-text-quaternary group-hover:text-text-secondary'}
-                    />
+                <div className={`flex items-center gap-4 w-full pl-5 pr-12 py-3 ${collapsed ? 'justify-center' : ''}`}>
+                  {/* Icon - Refined */}
+                  <div className={`flex items-center justify-center w-7 h-7 shrink-0 rounded-lg transition-all duration-500 ${
+                    isActive ? 'bg-accent/10 text-accent' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
+                  }`}>
+                    <MessageSquare size={15} strokeWidth={isActive ? 2.5 : 1.5} />
                   </div>
-                  {!collapsed ? (
-                    <span className={`text-[16px] truncate tracking-tight flex-1 ${isActive ? 'font-bold' : 'font-medium'}`}>
-                      {title}
-                    </span>
-                  ) : null}
-                  {!collapsed ? (
-                    <button
+
+                  {!collapsed && (
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <span className={`text-[14px] truncate tracking-tight transition-all duration-500 ${
+                        isActive ? 'font-bold text-text' : 'font-medium text-text-secondary group-hover:text-text'
+                      }`}>
+                        {title}
+                      </span>
+                    </div>
+                  )}
+
+                  {!collapsed && (
+                    <motion.button
+                      whileHover={{ scale: 1.1, rotate: 5 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(e, session.id);
                       }}
-                      className="p-2.5 rounded-xl text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-100"
+                      className="absolute right-4 p-1.5 rounded-lg text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm bg-white/50 dark:bg-black/20 shadow-sm border border-black/5 dark:border-white/5"
                     >
-                      <Trash2 size={16} />
-                    </button>
-                  ) : null}
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </motion.button>
+                  )}
                 </div>
+
+                {/* Active Indicator Line - Subtle */}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeSessionBar"
+                    className="absolute left-0 top-3 bottom-3 w-1 bg-accent rounded-r-full"
+                    transition={{ type: "spring", stiffness: 400, damping: 40 }}
+                  />
+                )}
               </ListBoxItem>
             )
           }}
         </ListBox>
       </div>
 
-      {/* Footer */}
-      <div className="p-8 space-y-8 border-t border-black/4 dark:border-white/4">
-        <div className="bg-surface-secondary/60 rounded-[32px] p-2 border border-black/3 dark:border-white/3 space-y-2">
+      {/* Footer: Utilities */}
+      <div className="p-8 relative z-10">
+        <div className="absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-border-light to-transparent" />
+        
+        <div className="space-y-4">
           <NavItem
             icon={Clock}
-            label="Tasks"
+            label="Daily Tasks"
             active={currentPage === 'tasks'}
             onClick={() => onNavigate('tasks')}
             collapsed={collapsed}
           />
           <NavItem
             icon={Send}
-            label="Telegram"
+            label="Telegram Hub"
             active={isConnected}
             onClick={onTelegramOpen}
             collapsed={collapsed}
@@ -209,34 +255,32 @@ export function Sidebar({
           />
           <NavItem
             icon={PawPrint}
-            label={pet ? (showPet ? 'Hide Pet' : 'Show Pet') : 'Hatch Pet'}
+            label={pet ? (showPet ? 'Sleep Mode' : 'Wake Pet') : 'Hatch Pet'}
             active={showPet && !!pet}
             onClick={onPetOpen}
             collapsed={collapsed}
           />
         </div>
 
-        <div className="flex gap-4">
+        <div className="mt-6 flex gap-3">
           <motion.button
-            whileHover={{ scale: 1.05, y: -2 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-            className={`flex items-center justify-center rounded-[20px] hover:bg-surface-hover text-text-tertiary hover:text-accent transition-all border border-transparent hover:border-accent/20 ${
-              collapsed ? 'w-full h-16' : 'flex-1 h-16'
+            className={`flex items-center justify-center rounded-xl bg-surface-secondary/60 hover:bg-accent/5 text-text-tertiary hover:text-accent transition-all duration-500 border border-transparent hover:border-accent/10 shadow-xs ${
+              collapsed ? 'w-full h-12' : 'flex-1 h-12'
             }`}
-            title={theme === 'light' ? 'Dark mode' : 'Light mode'}
           >
-            {theme === 'light' ? <Moon size={22} /> : <Sun size={22} />}
+            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
           </motion.button>
           {!collapsed && (
             <motion.button
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
               onClick={onSettingsOpen}
-              className="flex items-center justify-center w-16 h-16 rounded-[20px] hover:bg-surface-hover text-text-tertiary hover:text-text-secondary transition-all border border-transparent hover:border-black/[0.1]"
-              title="Settings"
+              className="flex items-center justify-center w-12 h-12 rounded-xl bg-surface-secondary/60 hover:bg-surface-tertiary text-text-tertiary hover:text-text transition-all duration-500 border border-transparent hover:border-black/5 dark:hover:border-white/5 shadow-xs"
             >
-              <Settings size={22} />
+              <Settings size={20} />
             </motion.button>
           )}
         </div>
@@ -256,31 +300,39 @@ interface NavItemProps {
 
 function NavItem({ icon: Icon, label, active, onClick, collapsed, badge }: NavItemProps) {
   return (
-    <button
+    <motion.button
+      whileHover={{ scale: 1.02, x: 4 }}
+      whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className={`flex items-center gap-4 rounded-[22px] transition-all duration-500 w-full relative group ${
+      className={`flex items-center gap-5 rounded-2xl transition-all duration-500 w-full relative group/nav ${
         active
-          ? 'bg-white dark:bg-white/10 text-accent shadow-[0_8px_32px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] dark:ring-white/[0.05]'
-          : 'hover:bg-surface-hover/80 text-text-tertiary hover:text-text-secondary'
-      } ${collapsed ? 'aspect-square justify-center' : 'px-5 py-3.5'}`}
-      title={label}
+          ? 'bg-white dark:bg-white/10 text-accent shadow-xl shadow-accent/5 ring-1 ring-accent/10'
+          : 'hover:bg-white/40 dark:hover:bg-white/5 text-text-tertiary hover:text-text'
+      } ${collapsed ? 'h-14 w-14 justify-center mx-auto' : 'px-6 py-4.5'}`}
     >
-      <Icon 
-        size={20} 
-        strokeWidth={active ? 2.5 : 1.5} 
-        className={`transition-transform duration-500 ${active ? 'scale-110' : 'group-hover:scale-110'}`}
-      />
-      {!collapsed && <span className="text-[15px] font-bold tracking-tight">{label}</span>}
-      {badge && !active && (
-        <span className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-green-500 ring-4 ring-surface-secondary animate-pulse shadow-[0_0_12px_rgba(34,197,94,0.4)]" />
+      <div className={`relative transition-transform duration-700 ${active ? 'scale-110' : 'group-hover/nav:scale-110'}`}>
+        <Icon 
+          size={collapsed ? 24 : 22} 
+          strokeWidth={active ? 2.5 : 2} 
+        />
+        {badge && !active && (
+          <span className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-green-500 ring-4 ring-surface-secondary shadow-[0_0_15px_rgba(34,197,94,0.6)] animate-pulse" />
+        )}
+      </div>
+      
+      {!collapsed && (
+        <span className={`text-[15px] tracking-tight transition-all duration-500 ${active ? 'font-black' : 'font-bold'}`}>
+          {label}
+        </span>
       )}
+
       {active && (
         <motion.div
           layoutId="activeNavIndicator"
-          className="absolute left-1.5 w-1 h-6 bg-accent rounded-full shadow-[0_0_12px_rgba(var(--color-accent-rgb),0.4)]"
+          className="absolute right-5 w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_12px_rgba(var(--color-accent-rgb),0.8)]"
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         />
       )}
-    </button>
+    </motion.button>
   )
 }
