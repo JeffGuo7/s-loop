@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Brain, Sparkles, Wrench, Layers } from 'lucide-react'
 import { Collapsible } from '../shared/Collapsible'
 import { ReasoningView } from './ReasoningView'
@@ -13,15 +13,6 @@ interface ThoughtStackViewProps {
 export function ThoughtStackView({ parts, isStreaming = false }: ThoughtStackViewProps) {
   const [isExpanded, setIsExpanded] = useState(isStreaming)
 
-  // Auto-collapse when streaming finishes
-  useEffect(() => {
-    if (!isStreaming) {
-      setIsExpanded(false)
-    } else {
-      setIsExpanded(true)
-    }
-  }, [isStreaming])
-
   // Identify if any part is still active
   const hasActiveProcess = useMemo(() => {
     return parts.some(part => {
@@ -33,6 +24,15 @@ export function ThoughtStackView({ parts, isStreaming = false }: ThoughtStackVie
       return false
     })
   }, [parts, isStreaming])
+
+  // Auto-collapse when streaming finishes, or if there are no active processes
+  useEffect(() => {
+    if (!isStreaming || !hasActiveProcess) {
+      setIsExpanded(false)
+    } else {
+      setIsExpanded(true)
+    }
+  }, [isStreaming, hasActiveProcess])
 
   // Count types
   const reasoningCount = parts.filter(p => p.type === 'reasoning').length
