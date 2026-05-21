@@ -158,7 +158,7 @@ export function ChatInput({
 
   return (
     <div
-      className="w-full max-w-(--spacing-chat-max) mx-auto px-4 pb-12"
+      className="w-full max-w-(--spacing-chat-max) mx-auto px-4 pb-2"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -166,9 +166,9 @@ export function ChatInput({
       <form onSubmit={handleSubmit}>
         <Card
           variant={isHero ? 'glass' : 'default'}
-          className={`relative group p-3 transition-all duration-700 border border-border-light ${
-            isHero ? 'shadow-[0_24px_64px_rgba(0,0,0,0.1)]' : 'shadow-2xl hover:shadow-accent/10'
-          } ${isDragOver ? 'ring-2 ring-accent ring-offset-[8px] ring-offset-bg' : ''} rounded-[28px] bg-surface/90 backdrop-blur-3xl`}
+          className={`relative group p-2 transition-all duration-700 border border-border-light ${
+            isHero ? 'shadow-[0_24px_64px_rgba(0,0,0,0.1)]' : 'shadow-2xl hover:shadow-accent/5'
+          } ${isDragOver ? 'ring-2 ring-accent ring-offset-[8px] ring-offset-bg' : ''} rounded-[24px] bg-surface/90 backdrop-blur-3xl`}
         >
           {isDragOver && (
             <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-surface/95 backdrop-blur-2xl pointer-events-none">
@@ -205,24 +205,24 @@ export function ChatInput({
             )}
 
             <div className="flex items-end px-3">
-              <div className="flex-1">
-                <TextField
-                  value={input}
-                  onChange={setInput}
-                  isDisabled={disabled || isStreaming}
-                  className="w-full"
-                >
-                  <TextArea
-                    ref={textareaRef}
-                    onKeyDown={handleKeyDown}
-                    onCompositionStart={handleCompositionStart}
-                    onCompositionEnd={handleCompositionEnd}
-                    placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
-                    className="w-full bg-transparent hover:bg-transparent focus:outline-none shadow-none border-none p-6 min-h-[80px] text-[15px] font-bold leading-relaxed custom-scrollbar text-text placeholder:text-text-quaternary/30 resize-none tracking-tight"
-                    rows={1}
-                  />
-                </TextField>
-              </div>
+            <div className="flex-1">
+              <TextField
+                value={input}
+                onChange={setInput}
+                isDisabled={disabled || isStreaming}
+                className="w-full selection:bg-accent/20"
+              >
+                <TextArea
+                  ref={textareaRef}
+                  onKeyDown={handleKeyDown}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={handleCompositionEnd}
+                  placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
+                  className="w-full bg-transparent hover:bg-transparent focus:outline-none shadow-none border-none p-6 min-h-[60px] text-[15px] font-bold leading-relaxed custom-scrollbar text-text placeholder:text-text-quaternary/30 resize-none tracking-tight selection:bg-accent/20"
+                  rows={1}
+                />
+              </TextField>
+            </div>
 
               <div className="flex items-center p-4">
                 {isStreaming ? (
@@ -257,22 +257,22 @@ export function ChatInput({
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-10 pb-6 pt-2 text-[10px] font-bold tracking-[0.3em] uppercase transition-all duration-300">
-              <div className={`flex items-center gap-6 transition-opacity ${isHero ? 'opacity-60' : 'opacity-40 group-focus-within:opacity-90'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${input.trim() || attachments.length > 0 ? 'bg-accent shadow-[0_0_8px_var(--color-accent)]' : 'bg-text-quaternary opacity-40'}`} />
+            <div className="flex items-center justify-between px-8 pb-3 pt-1 text-[9px] font-bold tracking-[0.25em] uppercase transition-all duration-300">
+              <div className={`flex items-center gap-5 transition-opacity ${isHero ? 'opacity-60' : 'opacity-30 group-focus-within:opacity-80'}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${input.trim() || attachments.length > 0 ? 'bg-accent shadow-[0_0_6px_var(--color-accent)]' : 'bg-text-quaternary opacity-30'}`} />
                   <span className="tracking-widest">
                     {attachments.length > 0
-                      ? `${attachments.length} reference${attachments.length > 1 ? 's' : ''}`
-                      : 'Shift + Enter for new line'}
+                      ? `${attachments.length} ref`
+                      : 'Shift+Enter: New Line'}
                   </span>
                 </div>
-                <div className="w-1.5 h-1.5 rounded-full bg-border-light" />
-                <span className="hidden sm:inline tracking-widest">Enter to send</span>
+                <div className="w-1 h-1 rounded-full bg-border-light" />
+                <span className="hidden sm:inline tracking-widest">Enter: Send</span>
               </div>
-              <div className={`transition-opacity flex items-center gap-3 ${isHero ? 'opacity-60' : 'opacity-40 group-focus-within:opacity-90'}`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-border-light" />
-                <span className="tracking-widest">Intelligence Workspace</span>
+              <div className={`transition-opacity flex items-center gap-2.5 ${isHero ? 'opacity-60' : 'opacity-30 group-focus-within:opacity-80'}`}>
+                <span className="w-1 h-1 rounded-full bg-border-light" />
+                <span className="tracking-widest">Intelligence</span>
               </div>
             </div>
           </div>

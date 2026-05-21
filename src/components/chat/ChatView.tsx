@@ -301,107 +301,86 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-transparent h-full w-full">
+    <div className="flex-1 flex flex-col bg-transparent h-full w-full overflow-hidden">
       {/* Offline status bar */}
       {!serverOnline && (
-        <div className="mx-12 mt-8 rounded-[24px] px-6 py-4 text-[14px] font-bold flex items-center gap-4 bg-red-500/10 text-red-500 border border-red-500/20 animate-fade-in shadow-sm">
+        <div className="mx-12 mt-8 rounded-[24px] px-6 py-4 text-[14px] font-bold flex items-center gap-4 bg-red-500/10 text-red-500 border border-red-500/20 animate-fade-in shadow-sm z-20 shrink-0">
           <WifiOff size={18} />
           <span>Kilo server is currently unreachable</span>
         </div>
       )}
 
-      {/* Messages or hero empty state */}
-      {isEmpty ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-16 relative overflow-hidden">
-          {/* Ambient glow */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-accent/6 rounded-full blur-[180px] pointer-events-none" />
+      {/* Main content area - Takes all space */}
+      <div className="flex-1 min-h-0 relative">
+        {isEmpty ? (
+          <div className="h-full flex flex-col items-center justify-center px-16 relative overflow-y-auto pb-48">
+            {/* Ambient glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-accent/6 rounded-full blur-[180px] pointer-events-none" />
 
-          <div className="text-center relative z-10 w-full flex flex-col items-center">
-            {/* Label ABOVE icon */}
-            <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">Snotra Workspace</p>
+            <div className="text-center relative z-10 w-full flex flex-col items-center">
+              <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">Snotra Workspace</p>
 
-            {/* Centered icon */}
-            <div className="flex justify-center w-full mb-8">
-              <div className="relative group scale-90">
-                {/* Background Glow Effect */}
-                <div className="absolute inset-0 bg-accent opacity-30 blur-[80px] group-hover:opacity-50 transition-opacity duration-700 rounded-full scale-110" />
-                
-                {/* Main Glass Icon Container */}
-                <div className="relative w-32 h-32 rounded-[35%_65%_60%_40%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
-                  <div className="relative z-10 flex items-center justify-center">
+              <div className="flex justify-center w-full mb-8">
+                <div className="relative group scale-90">
+                  <div className="absolute inset-0 bg-accent opacity-30 blur-[80px] group-hover:opacity-50 transition-opacity duration-700 rounded-full scale-110" />
+                  <div className="relative w-32 h-32 rounded-[35%_65%_60%_40%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
                     <Cpu size={48} className="text-accent drop-shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.5)]" />
+                    <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
                   </div>
-                  
-                  {/* Internal Shimmering Effect */}
-                  <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
                 </div>
-
-                {/* Orbiting dots */}
-                <div className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-accent animate-pulse shadow-[0_0_15px_var(--color-accent)]" />
-                <div className="absolute -bottom-2 -left-2 w-5 h-5 rounded-full bg-accent-light animate-bounce [animation-delay:0.7s]" />
               </div>
+
+              <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">
+                How can I help?
+              </h2>
+              <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">
+                Seamlessly orchestrate your workspace, files, and AI agents.
+              </p>
             </div>
-
-            {/* Heading below icon */}
-            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">
-              How can I help?
-            </h2>
-            <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed mb-12 font-bold opacity-70 text-center">
-              Seamlessly orchestrate your workspace, files, and AI agents.
-            </p>
           </div>
-
-          <div className="w-full max-w-(--spacing-chat-max) relative z-10 mx-auto">
-            <ChatInput
-              onSubmit={handleSubmit}
-              onAbort={abort}
-              isStreaming={isStreaming}
-              placeholder="Ask anything..."
-              variant="hero"
-            />
+        ) : (
+          <div className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden">
+            <MessageList sessionId={activeSessionId} />
+            
+            {error && (
+              <div className="absolute top-8 left-4 right-4 z-20 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm backdrop-blur-md">
+                <span>{error}</span>
+                <button
+                  onClick={() => setError(null)}
+                  className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative">
-          <MessageList sessionId={activeSessionId} />
+        )}
 
-          {/* Error Display */}
-          {error && (
-            <div className="mx-12 mb-8 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm">
-              <span>{error}</span>
-              <button
-                onClick={() => setError(null)}
-                className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]"
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
+        {/* Input Area - Now absolute within the relative parent to overlay messages correctly */}
+        <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
+          <div className="bg-linear-to-t from-bg via-bg/95 to-transparent pt-12 pb-2 pointer-events-auto">
+            <div className="w-full max-w-(--spacing-chat-max) mx-auto relative px-4">
+              <ChatInput
+                onSubmit={handleSubmit}
+                onAbort={abort}
+                isStreaming={isStreaming}
+                placeholder="Ask anything..."
+              />
 
-          {/* Input Area Wrapper */}
-          <div className="shrink-0 pt-6 relative z-10 bg-linear-to-t from-bg via-bg/95 to-transparent">
-            {/* Input */}
-            <ChatInput
-              onSubmit={handleSubmit}
-              onAbort={abort}
-              isStreaming={isStreaming}
-              placeholder="Ask anything..."
-            />
-
-            {/* Model info */}
-            <div className="px-8 pb-10 text-[11px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-30 hover:opacity-100 transition-all duration-700">
-              <div className="flex items-center gap-3 px-6 py-2.5 rounded-full bg-surface-secondary/90 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/10 hover:border-accent/30 transition-all">
-                <Cpu size={14} className="text-accent/70" />
-                <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || 'No model'}</span>
-                <span className="opacity-20 px-2 font-light">|</span>
-                <span className="font-bold uppercase tracking-[0.2em]">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
+              {/* Model info */}
+              <div className="mt-2 pb-2 text-[10px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
+                <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
+                  <Cpu size={12} className="text-accent/60" />
+                  <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || 'No model'}</span>
+                  <span className="opacity-10 px-1">|</span>
+                  <span className="font-bold uppercase tracking-[0.2em]">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
-
   )
 }
 
