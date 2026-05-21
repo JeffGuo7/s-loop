@@ -13,6 +13,15 @@ interface ThoughtStackViewProps {
 export function ThoughtStackView({ parts, isStreaming = false }: ThoughtStackViewProps) {
   const [isExpanded, setIsExpanded] = useState(isStreaming)
 
+  // Auto-collapse when streaming finishes
+  useEffect(() => {
+    if (!isStreaming) {
+      setIsExpanded(false)
+    } else {
+      setIsExpanded(true)
+    }
+  }, [isStreaming])
+
   // Identify if any part is still active
   const hasActiveProcess = useMemo(() => {
     return parts.some(part => {
