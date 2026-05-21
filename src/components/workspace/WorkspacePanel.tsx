@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { X, Folder, FolderOpen, Check, ChevronLeft, Files } from 'lucide-react'
+import { Folder, FolderOpen, Check, ChevronLeft, Files, ChevronRight } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores'
 import { Kilo } from '../../utils'
 import { FileTree } from './FileTree'
@@ -47,17 +48,12 @@ export function WorkspacePanel() {
     // ── Browser: File System Access API (Chrome/Edge) ──
     try {
       const handle = await (window as any).showDirectoryPicker()
-      // showDirectoryPicker doesn't expose a full path, use the handle name
       const dirName = handle.name
-      // Try to get more info via the native file system access API
-      // Unfortunately no full path is available in browser for security
       applyDir(`selected://${dirName}`)
     } catch (err: unknown) {
-      // User cancelled or API not supported
       if ((err as DOMException)?.name === 'AbortError' || (err as DOMException)?.name === 'SecurityError') {
         return
       }
-      // ── Browser fallback: hidden <input webkitdirectory> ──
       if (hiddenInputRef.current) {
         hiddenInputRef.current.value = ''
         hiddenInputRef.current.click()
@@ -68,12 +64,9 @@ export function WorkspacePanel() {
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
-    // webkitRelativePath gives us the relative path from the selected root
     const firstPath = files[0].webkitRelativePath
     if (firstPath) {
-      // Extract the root folder name from the first file's webkitRelativePath
       const rootName = firstPath.split('/')[0]
-      // The full path isn't available in browser, so we store the root name
       applyDir(`selected://${rootName}`)
     } else {
       applyDir(`selected://${files[0].name}`)
@@ -93,164 +86,178 @@ export function WorkspacePanel() {
 
   if (collapsed) {
     return (
-      <div 
-        className="h-full flex flex-col items-center pt-8 bg-surface/10 sidebar-transition relative shrink-0"
-        style={{ width: 'var(--workspace-panel-collapsed)' }}
+      <aside 
+        className="h-full flex flex-col items-center pt-6 bg-surface/5 sidebar-transition relative shrink-0"
+        style={{ width: 'var(--spacing-workspace-panel-collapsed)' }}
       >
-        <div className="absolute inset-y-0 left-0 w-px bg-linear-to-b from-transparent via-black/[0.02] dark:via-white/[0.02] to-transparent" />
-        <button
+        <div className="absolute inset-y-0 left-0 w-px bg-linear-to-b from-transparent via-accent/10 to-transparent opacity-30" />
+        <motion.button
+          whileHover={{ scale: 1.1, x: -2 }}
+          whileTap={{ scale: 0.9 }}
           onClick={toggleWorkspace}
-          className="p-3 rounded-xl hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all"
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-secondary/80 text-accent shadow-lg shadow-accent/5 border border-white/10 backdrop-blur-md transition-all duration-500 hover:shadow-accent/20"
           title="Show workspace panel"
         >
-          <Folder size={20} />
-        </button>
-      </div>
+          <FolderOpen size={16} strokeWidth={2.5} />
+        </motion.button>
+      </aside>
     )
   }
 
   return (
-    <div 
+    <aside 
       className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-surface/20 backdrop-blur-3xl relative"
-      style={{ width: 'var(--workspace-panel-width)' }}
+      style={{ width: 'var(--spacing-workspace-panel)' }}
     >
-      <div className="absolute inset-y-0 left-0 w-px bg-linear-to-b from-transparent via-black/[0.03] dark:via-white/[0.05] to-transparent" />
-      {/* Hidden file input for browser fallback */}
-      <input
-        ref={hiddenInputRef}
-        type="file"
-        /* @ts-ignore - webkitdirectory is a non-standard attribute */
-        webkitdirectory=""
-        directory=""
-        className="hidden"
-        onChange={handleFileInputChange}
-      />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-8 h-48 border-b border-border-light bg-surface-secondary/20 backdrop-blur-3xl">
-        <div className="flex items-center gap-3 text-[15px] font-bold tracking-tight text-text uppercase tracking-[0.05em]">
-          <Files size={18} className="text-accent/60" />
-          Workspace
+      <div className="absolute inset-y-0 left-0 w-px bg-linear-to-b from-transparent via-accent/10 to-transparent opacity-40" />
+      
+      {/* Header - Refined & Balanced */}
+      <div className="flex items-start justify-between px-5 pt-6 pb-4 relative z-10">
+        <div className="flex flex-col">
+          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent opacity-40 mb-0.5">
+            Resource
+          </span>
+          <h2 className="text-[17px] font-black text-text tracking-tighter leading-none">
+            Workspace
+          </h2>
         </div>
-        <button
+        <motion.button
+          whileHover={{ scale: 1.05, x: 2 }}
+          whileTap={{ scale: 0.95 }}
           onClick={toggleWorkspace}
-          className="p-1.5 rounded-lg hover:bg-surface-secondary text-text-tertiary hover:text-text transition-all duration-500"
-          title="Collapse workspace panel"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-secondary/60 text-text-tertiary hover:text-accent transition-all duration-500 shadow-sm border border-black/5 dark:border-white/5 mt-0.5"
         >
-          <X size={18} />
-        </button>
+          <ChevronRight size={14} strokeWidth={2.5} />
+        </motion.button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-8 py-8 scrollbar-subtle space-y-8">
-        {workspaceDir ? (
-          <div className="space-y-8 animate-fade-in-up">
-            {/* Directory path display - Refined style */}
-            <div className="group relative rounded-2xl border border-border-light bg-white dark:bg-white/5 p-5 transition-all duration-500 hover:shadow-lg hover:shadow-accent/5 overflow-hidden">
-              <div className="flex items-start gap-4 relative z-10">
-                <div className="p-2.5 rounded-xl bg-accent-subtle text-accent">
-                  <FolderOpen size={20} strokeWidth={2} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent/60 mb-2">
-                    Active Environment
+      <div className="flex-1 overflow-y-auto px-5 scrollbar-subtle">
+        <div className="pb-6 space-y-5">
+          {workspaceDir ? (
+            <div className="space-y-4 animate-fade-in-up">
+              {/* Directory path display - Refined style */}
+              <div className="group relative rounded-lg border border-border-light bg-white dark:bg-white/5 p-3.5 transition-all duration-500 hover:shadow-md hover:shadow-accent/5 overflow-hidden shadow-xs">
+                <div className="flex items-start gap-2.5 relative z-10">
+                  <div className="p-1.5 rounded-md bg-accent/10 text-accent">
+                    <FolderOpen size={14} strokeWidth={2} />
                   </div>
-                  <p className="text-[13px] font-mono text-text-secondary break-all leading-relaxed font-semibold bg-surface-secondary/40 p-3 rounded-lg border border-black/[0.01] dark:border-white/[0.01]">
-                    {workspaceDir}
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[8px] font-black uppercase tracking-[0.15em] text-accent/60 mb-1">
+                      Environment
+                    </div>
+                    <div className="bg-surface-secondary/40 p-2 rounded-md border border-black/[0.01] dark:border-white/[0.01] shadow-inner">
+                      <p className="text-[10px] font-mono text-text-secondary break-all leading-relaxed font-semibold">
+                        {workspaceDir}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions - Refined buttons */}
+              <div className="flex gap-2 px-0.5">
+                <motion.button
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleSelectDir}
+                  className="flex-1 text-[11px] px-3 py-2 rounded-lg bg-accent text-white font-bold hover:bg-accent-light transition-all duration-500 shadow-lg shadow-accent/10"
+                >
+                  Switch
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleClear}
+                  className="text-[11px] px-3 py-2 rounded-lg bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all duration-500 font-bold"
+                >
+                  Reset
+                </motion.button>
+              </div>
+
+              {/* File Tree */}
+              <div className="pt-1">
+                <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.15em] text-accent mb-2.5 px-0.5 opacity-60">
+                  <Files size={12} />
+                  Explorer
+                </div>
+                <div className="-mx-1.5 px-0.5">
+                  <FileTree
+                    rootPath={workspaceDir.startsWith('selected://') ? '' : workspaceDir}
+                  />
                 </div>
               </div>
             </div>
-
-            {/* Actions - Refined buttons */}
-            <div className="flex gap-3 px-1">
+          ) : showInput ? (
+            <div className="space-y-3.5">
               <button
-                onClick={handleSelectDir}
-                className="flex-1 text-[13px] px-5 py-3 rounded-xl bg-accent text-white font-bold hover:bg-accent-light transition-all duration-500 shadow-md shadow-accent/10 hover:shadow-accent/20 hover:-translate-y-1 active:translate-y-0"
+                onClick={() => setShowInput(false)}
+                className="flex items-center gap-1.5 text-[10px] font-bold text-text-tertiary hover:text-text transition-all"
               >
-                Switch Path
+                <ChevronLeft size={12} />
+                Back
               </button>
+              <p className="text-[12px] font-bold text-text tracking-tight">
+                Enter path
+              </p>
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit()}
+                placeholder="C:\\Users\\...\\project"
+                className="w-full px-3.5 py-2.5 rounded-lg bg-surface border border-border text-[10px] font-mono focus:ring-4 focus:ring-accent-subtle focus:border-accent/40 outline-none transition-all shadow-inner"
+                autoFocus
+              />
               <button
-                onClick={handleClear}
-                className="text-[13px] px-5 py-3 rounded-xl bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all duration-500 font-bold hover:-translate-y-1 active:translate-y-0"
+                onClick={handleInputSubmit}
+                disabled={!inputValue.trim()}
+                className="w-full flex items-center justify-center gap-2 text-[11px] px-4 py-2.5 rounded-lg bg-accent text-white font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-xl shadow-accent/20"
               >
-                Reset
+                <Check size={13} strokeWidth={2.5} />
+                Confirm
               </button>
             </div>
-
-            {/* File Tree */}
-            <div className="pt-4">
-              <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.2em] text-accent mb-4 px-1 opacity-60">
-                <Files size={16} />
-                Explorer
+          ) : (
+              <div className="flex flex-col items-center text-center py-8 px-4">
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="w-16 h-16 rounded-full bg-surface-secondary/40 border border-border-light flex items-center justify-center mb-6 shadow-sm relative overflow-hidden group/empty"
+                >
+                  <div className="absolute inset-0 bg-linear-to-br from-accent/5 to-transparent opacity-0 group-hover/empty:opacity-100 transition-opacity duration-700" />
+                  <FolderOpen size={24} className="text-accent/30 relative z-10 group-hover/empty:scale-110 transition-transform duration-500" />
+                </motion.div>
+                
+                <h3 className="text-[16px] font-black text-text mb-1.5 tracking-tighter">
+                  Empty Space
+                </h3>
+                <p className="text-[11px] text-text-tertiary mb-8 max-w-[160px] leading-relaxed font-medium opacity-60">
+                  Select a project folder to begin.
+                </p>
+                
+                <div className="w-full space-y-2.5">
+                  <motion.button
+                    whileHover={{ scale: 1.02, y: -1 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleSelectDir}
+                    className="w-full flex items-center justify-center gap-2 text-[11px] px-5 py-3 rounded-lg bg-accent text-white font-black hover:bg-accent-light transition-all duration-500 shadow-xl shadow-accent/10"
+                  >
+                    <FolderOpen size={13} strokeWidth={2.5} />
+                    Open Project
+                  </motion.button>
+                  
+                  <button
+                    onClick={() => setShowInput(true)}
+                    className="w-full text-[10px] text-text-tertiary hover:text-accent font-bold transition-all duration-300 opacity-50 hover:opacity-100 py-1.5"
+                  >
+                    Enter path manually
+                  </button>
+                </div>
               </div>
-              <div className="-mx-2 px-1">
-                <FileTree
-                  rootPath={workspaceDir.startsWith('selected://') ? '' : workspaceDir}
-                />
-              </div>
-            </div>
-          </div>
-        ) : showInput ? (
-          <div className="space-y-4">
-            <button
-              onClick={() => setShowInput(false)}
-              className="flex items-center gap-2 text-[12px] font-bold text-text-tertiary hover:text-text transition-all"
-            >
-              <ChevronLeft size={16} />
-              Back
-            </button>
-            <p className="text-sm font-bold text-text tracking-tight">
-              Enter workspace path
-            </p>
-            <p className="text-[11px] text-text-tertiary leading-relaxed font-medium">
-              Example: <code className="text-[11px] bg-surface-secondary px-1 rounded">C:\Users\name\project</code>
-            </p>
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit()}
-              placeholder="C:\\Users\\...\\project"
-              className="w-full px-5 py-4 rounded-[18px] bg-surface border border-border text-xs font-mono focus:ring-4 focus:ring-accent-subtle focus:border-accent/40 outline-none transition-all shadow-inner"
-              autoFocus
-            />
-            <button
-              onClick={handleInputSubmit}
-              disabled={!inputValue.trim()}
-              className="w-full flex items-center justify-center gap-2 text-xs px-6 py-4 rounded-[18px] bg-accent text-white font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-xl shadow-accent/20"
-            >
-              <Check size={16} strokeWidth={2.5} />
-              Confirm Path
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center text-center py-16">
-            <div className="w-16 h-16 rounded-[22px] bg-surface-secondary border border-border flex items-center justify-center mb-8 shadow-sm">
-              <FolderOpen size={32} className="text-text-tertiary opacity-40" />
-            </div>
-            <h3 className="text-lg font-bold text-text mb-2 tracking-tight">
-              No Workspace
-            </h3>
-            <p className="text-[13px] text-text-tertiary mb-10 max-w-[200px] leading-relaxed font-medium opacity-70">
-              Select a project directory to enable workspace features
-            </p>
-            <button
-              onClick={handleSelectDir}
-              className="flex items-center gap-3 text-xs px-8 py-4 rounded-2xl bg-accent text-white font-bold hover:opacity-90 transition-all shadow-2xl shadow-accent/20 active:scale-95"
-            >
-              <Folder size={16} />
-              Select Folder
-            </button>
-            <button
-              onClick={() => setShowInput(true)}
-              className="mt-4 text-[12px] text-text-tertiary hover:text-accent underline underline-offset-4 transition-all font-bold opacity-60 hover:opacity-100"
-            >
-              Or enter path manually
-            </button>
-          </div>
-        )}
+            )}
+        </div>
       </div>
-    </div>
+    </aside>
   )
 }

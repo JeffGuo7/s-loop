@@ -13,7 +13,7 @@ import { Kilo } from './utils'
 export type Page = 'chat' | 'tasks'
 
 function App() {
-  const { theme, sidebarCollapsed, workspaceCollapsed, toggleSidebar } = useAppStore()
+  const { theme, sidebarCollapsed, toggleSidebar } = useAppStore()
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
   const [showHatchModal, setShowHatchModal] = useState(false)

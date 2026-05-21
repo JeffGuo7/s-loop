@@ -255,44 +255,44 @@ export function ChatView() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-accent/4 rounded-full blur-[160px] pointer-events-none animate-pulse-slow [animation-delay:2s]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1400px] h-[1400px] bg-accent/[0.02] rounded-full blur-[240px] pointer-events-none" />
 
-        <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-6 sm:px-12 max-w-5xl mx-auto h-full">
+        <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 sm:px-8 max-w-4xl mx-auto h-full">
           {/* Main Visual Group */}
-          <div className="mb-8 sm:mb-20 shrink-0">
-            <div className="relative group scale-90 sm:scale-100 transition-transform duration-700">
-              <div className="absolute inset-0 bg-accent/10 blur-[80px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-150" />
-              <div className="relative w-36 h-36 sm:w-56 sm:h-56 rounded-[32%_68%_55%_45%/45%_35%_65%_55%] bg-white/95 dark:bg-white/5 border border-white/40 dark:border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-3xl animate-liquid overflow-hidden">
-                <Cpu size={60} className="sm:hidden text-accent drop-shadow-[0_8px_24px_rgba(var(--color-accent-rgb),0.4)]" />
-                <Cpu size={84} className="hidden sm:block text-accent drop-shadow-[0_12px_32px_rgba(var(--color-accent-rgb),0.5)]" />
+          <div className="mb-4 sm:mb-8 shrink-0">
+            <div className="relative group scale-75 sm:scale-90 transition-transform duration-700">
+              <div className="absolute inset-0 bg-accent/10 blur-[40px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-125" />
+              <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-[32%_68%_55%_45%/45%_35%_65%_55%] bg-white/95 dark:bg-white/5 border border-white/40 dark:border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-3xl animate-liquid overflow-hidden">
+                <Cpu size={32} className="sm:hidden text-accent drop-shadow-[0_4px_16px_rgba(var(--color-accent-rgb),0.4)]" />
+                <Cpu size={48} className="hidden sm:block text-accent drop-shadow-[0_8px_24px_rgba(var(--color-accent-rgb),0.5)]" />
               </div>
               <motion.div 
-                animate={{ y: [0, -12, 0], x: [0, 8, 0] }}
+                animate={{ y: [0, -8, 0], x: [0, 4, 0] }}
                 transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -top-4 -right-4 sm:-top-8 sm:-right-8 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl"
+                className="absolute -top-2 -right-2 sm:-top-4 sm:-right-4 w-6 h-6 sm:w-10 sm:h-10 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl"
               >
-                <Sparkles size={20} className="sm:hidden" />
-                <Sparkles size={28} className="hidden sm:block" />
+                <Sparkles size={12} className="sm:hidden" />
+                <Sparkles size={20} className="hidden sm:block" />
               </motion.div>
             </div>
           </div>
 
           {/* Typography */}
-          <div className="space-y-4 sm:space-y-10 mb-10 sm:mb-24 w-full">
-            <h2 className="text-4xl sm:text-7xl lg:text-[8rem] font-bold tracking-tight text-text leading-tight drop-shadow-sm select-none">
-              Welcome to <span className="text-accent italic font-serif px-2">Snotra</span>
+          <div className="space-y-3 sm:space-y-6 mb-6 sm:mb-12 w-full">
+            <h2 className="text-3xl sm:text-5xl lg:text-[4.5rem] font-bold tracking-tight text-text leading-tight drop-shadow-sm select-none">
+              Welcome to <span className="text-accent italic font-serif px-1">Snotra</span>
             </h2>
             <div className="flex justify-center w-full">
-              <p className="text-base sm:text-xl lg:text-2xl text-text-tertiary leading-relaxed max-w-xl sm:max-w-2xl font-medium tracking-tight opacity-70 text-center">
+              <p className="text-sm sm:text-base lg:text-lg text-text-tertiary leading-relaxed max-w-lg sm:max-w-xl font-medium tracking-tight opacity-70 text-center">
                 Your intelligent orchestration workspace. Seamlessly manage <span className="text-text font-bold">agents</span>, <span className="text-text font-bold">files</span>, and <span className="text-text font-bold">workflows</span>.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-12 sm:gap-20">
+          <div className="flex flex-col items-center gap-8 sm:gap-12">
             <ServerStatus online={serverOnline} />
-            <div className="flex items-center gap-12">
-              <div className="h-px w-24 bg-border-light" />
-              <p className="text-[13px] font-bold uppercase tracking-[0.8em] text-accent/40">New Conversation</p>
-              <div className="h-px w-24 bg-border-light" />
+            <div className="flex items-center gap-8">
+              <div className="h-px w-12 bg-border-light" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-accent/40">New Conversation</p>
+              <div className="h-px w-12 bg-border-light" />
             </div>
           </div>
         </div>
@@ -304,32 +304,32 @@ export function ChatView() {
     <div className="flex-1 flex flex-col bg-transparent h-full w-full">
       {/* Offline status bar */}
       {!serverOnline && (
-        <div className="mx-24 mt-12 rounded-[40px] px-10 py-6 text-[16px] font-bold flex items-center gap-6 bg-red-500/10 text-red-500 border border-red-500/20 animate-fade-in shadow-sm">
-          <WifiOff size={22} />
+        <div className="mx-12 mt-8 rounded-[24px] px-6 py-4 text-[14px] font-bold flex items-center gap-4 bg-red-500/10 text-red-500 border border-red-500/20 animate-fade-in shadow-sm">
+          <WifiOff size={18} />
           <span>Kilo server is currently unreachable</span>
         </div>
       )}
 
       {/* Messages or hero empty state */}
       {isEmpty ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-32 relative overflow-hidden">
+        <div className="flex-1 flex flex-col items-center justify-center px-16 relative overflow-hidden">
           {/* Ambient glow */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[1200px] bg-accent/6 rounded-full blur-[200px] pointer-events-none" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-accent/6 rounded-full blur-[180px] pointer-events-none" />
 
           <div className="text-center relative z-10 w-full flex flex-col items-center">
             {/* Label ABOVE icon */}
-            <p className="text-[14px] font-bold tracking-[0.7em] uppercase text-accent opacity-50 mb-20">Snotra Workspace</p>
+            <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">Snotra Workspace</p>
 
             {/* Centered icon */}
-            <div className="flex justify-center w-full mb-20">
-              <div className="relative group">
+            <div className="flex justify-center w-full mb-8">
+              <div className="relative group scale-90">
                 {/* Background Glow Effect */}
-                <div className="absolute inset-0 bg-accent opacity-30 blur-[120px] group-hover:opacity-50 transition-opacity duration-700 rounded-full scale-125" />
+                <div className="absolute inset-0 bg-accent opacity-30 blur-[80px] group-hover:opacity-50 transition-opacity duration-700 rounded-full scale-110" />
                 
                 {/* Main Glass Icon Container */}
-                <div className="relative w-52 h-52 rounded-[35%_65%_60%_40%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
+                <div className="relative w-32 h-32 rounded-[35%_65%_60%_40%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
                   <div className="relative z-10 flex items-center justify-center">
-                    <Cpu size={84} className="text-accent drop-shadow-[0_0_30px_rgba(var(--color-accent-rgb),0.5)]" />
+                    <Cpu size={48} className="text-accent drop-shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.5)]" />
                   </div>
                   
                   {/* Internal Shimmering Effect */}
@@ -337,21 +337,21 @@ export function ChatView() {
                 </div>
 
                 {/* Orbiting dots */}
-                <div className="absolute -top-6 -right-6 w-10 h-10 rounded-full bg-accent animate-pulse shadow-[0_0_20px_var(--color-accent)]" />
-                <div className="absolute -bottom-5 -left-5 w-8 h-8 rounded-full bg-accent-light animate-bounce [animation-delay:0.7s]" />
+                <div className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-accent animate-pulse shadow-[0_0_15px_var(--color-accent)]" />
+                <div className="absolute -bottom-2 -left-2 w-5 h-5 rounded-full bg-accent-light animate-bounce [animation-delay:0.7s]" />
               </div>
             </div>
 
             {/* Heading below icon */}
-            <h2 className="text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight text-text leading-none mb-12 drop-shadow-sm text-center">
+            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">
               How can I help?
             </h2>
-            <p className="text-base sm:text-xl lg:text-2xl text-text-tertiary max-w-3xl leading-relaxed mb-32 font-bold opacity-70 text-center">
-              Seamlessly orchestrate your workspace, files, and AI agents from one minimalist interface.
+            <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed mb-12 font-bold opacity-70 text-center">
+              Seamlessly orchestrate your workspace, files, and AI agents.
             </p>
           </div>
 
-          <div className="w-full max-w-[1000px] relative z-10 mx-auto">
+          <div className="w-full max-w-(--spacing-chat-max) relative z-10 mx-auto">
             <ChatInput
               onSubmit={handleSubmit}
               onAbort={abort}
@@ -362,16 +362,16 @@ export function ChatView() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col w-full max-w-(--chat-max-width) mx-auto relative">
+        <div className="flex-1 flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative">
           <MessageList sessionId={activeSessionId} />
 
           {/* Error Display */}
           {error && (
-            <div className="mx-24 mb-10 flex items-center gap-6 p-8 rounded-[40px] bg-red-500/10 text-red-500 text-[16px] font-bold border border-red-500/15 animate-shake shadow-sm">
+            <div className="mx-12 mb-8 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm">
               <span>{error}</span>
               <button
                 onClick={() => setError(null)}
-                className="ml-auto text-red-500 hover:opacity-70 text-xs font-bold uppercase tracking-[0.3em]"
+                className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]"
               >
                 Dismiss
               </button>
@@ -379,7 +379,7 @@ export function ChatView() {
           )}
 
           {/* Input Area Wrapper */}
-          <div className="shrink-0 pt-10 relative z-10 bg-linear-to-t from-bg via-bg/95 to-transparent">
+          <div className="shrink-0 pt-6 relative z-10 bg-linear-to-t from-bg via-bg/95 to-transparent">
             {/* Input */}
             <ChatInput
               onSubmit={handleSubmit}
@@ -389,12 +389,12 @@ export function ChatView() {
             />
 
             {/* Model info */}
-            <div className="px-12 pb-16 text-[13px] text-text-tertiary text-center flex items-center justify-center gap-6 opacity-30 hover:opacity-100 transition-all duration-700">
-              <div className="flex items-center gap-5 px-10 py-4 rounded-full bg-surface-secondary/90 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/10 hover:border-accent/30 transition-all">
-                <Cpu size={18} className="text-accent/70" />
-                <span className="font-bold uppercase tracking-[0.4em]">{providerConfigs[activeProvider]?.model || 'No model'}</span>
-                <span className="opacity-20 px-3 font-light">|</span>
-                <span className="font-bold uppercase tracking-[0.4em]">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
+            <div className="px-8 pb-10 text-[11px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-30 hover:opacity-100 transition-all duration-700">
+              <div className="flex items-center gap-3 px-6 py-2.5 rounded-full bg-surface-secondary/90 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/10 hover:border-accent/30 transition-all">
+                <Cpu size={14} className="text-accent/70" />
+                <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || 'No model'}</span>
+                <span className="opacity-20 px-2 font-light">|</span>
+                <span className="font-bold uppercase tracking-[0.2em]">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
               </div>
             </div>
           </div>

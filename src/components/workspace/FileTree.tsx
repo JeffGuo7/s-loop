@@ -129,11 +129,11 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
   }, [])
 
   const Icon = getFileIcon(name)
-  const paddingLeft = depth * 16 + 8
+  const paddingLeft = depth * 16 + 10
   const isNodeModules = name === 'node_modules'
 
   return (
-    <div>
+    <div className="mb-0.5">
       <div
         role="button"
         tabIndex={0}
@@ -143,7 +143,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
         onKeyDown={handleKeyDown}
         onDragStart={!isDir ? handleDragStart : undefined}
         onDragEnd={!isDir ? handleDragEnd : undefined}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--color-surface-secondary)] transition-colors text-left select-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-surface-secondary/60 transition-all duration-300 text-left select-none outline-none focus-visible:ring-2 focus-visible:ring-accent group/tree-item"
         style={{ paddingLeft: `${paddingLeft}px` }}
         title={path}
       >
@@ -152,13 +152,13 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
           children !== null && children.length === 0 ? (
             <span className="w-4 shrink-0" />
           ) : (
-            <span className="w-4 shrink-0 text-[var(--color-text-quaternary)]">
+            <span className="w-4 shrink-0 text-text-quaternary group-hover/tree-item:text-accent transition-colors">
               {loading ? (
-                <span className="inline-block w-3 h-3 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                <span className="inline-block w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
               ) : expanded ? (
-                <ChevronDown size={14} />
+                <ChevronDown size={13} strokeWidth={2.5} />
               ) : (
-                <ChevronRight size={14} />
+                <ChevronRight size={13} strokeWidth={2.5} />
               )}
             </span>
           )
@@ -167,26 +167,26 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
         )}
 
         {/* File/folder icon */}
-        <span className={`shrink-0 ${isNodeModules ? 'opacity-40' : ''}`}>
+        <span className={`shrink-0 transition-transform duration-500 group-hover/tree-item:scale-110 ${isNodeModules ? 'opacity-30' : ''}`}>
           {isDir ? (
             expanded ? (
-              <Folder size={15} className="text-[var(--color-accent)]" fill="var(--color-accent-muted)" />
+              <Folder size={14} className="text-accent" fill="currentColor" fillOpacity={0.15} strokeWidth={2} />
             ) : (
-              <Folder size={15} className="text-[var(--color-accent-light)]" />
+              <Folder size={14} className="text-accent/60" strokeWidth={2} />
             )
           ) : (
-            <Icon size={15} className="text-[var(--color-text-tertiary)]" />
+            <Icon size={14} className="text-text-quaternary group-hover/tree-item:text-text-secondary" strokeWidth={1.5} />
           )}
         </span>
 
         {/* Name */}
         <span
-          className={`text-xs truncate ${
+          className={`text-[12px] truncate tracking-tight transition-colors duration-300 ${
             isNodeModules
-              ? 'text-[var(--color-text-quaternary)] italic'
+              ? 'text-text-quaternary italic'
               : isDir
-                ? 'text-[var(--color-text)]'
-                : 'text-[var(--color-text-secondary)]'
+                ? 'text-text font-bold'
+                : 'text-text-secondary group-hover/tree-item:text-text'
           }`}
         >
           {name}
@@ -198,8 +198,8 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
         <div>
           {children.length === 0 ? (
             <div
-              className="text-[10px] text-[var(--color-text-quaternary)] italic px-2 py-1"
-              style={{ paddingLeft: `${paddingLeft + 20}px` }}
+              className="text-[9px] text-[var(--color-text-quaternary)] italic px-2 py-0.5"
+              style={{ paddingLeft: `${paddingLeft + 16}px` }}
             >
               Empty
             </div>
