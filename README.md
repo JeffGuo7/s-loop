@@ -1,6 +1,6 @@
 # Snotra
 
-AI 桌面助手 — Tauri 2 桌面应用，集成 [Kilo CLI](https://github.com/Kilo-Org/kilocode) 作为 AI 引擎，支持 500+ 模型、MCP 工具系统、定时任务、桌面宠物。
+AI 桌面助手 — Tauri 2 桌面应用，集成 [Kilo CLI](https://github.com/Kilo-Org/kilocode) 作为 AI 引擎，支持 500+ 模型、MCP 工具系统、Skills 技能系统、定时任务、桌面宠物、Telegram 集成。
 
 ## 技术栈
 
@@ -42,16 +42,18 @@ AI 桌面助手 — Tauri 2 桌面应用，集成 [Kilo CLI](https://github.com/
 | 功能 | 状态 |
 |------|------|
 | AI 对话 (流式输出) | ✅ |
-| 富消息类型 (文本/思考/工具调用/步骤) | ✅ |
+| 富消息类型 (文本/思考/工具调用/步骤/思考栈) | ✅ |
 | 多会话管理 | ✅ |
 | 深色/浅色主题 | ✅ |
 | Provider 动态配置 (从 Kilo 拉取全部模型) | ✅ |
-| MCP 服务器管理 | ✅ UI / 🔄 后端连接 |
-| Skills 管理 | ✅ UI / 🔄 自动发现 |
+| MCP 服务器管理 (新增/启停/状态) | ✅ |
+| Skills 管理系统 (启用/禁用/路径发现) | ✅ |
 | 定时任务调度 (Cron + AI Agent) | ✅ |
 | 桌面宠物 (孵化/拖拽/稀有度/属性/mood) | ✅ |
-| Telegram 集成 | ✅ UI / 🔄 真实连接 |
-| Kilo 进程托管 (自动启停) | ✅ |
+| Telegram 集成 (配置/连接/消息收发) | ✅ |
+| Kilo 进程托管 (Tauri 自动启停) | ✅ |
+| Workspace 文件树 | ✅ |
+| 自定义标题栏 (拖拽/双击最大化/窗口控件) | ✅ |
 
 ## 快速开始
 
@@ -115,20 +117,22 @@ NPX_PATH=C:\path\to\npx.cmd
 ```
 src/
 ├── components/
-│   ├── chat/           # ChatView, MessageList, MessageItem
-│   │   ├── parts/      # TextPartView, ReasoningView, ToolPartView, StepView
-│   │   └── shared/     # Markdown, Collapsible, StatusIndicator
-│   ├── layout/         # Sidebar（侧边栏）
-│   ├── companion/      # 桌面宠物
-│   ├── settings/       # SettingsModal（Provider/MCP/Skills）
-│   ├── tasks/          # 定时任务管理
-│   ├── telegram/       # Telegram 集成
-│   ├── mcp/            # MCP 服务器 UI
-│   └── skills/         # Skills 管理 UI
-├── stores/             # Zustand 状态管理
+│   ├── chat/           # ChatView, ChatInput, MessageList, MessageItem
+│   │   ├── parts/      # TextPartView, ReasoningView, ToolPartView, StepView, ThoughtStackView
+│   │   └── shared/     # Markdown, Collapsible, StatusIndicator, CopyButton, MessageActionBar, StreamingIndicator
+│   ├── layout/         # Sidebar（侧边栏）, TitleBar（自定义标题栏）
+│   ├── companion/      # 桌面宠物 (PetCompanion, PetHatchModal)
+│   ├── settings/       # SettingsModal（Provider/MCP/Skills 配置）
+│   ├── tasks/          # 定时任务管理 (TaskList, CreateTaskModal, TasksPage)
+│   ├── telegram/       # Telegram 集成 (TelegramPage, TelegramSettings)
+│   ├── mcp/            # MCP 服务器管理 UI
+│   ├── skills/         # Skills 管理 UI
+│   ├── ui/             # 通用组件 (Button, Card, Input, MagicButton)
+│   └── workspace/      # 工作区 (FileTree, WorkspacePanel)
+├── stores/             # Zustand 状态管理 (appStore, petStore, taskStore, mcpStore, skillStore, telegramStore)
 ├── hooks/              # React hooks (useAI, useTaskScheduler)
-├── utils/              # 工具函数 (kiloClient)
-├── types/              # TypeScript 类型
+├── utils/              # 工具函数 (kiloClient, ai, pet)
+├── types/              # TypeScript 类型 (index, pet, task, mcp, skill, telegram)
 └── styles/             # 全局样式 + Tailwind
 
 src-tauri/              # Rust 后端
@@ -145,7 +149,10 @@ src-tauri/              # Rust 后端
 | 包 | 用途 |
 |---|------|
 | `@kilocode/cli` | Kilo CLI npm 包 |
-| `react-virtuoso` | 虚拟列表 (消息性能优化) |
+| `react-virtuoso` | 虚拟列表 (大量消息性能优化) |
+| `framer-motion` | 动画引擎 (宠物/UI 过渡) |
+| `dompurify` | HTML 安全过滤 |
+| `@heroui/react` | UI 组件库 |
 | `marked` | Markdown 解析 |
 | `highlight.js` | 代码高亮 |
 | `lucide-react` | 图标库 |
