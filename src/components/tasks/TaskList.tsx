@@ -67,10 +67,10 @@ export function TaskList({ onCreateTask }: TaskListProps) {
           </div>
           <MagicButton
             onClick={onCreateTask}
-            className="gap-4 shrink-0 px-8 py-4 rounded-[24px] shadow-2xl shadow-accent/15 hover:shadow-accent/35 transition-all duration-700 hover:-translate-y-1.5 group"
+            className="gap-3 shrink-0 px-6 py-3 rounded-xl shadow-md shadow-accent/10 hover:shadow-accent/25 transition-all duration-500 hover:-translate-y-0.5 group"
           >
-            <Plus size={24} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
-            <span className="font-extrabold text-lg tracking-tight">New Task</span>
+            <Plus size={18} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
+            <span className="font-bold text-[15px] tracking-tight">New Task</span>
           </MagicButton>
         </div>
       </div>

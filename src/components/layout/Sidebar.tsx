@@ -93,15 +93,10 @@ export function Sidebar({
             >
               <MagicButton
                 onClick={handleNewChat}
-                className="w-full gap-2.5 rounded-lg py-3.5 shadow-lg shadow-accent/10 group relative overflow-hidden transition-all duration-500 hover:shadow-accent/20 hover:scale-[1.01] active:scale-98"
+                className="w-full gap-2.5 rounded-lg py-3.5 shadow-md shadow-accent/10 group transition-all duration-500 hover:shadow-accent/20 hover:-translate-y-0.5 active:translate-y-0"
               >
-                <div className="absolute inset-0 bg-linear-to-tr from-white/10 via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-                <div className="relative z-10 flex items-center gap-2.5">
-                  <div className="w-6 h-6 rounded-md bg-white/15 flex items-center justify-center backdrop-blur-md group-hover:rotate-6 transition-transform duration-500">
-                    <Plus size={16} strokeWidth={2.5} className="text-white" />
-                  </div>
-                  <span className="font-bold tracking-tight text-[14px] text-white">New Chat</span>
-                </div>
+                <Plus size={16} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-500" />
+                <span className="font-bold tracking-tight text-[14px]">New Chat</span>
               </MagicButton>
             </motion.div>
 
@@ -164,6 +159,7 @@ export function Sidebar({
       {/* Main Content: Session list */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 scrollbar-subtle space-y-1.5">
         <ListBox
+          key={`sessions-list-${collapsed}`}
           aria-label="Chat Sessions"
           items={sessions}
           onAction={(key: React.Key) => handleSelect(key as string)}
@@ -176,55 +172,54 @@ export function Sidebar({
 
             return (
               <ListBoxItem
-                key={session.id}
+                key={`${session.id}-${collapsed ? 'collapsed' : 'expanded'}`}
                 id={session.id}
                 textValue={title}
                 className={`group relative min-h-[40px] rounded-lg transition-all duration-500 mb-1 overflow-hidden border ${
                   isActive 
                     ? 'bg-white dark:bg-white/10 border-accent/20 shadow-sm ring-1 ring-accent/5' 
                     : 'bg-transparent border-transparent hover:bg-surface-secondary/70 hover:border-black/5 dark:hover:border-white/5'
-                }`}
+                } ${collapsed ? 'p-0' : ''}`}
               >
-                <div className={`flex items-center gap-2.5 w-full pl-3 pr-8 py-2 ${collapsed ? 'justify-center' : ''}`}>
-                  {/* Icon - Refined */}
-                  <div className={`flex items-center justify-center w-6 h-6 shrink-0 rounded-md transition-all duration-500 ${
-                    isActive ? 'bg-accent/10 text-accent' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
-                  }`}>
-                    <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
+                {collapsed ? (
+                  <div className="flex items-center justify-center w-full h-10">
+                    <div className={`flex items-center justify-center w-6 h-6 rounded-md transition-all duration-500 ${
+                      isActive ? 'bg-accent/10 text-accent' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
+                    }`}>
+                      <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
+                    </div>
                   </div>
+                ) : (
+                  <div className="flex items-center w-full pl-3 pr-8 py-2 gap-2.5 relative">
+                    <div className={`flex items-center justify-center w-6 h-6 shrink-0 rounded-md transition-all duration-500 ${
+                      isActive ? 'bg-accent/10 text-accent' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
+                    }`}>
+                      <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
+                    </div>
 
-                  {!collapsed && (
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <span className={`text-[13px] truncate tracking-tight transition-all duration-500 ${
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[13px] truncate tracking-tight transition-all duration-500 ${
                         isActive ? 'font-bold text-text' : 'font-medium text-text-secondary group-hover:text-text'
                       }`}>
                         {title}
-                      </span>
+                      </p>
                     </div>
-                  )}
 
-                  {!collapsed && (
-                    <motion.button
-                      whileHover={{ scale: 1.1, rotate: 5 }}
-                      whileTap={{ scale: 0.9 }}
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(e, session.id);
                       }}
-                      className="absolute right-3 p-1 rounded-md text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm bg-white/50 dark:bg-black/20 shadow-sm border border-black/5 dark:border-white/5"
+                      className="absolute right-3 p-1 rounded-md text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm bg-white/50 dark:bg-black/20 border border-black/5 dark:border-white/5"
                     >
                       <Trash2 size={12} strokeWidth={1.5} />
-                    </motion.button>
-                  )}
-                </div>
-
-                {/* Active Indicator Line - Subtle */}
+                    </button>
+                  </div>
+                )}
+                
+                {/* Active Indicator Line */}
                 {isActive && (
-                  <motion.div
-                    layoutId="activeSessionBar"
-                    className="absolute left-0 top-2.5 bottom-2.5 w-0.5 bg-accent rounded-r-full"
-                    transition={{ type: "spring", stiffness: 400, damping: 40 }}
-                  />
+                  <div className="absolute left-0 top-2.5 bottom-2.5 w-0.5 bg-accent rounded-r-full z-20" />
                 )}
               </ListBoxItem>
             )
