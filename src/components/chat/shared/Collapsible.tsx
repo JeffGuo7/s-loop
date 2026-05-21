@@ -48,27 +48,30 @@ export function Collapsible({
     onToggle?.(next)
   }, [expanded, isControlled, onToggle])
 
+  const hasCustomBg = className.includes('bg-')
+  const hasCustomBorder = className.includes('border-')
+
   return (
-    <div className={`border border-border rounded-2xl overflow-hidden transition-colors hover:border-border-hover ${className}`}>
+    <div className={`rounded-2xl overflow-hidden transition-all duration-500 ${!hasCustomBorder ? 'border border-border' : ''} ${!hasCustomBg ? 'bg-surface-secondary/10' : ''} ${className}`}>
       <button
         onClick={handleToggle}
-        className="w-full flex items-center gap-4 px-6 py-4 bg-surface-secondary/30 hover:bg-surface-secondary/80 transition-colors text-left"
+        className="w-full flex items-center gap-4 px-6 py-4 hover:bg-surface-secondary/40 transition-colors text-left"
       >
         <ChevronRight
-          size={18}
-          className="text-text-tertiary transition-transform duration-300"
+          size={16}
+          className="text-text-tertiary transition-transform duration-500"
           style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
         />
-        <span className="text-[15px] font-bold tracking-tight flex-1 min-w-0">{header}</span>
+        <div className="flex-1 min-w-0">{header}</div>
       </button>
       <div
         style={{
-          maxHeight: expanded ? (contentHeight !== undefined ? contentHeight + 'px' : '800px') : '0px',
-          overflow: 'hidden',
-          transition: 'max-height var(--motion-collapse)',
+          maxHeight: expanded ? (contentHeight !== undefined ? contentHeight + 'px' : '2000px') : '0px',
+          overflow: expanded ? 'visible' : 'hidden',
+          transition: 'max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
-        <div ref={contentRef} className="px-6 py-6 border-t border-border-light bg-surface/50">
+        <div ref={contentRef} className="px-6 py-4 border-t border-border-light/50">
           {children}
         </div>
       </div>

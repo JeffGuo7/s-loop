@@ -4,7 +4,7 @@ import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import * as Kilo from '../../utils/kiloClient'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
@@ -317,46 +317,62 @@ export function ChatView() {
 
       {/* Main content area - Takes all space */}
       <div className="flex-1 min-h-0 relative bg-transparent">
-        {isEmpty ? (
-          <div className="h-full flex flex-col items-center justify-center px-16 relative pb-48">
-            <div className="text-center relative z-10 w-full flex flex-col items-center">
-              <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">Snotra Workspace</p>
+        <AnimatePresence mode="wait">
+          {isEmpty ? (
+            <motion.div 
+              key="empty"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              className="h-full flex flex-col items-center justify-center px-16 relative pb-48"
+            >
+              <div className="text-center relative z-10 w-full flex flex-col items-center">
+                <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">Snotra Workspace</p>
 
-              <div className="flex justify-center w-full mb-8">
-                <div className="relative group scale-90">
-                  <div className="absolute inset-0 bg-accent opacity-30 blur-[80px] group-hover:opacity-50 transition-opacity duration-700 rounded-full scale-110" />
-                  <div className="relative w-32 h-32 rounded-[35%_65%_60%_40%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
-                    <Cpu size={48} className="text-accent drop-shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.5)]" />
-                    <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
+                <div className="flex justify-center w-full mb-8">
+                  <div className="relative group scale-90">
+                    <div className="absolute inset-0 bg-accent opacity-30 blur-[80px] group-hover:opacity-50 transition-opacity duration-700 rounded-full scale-110" />
+                    <div className="relative w-32 h-32 rounded-[35%_65%_60%_40%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
+                      <Cpu size={48} className="text-accent drop-shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.5)]" />
+                      <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">
-                How can I help?
-              </h2>
-              <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">
-                Seamlessly orchestrate your workspace, files, and AI agents.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden">
-            <MessageList sessionId={activeSessionId} />
-            
-            {error && (
-              <div className="absolute top-8 left-4 right-4 z-20 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm backdrop-blur-md">
-                <span>{error}</span>
-                <button
-                  onClick={() => setError(null)}
-                  className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]"
-                >
-                  Dismiss
-                </button>
+                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">
+                  How can I help?
+                </h2>
+                <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">
+                  Seamlessly orchestrate your workspace, files, and AI agents.
+                </p>
               </div>
-            )}
-          </div>
-        )}
+            </motion.div>
+          ) : (
+            <motion.div 
+              key={activeSessionId}
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden"
+            >
+              <MessageList sessionId={activeSessionId!} />
+              
+              {error && (
+                <div className="absolute top-8 left-4 right-4 z-20 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm backdrop-blur-md">
+                  <span>{error}</span>
+                  <button
+                    onClick={() => setError(null)}
+                    className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Input Area - Now absolute within the relative parent to overlay messages correctly */}
         <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">

@@ -168,7 +168,7 @@ export function ChatInput({
           variant={isHero ? 'glass' : 'default'}
           className={`relative group p-2 transition-all duration-700 border border-border-light ${
             isHero ? 'shadow-[0_24px_64px_rgba(0,0,0,0.1)]' : 'shadow-2xl hover:shadow-accent/5'
-          } ${isDragOver ? 'ring-2 ring-accent ring-offset-[8px] ring-offset-bg' : ''} rounded-[24px] bg-surface/90 backdrop-blur-3xl`}
+          } ${isDragOver ? 'ring-2 ring-accent ring-offset-[8px] ring-offset-bg' : 'focus-ring-accent'} rounded-[24px] bg-surface/90 backdrop-blur-3xl`}
         >
           {isDragOver && (
             <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-surface/95 backdrop-blur-2xl pointer-events-none">
@@ -211,6 +211,9 @@ export function ChatInput({
                 onChange={setInput}
                 isDisabled={disabled || isStreaming}
                 className="w-full selection:bg-accent/20"
+                classNames={{
+                  inputWrapper: "!bg-transparent !shadow-none !border-none after:!bg-transparent before:!bg-transparent focus-within:!bg-transparent",
+                }}
               >
                 <TextArea
                   ref={textareaRef}
@@ -218,7 +221,7 @@ export function ChatInput({
                   onCompositionStart={handleCompositionStart}
                   onCompositionEnd={handleCompositionEnd}
                   placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
-                  className="w-full bg-transparent hover:bg-transparent focus:outline-none shadow-none border-none p-6 min-h-[60px] text-[15px] font-bold leading-relaxed custom-scrollbar text-text placeholder:text-text-quaternary/30 resize-none tracking-tight selection:bg-accent/20"
+                  className="w-full bg-transparent hover:bg-transparent focus:!ring-0 focus:!outline-none shadow-none border-none p-6 min-h-[60px] text-[15px] font-bold leading-relaxed custom-scrollbar text-text placeholder:text-text-quaternary/30 resize-none tracking-tight selection:bg-accent/20"
                   rows={1}
                 />
               </TextField>

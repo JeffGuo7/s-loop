@@ -43,14 +43,12 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
 
           <div className="flex flex-col items-end gap-2 min-w-0">
             <div
-              className="bg-accent text-accent-foreground px-6 py-4 text-[15px] leading-relaxed wrap-break-word shadow-xl shadow-accent/10 rounded-[24px] rounded-tr-[4px] group-hover:shadow-accent/20 transition-all duration-500 font-medium"
+              className="bg-accent text-accent-foreground px-6 py-5 text-[15px] leading-relaxed wrap-break-word shadow-xl shadow-accent/10 rounded-[28px] rounded-tr-[4px] group-hover:shadow-accent/20 transition-all duration-500 font-medium"
             >
               {message.parts.map((part, idx) => (
-                <MessagePartRenderer
-                  key={part.id || idx}
-                  part={part.type === 'text' ? { ...part, text: part.text.trim() } : part}
-                  isStreaming={false}
-                />
+                <div key={part.id || idx} className="text-accent-foreground">
+                  {part.type === 'text' ? part.text.trim() : null}
+                </div>
               ))}
             </div>
             <div className="opacity-0 group-hover:opacity-100 transition-all duration-700">
@@ -85,7 +83,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="space-y-2">
+          <div className="space-y-4">
             {message.parts.length === 0 && isStreaming && (
               <div className="flex items-center gap-3 py-2">
                 <div className="w-2 h-2 bg-accent/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -94,8 +92,10 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
               </div>
             )}
 
-            <div className="space-y-1">
-              {renderGroupedParts(message.parts, isStreaming)}
+            <div className="relative">
+              <div className="space-y-4">
+                {renderGroupedParts(message.parts, isStreaming)}
+              </div>
             </div>
           </div>
 
@@ -179,7 +179,20 @@ interface MessagePartRendererProps {
 function MessagePartRenderer({ part, isStreaming }: MessagePartRendererProps) {
   switch (part.type) {
     case 'text':
-      return <TextPartView text={part.text} isStreaming={isStreaming} />
+      return (
+        <div className={`
+          relative px-6 py-5 rounded-[28px] rounded-tl-[4px] transition-all duration-700 group/text-part
+          ${isStreaming 
+            ? 'bg-accent-subtle/20 border-accent/20 shadow-[0_8px_32px_rgba(var(--color-accent-rgb),0.08)]' 
+            : 'bg-surface/40 backdrop-blur-xl border border-black/[0.03] dark:border-white/[0.03] shadow-sm hover:shadow-md hover:bg-surface/60'
+          }
+        `}>
+          <TextPartView text={part.text} isStreaming={isStreaming} />
+          {isStreaming && (
+            <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-accent rounded-full animate-pulse shadow-[0_0_8px_var(--color-accent)]" />
+          )}
+        </div>
+      )
     case 'reasoning':
       return <ReasoningView text={part.text} isActive={isStreaming} />
     case 'tool':

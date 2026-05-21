@@ -31,29 +31,39 @@ export function ThoughtStackView({ parts, isStreaming = false }: ThoughtStackVie
 
   const label = (
     <div className="flex items-center justify-between w-full">
-      <div className="flex items-center gap-3">
-        <div className={`p-1.5 rounded-lg ${hasActiveProcess ? 'bg-accent/10 text-accent' : 'bg-surface-tertiary text-text-tertiary'}`}>
+      <div className="flex items-center gap-4">
+        <div className={`p-2.5 rounded-xl transition-all duration-700 ${
+          hasActiveProcess 
+            ? 'bg-accent text-white shadow-lg shadow-accent/30 animate-pulse' 
+            : 'bg-surface-tertiary text-text-tertiary shadow-inner'
+        }`}>
           {hasActiveProcess ? (
-            <Sparkles size={14} className="animate-spin-slow" />
+            <Sparkles size={16} className="animate-spin-slow" />
           ) : (
-            <Layers size={14} />
+            <Layers size={16} />
           )}
         </div>
         <div className="flex flex-col">
-          <span className={`text-[10px] font-bold uppercase tracking-[0.2em] ${hasActiveProcess ? 'text-accent' : 'text-text-tertiary'}`}>
-            {hasActiveProcess ? 'Processing' : 'Execution Logs'}
-          </span>
-          <div className="flex items-center gap-2 mt-0.5">
-            {reasoningCount > 0 && (
-              <span className="text-[11px] text-text-secondary font-medium flex items-center gap-1">
-                <Brain size={10} className="opacity-50" /> {reasoningCount} {reasoningCount > 1 ? 'Thoughts' : 'Thought'}
-              </span>
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-black uppercase tracking-[0.3em] ${hasActiveProcess ? 'text-accent' : 'text-text-tertiary'}`}>
+              {hasActiveProcess ? 'Live Orchestration' : 'Execution Logs'}
+            </span>
+            {hasActiveProcess && (
+              <span className="flex h-1.5 w-1.5 rounded-full bg-accent animate-ping" />
             )}
-            {reasoningCount > 0 && toolCount > 0 && <span className="w-1 h-1 rounded-full bg-border-light" />}
+          </div>
+          <div className="flex items-center gap-3 mt-1 opacity-70">
+            {reasoningCount > 0 && (
+              <div className="flex items-center gap-2 px-2 py-0.5 rounded-lg bg-surface-tertiary/50 border border-border-light shadow-sm">
+                <Brain size={12} className="text-accent/60" />
+                <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest">{reasoningCount} {reasoningCount > 1 ? 'Thoughts' : 'Thought'}</span>
+              </div>
+            )}
             {toolCount > 0 && (
-              <span className="text-[11px] text-text-secondary font-medium flex items-center gap-1">
-                <Wrench size={10} className="opacity-50" /> {toolCount} {toolCount > 1 ? 'Tools' : 'Tool'}
-              </span>
+              <div className="flex items-center gap-2 px-2 py-0.5 rounded-lg bg-surface-tertiary/50 border border-border-light shadow-sm">
+                <Wrench size={12} className="text-accent/60" />
+                <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest">{toolCount} {toolCount > 1 ? 'Tools' : 'Tool'}</span>
+              </div>
             )}
           </div>
         </div>
@@ -62,21 +72,14 @@ export function ThoughtStackView({ parts, isStreaming = false }: ThoughtStackVie
   )
 
   return (
-    <div className="my-2 group/thought-stack relative">
-      {/* Visual Stack Layers - Decorative - Adjusted to be more compact and not obscured */}
-      <div className="absolute -bottom-0.5 left-3 right-3 h-2 bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.03] dark:border-white/[0.03] rounded-[14px] -z-10 translate-y-0.5" />
-      
+    <div className="my-4 group/thought-stack relative">
       <Collapsible
         header={label}
         expanded={isExpanded}
         onToggle={setIsExpanded}
-        className={`transition-all duration-700 border rounded-[16px] overflow-hidden ${
-          hasActiveProcess 
-            ? 'bg-accent-subtle/10 shadow-md shadow-accent/5 border-accent/20' 
-            : 'bg-surface-secondary/30 hover:bg-surface-secondary/50 border-black/[0.05] dark:border-white/[0.05] shadow-sm transition-colors'
-        }`}
+        className={`transition-all duration-700 border-none !bg-transparent !shadow-none overflow-visible`}
       >
-        <div className="flex flex-col gap-1 py-1.5 px-1.5">
+        <div className="flex flex-col gap-2 py-3 px-2 overflow-visible">
           {parts.map((part, idx) => {
             if (part.type === 'reasoning') {
               return (

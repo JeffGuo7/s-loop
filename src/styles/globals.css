@@ -108,3 +108,15 @@
 .sidebar-transition {
   transition: width 0.4s var(--ease-out-expo);
 }
+
+/* Disable HeroUI default blue focus */
+[data-focus="true"], [data-focus-visible="true"], :focus, :focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Global Focus Styles ── */
+.focus-ring-accent:focus-within {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px var(--color-accent-subtle), 0 0 12px var(--color-accent-glow) !important;
+}

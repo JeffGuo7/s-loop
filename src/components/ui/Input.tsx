@@ -21,8 +21,8 @@ export function Input({ className = '', variant = 'primary', size = 'md', startC
   }
 
   const variantClasses = {
-    primary: "bg-surface-secondary/50 border-border hover:border-accent/40 focus-within:!border-accent shadow-sm",
-    secondary: "bg-transparent border-border focus-within:!border-accent",
+    primary: "bg-surface-secondary/50 border-border hover:border-accent/40 focus-ring-accent shadow-sm",
+    secondary: "bg-transparent border-border focus-ring-accent",
     flat: "",
     bordered: "",
     faded: "",
@@ -52,7 +52,8 @@ export function Input({ className = '', variant = 'primary', size = 'md', startC
           disabled={isDisabled}
           className="w-full"
           classNames={{
-            input: "text-[16px] px-6 py-4 font-bold tracking-tight",
+            input: "text-[16px] px-6 py-4 font-bold tracking-tight focus:ring-0 focus:outline-none",
+            inputWrapper: "!bg-transparent !shadow-none !border-none after:!bg-transparent before:!bg-transparent focus-within:!bg-transparent",
             ...props.classNames
           }}
           {...props}
