@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react'
-import { TextPartView, ReasoningView, ToolPartView, StepView } from './parts'
+import { TextPartView, ReasoningView, ToolPartView, StepView, ThoughtStackView } from './parts'
 import { MessageActionBar } from './shared/MessageActionBar'
 import { StreamingIndicator } from './shared/StreamingIndicator'
 import { shouldUseDocumentLayout } from './shared/Markdown'
@@ -95,13 +95,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
             )}
 
             <div className="space-y-1">
-              {message.parts.map((part, idx) => (
-                <MessagePartRenderer
-                  key={part.id || idx}
-                  part={part}
-                  isStreaming={isStreaming}
-                />
-              ))}
+              {renderGroupedParts(message.parts, isStreaming)}
             </div>
           </div>
 
@@ -135,6 +129,47 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
     </div>
   )
 })
+
+function renderGroupedParts(parts: MessagePart[], isStreaming: boolean) {
+  const renderedParts: React.ReactNode[] = []
+  let currentStack: MessagePart[] = []
+
+  const flushStack = (idx: number) => {
+    if (currentStack.length > 0) {
+      renderedParts.push(
+        <ThoughtStackView 
+          key={`stack-${idx}`} 
+          parts={[...currentStack]} 
+          isStreaming={isStreaming} 
+        />
+      )
+      currentStack = []
+    }
+  }
+
+  parts.forEach((part, idx) => {
+    // Skip decluttering parts entirely so they don't break the stack
+    if (part.type === 'step-start' || part.type === 'step-finish') {
+      return
+    }
+
+    if (part.type === 'reasoning' || part.type === 'tool') {
+      currentStack.push(part)
+    } else {
+      flushStack(idx)
+      renderedParts.push(
+        <MessagePartRenderer 
+          key={part.id || idx} 
+          part={part} 
+          isStreaming={isStreaming} 
+        />
+      )
+    }
+  })
+
+  flushStack(parts.length)
+  return renderedParts
+}
 
 interface MessagePartRendererProps {
   part: MessagePart
