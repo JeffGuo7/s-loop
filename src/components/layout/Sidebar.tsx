@@ -22,7 +22,6 @@ import type { Page } from '../../App'
 interface SidebarProps {
   onSettingsOpen: () => void
   onPetOpen: () => void
-  onTelegramOpen: () => void
   currentPage: Page
   onNavigate: (page: Page) => void
   collapsed?: boolean
@@ -32,7 +31,6 @@ interface SidebarProps {
 export function Sidebar({
   onSettingsOpen,
   onPetOpen,
-  onTelegramOpen,
   currentPage,
   onNavigate,
   collapsed = false,
@@ -73,14 +71,12 @@ export function Sidebar({
 
   return (
     <aside
-      className="h-full flex flex-col bg-surface/30 backdrop-blur-3xl sidebar-transition shrink-0 z-20 relative group/sidebar"
+      className="h-full flex flex-col bg-transparent sidebar-transition shrink-0 z-20 relative group/sidebar"
       style={{ width }}
     >
-      {/* Dynamic Accent Background Layer */}
-      <div className="absolute inset-0 bg-linear-to-b from-accent/3 via-transparent to-accent/2 pointer-events-none opacity-50" />
+      {/* Background Layer - Removed for consistency */}
       
-      {/* Right Edge Glow Indicator */}
-      <div className="absolute inset-y-0 right-0 w-px bg-linear-to-b from-transparent via-accent/15 to-transparent shadow-[0_0_15px_rgba(var(--color-accent-rgb),0.1)]" />
+      {/* Right Edge - No indicator line to keep it seamless */}
 
       {/* Header: New Chat & Title */}
       <div className="px-4 pt-8 pb-6 relative z-10">
@@ -167,7 +163,7 @@ export function Sidebar({
           className="p-0 gap-1.5"
         >
           {(session: any) => {
-            const isActive = session.id === activeSessionId
+            const isActive = session.id === activeSessionId && currentPage === 'chat'
             const title = session.title || 'Untitled Chat'
 
             return (
@@ -242,8 +238,8 @@ export function Sidebar({
           <NavItem
             icon={Send}
             label="Telegram Hub"
-            active={isConnected}
-            onClick={onTelegramOpen}
+            active={currentPage === 'telegram'}
+            onClick={() => onNavigate('telegram')}
             collapsed={collapsed}
             badge={isConnected}
           />

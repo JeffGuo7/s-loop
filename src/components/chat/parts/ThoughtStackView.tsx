@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Brain, Sparkles, Wrench, ChevronDown, Activity, Layers } from 'lucide-react'
+import { Brain, Sparkles, Wrench, Layers } from 'lucide-react'
 import { Collapsible } from '../shared/Collapsible'
 import { ReasoningView } from './ReasoningView'
 import { ToolPartView } from './ToolPartView'

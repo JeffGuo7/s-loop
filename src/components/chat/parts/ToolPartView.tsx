@@ -41,22 +41,6 @@ function getToolIcon(toolName: string): typeof Wrench {
   return Wrench
 }
 
-function getToolSubtitle(part: ToolPart): string | null {
-  const state = part.state as Record<string, unknown>
-  const input = state?.input as Record<string, unknown> | undefined
-  if (!input) return null
-
-  if (typeof input.path === 'string') return input.path
-  if (typeof input.filePath === 'string') return input.filePath
-  if (typeof input.file_path === 'string') return input.file_path
-  if (typeof input.command === 'string') return `$ ${input.command}`
-  if (typeof input.url === 'string') return input.url
-  if (typeof input.query === 'string') return String(input.query).slice(0, 60)
-  if (typeof input.pattern === 'string') return input.pattern
-
-  return null
-}
-
 function formatOutput(output: unknown): string {
   if (typeof output === 'string') return output
   if (output === null || output === undefined) return ''
@@ -71,7 +55,6 @@ export function ToolPartView({ part }: ToolPartViewProps) {
   const [expanded, setExpanded] = useState(false)
   const toolName = part.name || part.tool
   const Icon = getToolIcon(toolName)
-  const subtitle = getToolSubtitle(part)
   const state = part.state as Record<string, unknown>
   const output = formatOutput(state?.output || state?.error)
   const isError = !!state?.error

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Folder, FolderOpen, Check, ChevronLeft, Files, ChevronRight } from 'lucide-react'
+import { FolderOpen, Check, ChevronLeft, Files, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores'
 import { Kilo } from '../../utils'
@@ -61,18 +61,6 @@ export function WorkspacePanel() {
     }
   }, [applyDir])
 
-  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-    const firstPath = files[0].webkitRelativePath
-    if (firstPath) {
-      const rootName = firstPath.split('/')[0]
-      applyDir(`selected://${rootName}`)
-    } else {
-      applyDir(`selected://${files[0].name}`)
-    }
-  }, [applyDir])
-
   const handleClear = useCallback(() => {
     setWorkspaceDir(null)
     Kilo.setProjectDir(null)
@@ -87,10 +75,9 @@ export function WorkspacePanel() {
   if (collapsed) {
     return (
       <aside 
-        className="h-full flex flex-col items-center pt-6 bg-surface/5 sidebar-transition relative shrink-0"
+        className="h-full flex flex-col items-center pt-6 bg-transparent sidebar-transition relative shrink-0"
         style={{ width: 'var(--spacing-workspace-panel-collapsed)' }}
       >
-        <div className="absolute inset-y-0 left-0 w-px bg-linear-to-b from-transparent via-accent/10 to-transparent opacity-30" />
         <motion.button
           whileHover={{ scale: 1.1, x: -2 }}
           whileTap={{ scale: 0.9 }}
@@ -106,10 +93,10 @@ export function WorkspacePanel() {
 
   return (
     <aside 
-      className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-surface/20 backdrop-blur-3xl relative"
+      className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-transparent relative"
       style={{ width: 'var(--spacing-workspace-panel)' }}
     >
-      <div className="absolute inset-y-0 left-0 w-px bg-linear-to-b from-transparent via-accent/10 to-transparent opacity-40" />
+      {/* Left Edge - Removed for consistency */}
       
       {/* Header - Refined & Balanced */}
       <div className="flex items-start justify-between px-5 pt-6 pb-4 relative z-10">

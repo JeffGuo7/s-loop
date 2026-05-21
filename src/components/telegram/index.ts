@@ -1,2 +1,2 @@
-export { TelegramSettings } from './TelegramSettings';
-export { TelegramModal } from './TelegramModal';
+export * from './TelegramPage'
+export * from './TelegramSettings'

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores'
-import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon } from 'lucide-react'
+import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle } from 'lucide-react'
 import type { ProviderConfig } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
@@ -33,6 +33,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [saved, setSaved] = useState(false)
   const [fetching, setFetching] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [modelSearchQuery, setModelSearchQuery] = useState('')
+  const [missingModelWarning, setMissingModelWarning] = useState(false)
 
   // Load providers from Kilo on mount
   useEffect(() => {
@@ -64,6 +66,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   useEffect(() => {
     setLocalConfigs({ ...providerConfigs })
     setExpandedProvider(activeProvider || null)
+    setModelSearchQuery('') // Reset model search when switching
   }, [activeProvider, providerConfigs])
 
   const handleConfigChange = (id: string, field: string, value: string) => {
@@ -94,6 +97,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+
+    // Check if any provider has API key but no model selected
+    const hasMissingModel = Object.entries(localConfigs).some(
+      ([_, cfg]) => cfg.apiKey && !cfg.model,
+    )
+    if (hasMissingModel) {
+      setMissingModelWarning(true)
+      setTimeout(() => setMissingModelWarning(false), 5000)
+    }
   }
 
   const filteredProviders = useMemo(() => {
@@ -104,7 +116,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const provider = providerList.find((p) => p.id === expandedProvider)
   const cfg = expandedProvider ? localConfigs[expandedProvider] || { apiKey: '', model: '', baseUrl: '' } : null
-  const modelKeys = provider ? Object.keys(provider.models || {}) : []
+  
+  // Filtered models based on modelSearchQuery
+  const filteredModels = useMemo(() => {
+    if (!provider) return []
+    const allModels = Object.keys(provider.models || {})
+    if (!modelSearchQuery) return allModels
+    const q = modelSearchQuery.toLowerCase()
+    return allModels.filter(m => m.toLowerCase().includes(q))
+  }, [provider, modelSearchQuery])
+
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
+
   const envVar = provider?.env || ''
 
   return createPortal(
@@ -118,7 +141,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             <p className="text-[11px] text-accent font-bold uppercase tracking-[0.5em] mt-4 opacity-50">Intelligence Hub</p>
           </div>
 
-          <nav className="flex-1 px-8 space-y-4 overflow-y-auto scrollbar-subtle">
+          <nav className="flex-1 px-8 pt-4 space-y-4 overflow-y-auto scrollbar-subtle">
             {[
               { id: 'provider', icon: Cpu, label: 'AI Providers' },
               { id: 'mcp', icon: Server, label: 'MCP Servers' },
@@ -185,185 +208,201 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           {/* Content Area */}
           <div className="flex-1 overflow-hidden">
             {activeTab === 'provider' && (
-              <div className="flex h-full">
-                {/* Provider List */}
-                <aside className="w-[300px] border-r border-border-light flex flex-col shrink-0 bg-surface-secondary/15">
-                  <div className="px-10 py-8 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-text-tertiary uppercase tracking-[0.2em] opacity-60">
-                        {providerList.length} Models
-                      </span>
-                      <button
-                        onClick={fetchProviders}
-                        disabled={fetching}
-                        className="p-3 rounded-xl hover:bg-surface-tertiary text-text-tertiary hover:text-accent transition-all disabled:opacity-40"
-                      >
-                        <RefreshCw size={16} className={fetching ? 'animate-spin' : ''} />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-4 px-6 py-4 rounded-[24px] bg-surface border border-border-light focus-within:border-accent/50 focus-within:ring-[8px] focus-within:ring-accent-subtle transition-all duration-500 shadow-[inset_0_1px_6px_rgba(0,0,0,0.02)]">
-                      <Search size={18} className="text-text-quaternary shrink-0" />
-                      <input
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search..."
-                        className="flex-1 bg-transparent text-[15px] text-text placeholder:text-text-quaternary outline-none min-w-0 font-bold tracking-tight"
-                      />
-                    </div>
-                  </div>
-                  
-                  <ScrollShadow className="flex-1 px-8 pb-10 space-y-3">
-                    {filteredProviders.map((p) => {
-                      const isActive = expandedProvider === p.id
-                      const isConfigured = !!localConfigs[p.id]?.apiKey
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => setExpandedProvider(p.id)}
-                          className={`w-full flex items-center gap-5 px-6 py-5 rounded-[24px] transition-all duration-500 text-left group relative ${
-                            isActive 
-                              ? 'bg-accent-subtle shadow-[0_8px_24px_rgba(var(--color-accent-rgb),0.08)] ring-1 ring-accent/25' 
-                              : 'hover:bg-surface-secondary/90'
-                          }`}
-                        >
-                          <div className={`p-4 rounded-[16px] transition-all duration-500 ${
-                            isActive 
-                              ? 'bg-accent text-accent-foreground shadow-xl shadow-accent/40' 
-                              : 'bg-surface-tertiary text-text-tertiary group-hover:text-text group-hover:bg-surface-tertiary/95'
-                          }`}>
-                            <Cpu size={16} />
-                          </div>
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <span className={`text-[15px] font-bold tracking-tight truncate ${
-                              isActive ? 'text-accent' : 'text-text-secondary'
-                            }`}>{p.name}</span>
-                            <span className="text-[10px] text-text-tertiary font-bold uppercase tracking-widest mt-1 opacity-40">
-                              {p.source || 'Cloud API'}
-                            </span>
-                          </div>
-                          {isConfigured && (
-                            <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/20 shadow-sm">
-                              <Check size={12} className="text-green-500" />
-                            </div>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </ScrollShadow>
-                </aside>
-
-                {/* Provider Detail Form */}
+              <div className="h-full flex flex-col">
+                {/* Single Focused View */}
                 <ScrollShadow className="flex-1">
-                  <div className="max-w-3xl mx-auto px-16 py-16 space-y-16">
-                    {expandedProvider && provider && cfg ? (
-                      <div className="animate-fade-in-up space-y-16">
+                  <div className="max-w-4xl mx-auto px-12 py-12 space-y-12">
+                    
+                    {!expandedProvider ? (
+                      /* Provider Selection Grid - More Spacious */
+                      <div className="space-y-10 animate-fade-in">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <h4 className="text-2xl font-bold text-text tracking-tight">Select Provider</h4>
+                            <p className="text-[13px] text-text-tertiary font-medium">Choose an AI service to configure</p>
+                          </div>
+                          <div className="flex items-center gap-4 px-5 py-2.5 rounded-2xl bg-surface-secondary/50 border border-border-light focus-within:border-accent/50 transition-all duration-300 w-64">
+                            <Search size={14} className="text-text-quaternary" />
+                            <input
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              placeholder="Search providers..."
+                              className="bg-transparent text-[13px] font-bold text-text outline-none w-full"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {filteredProviders.map((p) => {
+                            const isConfigured = !!localConfigs[p.id]?.apiKey
+                            return (
+                              <button
+                                key={p.id}
+                                onClick={() => setExpandedProvider(p.id)}
+                                className="group relative p-8 rounded-[32px] bg-white/40 dark:bg-white/5 border border-border-light hover:border-accent/30 hover:bg-accent-subtle transition-all duration-500 text-left shadow-sm hover:shadow-xl hover:-translate-y-1"
+                              >
+                                <div className="flex items-center justify-between mb-6">
+                                  <div className="p-4 rounded-2xl bg-surface-tertiary text-text-tertiary group-hover:bg-accent group-hover:text-white transition-all duration-500 shadow-sm">
+                                    <Cpu size={24} />
+                                  </div>
+                                  {isConfigured && (
+                                    <div className="px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-[10px] font-black uppercase tracking-widest border border-green-500/20">
+                                      Active
+                                    </div>
+                                  )}
+                                </div>
+                                <h5 className="text-[17px] font-bold text-text tracking-tight mb-1">{p.name}</h5>
+                                <p className="text-[11px] text-text-tertiary font-bold uppercase tracking-widest opacity-50">{p.source || 'Cloud API'}</p>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : provider && cfg ? (
+                      /* Focused Provider Configuration - Very Spacious */
+                      <div className="space-y-12 animate-fade-in-up">
+                        <div className="flex items-center justify-between">
+                          <button 
+                            onClick={() => setExpandedProvider(null)}
+                            className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.2em] text-text-tertiary hover:text-accent transition-colors"
+                          >
+                            <RefreshCw size={14} className="rotate-180" />
+                            Back to list
+                          </button>
+                        </div>
+
                         <div className="flex items-center gap-8">
-                          <div className="p-8 rounded-[32px] bg-accent text-accent-foreground shadow-xl shadow-accent/40">
+                          <div className="p-8 rounded-[32px] bg-accent text-accent-foreground shadow-2xl shadow-accent/20">
                             <Cpu size={48} />
                           </div>
                           <div>
                             <h2 className="text-5xl font-bold text-text tracking-tighter leading-tight">{provider.name}</h2>
-                            <div className="flex items-center gap-4 mt-2">
-                              <span className="px-5 py-2 rounded-full bg-accent-subtle text-accent text-[12px] font-bold uppercase tracking-[0.2em] border border-accent/25 shadow-sm">
+                            <div className="flex items-center gap-3 mt-2">
+                              <span className="px-4 py-1.5 rounded-full bg-accent-muted text-accent text-[11px] font-black uppercase tracking-widest border border-accent/10">
                                 {provider.id}
                               </span>
-                              <span className="text-[14px] text-text-tertiary font-bold opacity-50 uppercase tracking-widest">Profile</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="space-y-10">
+                        <div className="grid grid-cols-1 gap-12 pt-4">
+                          {/* API Key Card */}
                           <div className="space-y-6">
-                            <div className="flex items-center justify-between ml-4">
-                              <label className="text-[12px] font-bold uppercase tracking-[0.3em] text-text-tertiary opacity-70">
-                                API Access Key
-                              </label>
-                              {envVar && <span className="text-[11px] font-mono text-accent opacity-70 px-4 py-1.5 bg-accent-subtle rounded-xl border border-accent/20 shadow-sm">{envVar}</span>}
+                            <div className="flex items-center justify-between ml-2">
+                              <label className="text-[11px] font-black uppercase tracking-[0.3em] text-text-tertiary opacity-50">API Access Token</label>
+                              {envVar && <span className="text-[10px] font-mono text-accent/70 bg-accent-muted px-3 py-1 rounded-lg border border-accent/10">{envVar}</span>}
                             </div>
                             <div className="relative group">
                               <input
                                 type={showKey ? 'text' : 'password'}
                                 value={cfg.apiKey}
                                 onChange={(e) => handleConfigChange(expandedProvider, 'apiKey', e.target.value)}
-                                placeholder="Paste token..."
-                                className="w-full px-8 py-5 rounded-[24px] bg-surface-secondary/50 border border-border-light text-[15px] font-mono text-text placeholder:text-text-quaternary outline-none focus:bg-surface focus:border-accent/50 focus:ring-[12px] focus:ring-accent-subtle transition-all duration-500 pr-16 shadow-[inset_0_1px_6px_rgba(0,0,0,0.02)]"
+                                placeholder="Paste your API key here..."
+                                className="w-full px-8 py-6 rounded-[28px] bg-white/40 dark:bg-white/5 border border-border-light text-[15px] font-mono text-text outline-none focus:bg-white/80 dark:focus:bg-white/10 focus:border-accent/50 focus:ring-[16px] focus:ring-accent-subtle transition-all duration-500 pr-16 shadow-sm"
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowKey(!showKey)}
-                                className="absolute right-6 top-1/2 -translate-y-1/2 p-4 rounded-xl text-text-tertiary hover:text-text hover:bg-surface-tertiary transition-all duration-300"
+                                className="absolute right-6 top-1/2 -translate-y-1/2 p-3 rounded-xl text-text-tertiary hover:text-text hover:bg-surface-secondary transition-all"
                               >
-                                {showKey ? <EyeOff size={20} /> : <Eye size={20} />}
+                                {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
                               </button>
                             </div>
                           </div>
 
+                          {/* Model Selection - Dropdown Style */}
                           <div className="space-y-6">
-                            <label className="text-[12px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-4 opacity-70">Model Selection</label>
-                            {modelKeys.length > 0 ? (
-                              <Select
-                                selectedKey={cfg.model}
-                                onSelectionChange={(key: any) => {
-                                  if (key) handleConfigChange(expandedProvider, 'model', key as string);
-                                }}
-                                placeholder="Choose model..."
+                            <label className="text-[11px] font-black uppercase tracking-[0.3em] text-text-tertiary ml-2 opacity-50">Model Engine</label>
+                            
+                            <div className="relative">
+                              {/* Dropdown Trigger */}
+                              <button
+                                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                                className={`w-full flex items-center justify-between px-8 py-6 rounded-[28px] border transition-all duration-500 ${
+                                  showModelDropdown 
+                                    ? 'bg-white dark:bg-white/10 border-accent/50 ring-[16px] ring-accent-subtle shadow-xl' 
+                                    : 'bg-white/40 dark:bg-white/5 border-border-light hover:border-accent/30 shadow-sm'
+                                }`}
                               >
-                                <SelectTrigger className="w-full px-8 py-5 rounded-[24px] bg-surface-secondary/50 border border-border-light outline-none focus:bg-surface focus:border-accent/50 text-[15px] font-bold tracking-tight transition-all duration-500 h-auto shadow-[inset_0_1px_6px_rgba(0,0,0,0.02)]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectPopover className="bg-surface/95 border border-border shadow-[0_16px_64px_rgba(0,0,0,0.15)] rounded-[24px] overflow-hidden backdrop-blur-3xl">
-                                  <ListBox items={modelKeys.map(m => ({ id: m, name: m }))} className="p-4">
-                                    {(item: any) => (
-                                      <ListBoxItem 
-                                        key={item.id} 
-                                        id={item.id} 
-                                        textValue={item.name}
-                                        className="rounded-[16px] px-6 py-4 text-[15px] text-text-secondary hover:text-text hover:bg-surface-secondary data-[selected=true]:text-accent data-[selected=true]:bg-accent-subtle transition-all duration-300"
-                                      >
-                                        <div className="flex items-center gap-4">
-                                          <Sparkles size={16} className="text-accent opacity-60" />
-                                          <span className="font-bold tracking-tight">{item.name}</span>
+                                <div className="flex items-center gap-4">
+                                  <Sparkles size={20} className={cfg.model ? 'text-accent' : 'text-text-tertiary opacity-40'} />
+                                  <span className={`text-[15px] font-bold tracking-tight ${cfg.model ? 'text-text' : 'text-text-tertiary'}`}>
+                                    {cfg.model || 'Choose a model engine...'}
+                                  </span>
+                                </div>
+                                <RefreshCw size={18} className={`text-text-tertiary transition-transform duration-500 ${showModelDropdown ? 'rotate-180' : ''}`} />
+                              </button>
+
+                              {/* Dropdown Popover */}
+                              {showModelDropdown && (
+                                <>
+                                  <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)} />
+                                  <div className="absolute top-full left-0 right-0 mt-4 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-3xl rounded-[32px] border border-border shadow-[0_24px_80px_rgba(0,0,0,0.2)] overflow-hidden animate-scale-in origin-top">
+                                    <div className="p-6 border-b border-border-light">
+                                      <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-surface-secondary/50 border border-border-light focus-within:border-accent/30 transition-all">
+                                        <Search size={16} className="text-text-quaternary" />
+                                        <input
+                                          autoFocus
+                                          value={modelSearchQuery}
+                                          onChange={(e) => setModelSearchQuery(e.target.value)}
+                                          placeholder="Filter models..."
+                                          className="bg-transparent text-[14px] font-bold text-text outline-none w-full"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="max-h-[320px] overflow-y-auto p-4 custom-scrollbar">
+                                      {filteredModels.length > 0 ? (
+                                        <div className="space-y-1">
+                                          {filteredModels.map((m) => (
+                                            <button
+                                              key={m}
+                                              onClick={() => {
+                                                handleConfigChange(expandedProvider, 'model', m);
+                                                setShowModelDropdown(false);
+                                              }}
+                                              className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all duration-300 group ${
+                                                cfg.model === m 
+                                                  ? 'bg-accent/10 text-accent' 
+                                                  : 'hover:bg-surface-secondary text-text-secondary hover:text-text'
+                                              }`}
+                                            >
+                                              <span className="text-[14px] font-bold tracking-tight">{m}</span>
+                                              {cfg.model === m && <Check size={16} className="text-accent" />}
+                                            </button>
+                                          ))}
                                         </div>
-                                      </ListBoxItem>
-                                    )}
-                                  </ListBox>
-                                </SelectPopover>
-                              </Select>
-                            ) : (
-                              <input
-                                value={cfg.model}
-                                onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
-                                placeholder="e.g., gpt-4-turbo"
-                                className="w-full px-8 py-5 rounded-[24px] bg-surface-secondary/50 border border-border-light text-[15px] font-bold text-text placeholder:text-text-quaternary outline-none focus:bg-surface focus:border-accent/50 focus:ring-[12px] focus:ring-accent-subtle transition-all duration-500 shadow-[inset_0_1px_6px_rgba(0,0,0,0.02)]"
-                              />
+                                      ) : (
+                                        <div className="py-12 text-center">
+                                          <p className="text-[13px] font-bold text-text-tertiary italic opacity-50">No models found</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            
+                            {cfg.apiKey && !cfg.model && (
+                              <div className="flex items-center gap-2 ml-4 text-amber-500 text-[12px] font-black uppercase tracking-widest animate-fade-in">
+                                <AlertTriangle size={14} />
+                                <span>Missing Model Engine</span>
+                              </div>
                             )}
                           </div>
 
+                          {/* Gateway Card */}
                           <div className="space-y-6">
-                            <label className="text-[12px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-4 opacity-70">Custom Gateway</label>
-                            <div className="relative">
-                              <input
-                                value={cfg.baseUrl || ''}
-                                onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
-                                placeholder="https://api.custom-proxy.com/v1"
-                                className="w-full px-8 py-5 rounded-[24px] bg-surface-secondary/50 border border-border-light text-[15px] font-mono text-text placeholder:text-text-quaternary outline-none focus:bg-surface focus:border-accent/50 focus:ring-[12px] focus:ring-accent-subtle transition-all duration-500 shadow-[inset_0_1px_6px_rgba(0,0,0,0.02)]"
-                              />
-                            </div>
+                            <label className="text-[11px] font-black uppercase tracking-[0.3em] text-text-tertiary ml-2 opacity-50">Custom Gateway (Optional)</label>
+                            <input
+                              value={cfg.baseUrl || ''}
+                              onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
+                              placeholder="https://your-custom-proxy.com/v1"
+                              className="w-full px-8 py-6 rounded-[28px] bg-white/40 dark:bg-white/5 border border-border-light text-[15px] font-mono text-text outline-none focus:bg-white/80 dark:focus:bg-white/10 focus:border-accent/50 focus:ring-[16px] focus:ring-accent-subtle transition-all duration-500 shadow-sm"
+                            />
                           </div>
                         </div>
                       </div>
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-center px-12 py-32">
-                        <div className="relative mb-12">
-                          <div className="absolute inset-0 bg-accent/25 blur-[100px] rounded-full scale-150 animate-pulse" />
-                          <div className="relative w-40 h-40 rounded-[42%] bg-surface border border-border-light flex items-center justify-center backdrop-blur-3xl shadow-2xl animate-float">
-                            <Cpu size={80} className="text-accent opacity-40" />
-                          </div>
-                        </div>
-                        <h4 className="text-4xl font-bold text-text tracking-tighter mb-6">Select a Model Provider</h4>
-                        <p className="text-[16px] text-text-tertiary max-w-[320px] leading-relaxed font-bold opacity-60">Choose an AI orchestration provider to configure.</p>
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 </ScrollShadow>
               </div>
@@ -427,6 +466,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           </div>
 
           {/* Footer */}
+          {missingModelWarning && (
+            <div className="shrink-0 flex items-center gap-3 px-16 py-3 bg-amber-500/5 border-t border-amber-500/15 animate-fade-in">
+              <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+              <span className="text-[13px] font-bold text-amber-500 tracking-tight">
+                Some providers have API key but no model selected — please choose a model to enable chatting
+              </span>
+            </div>
+          )}
           <footer className="shrink-0 flex items-center justify-end gap-6 px-16 h-24 border-t border-border-light bg-surface/50 backdrop-blur-3xl">
             <button
               onClick={onClose}

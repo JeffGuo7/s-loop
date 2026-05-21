@@ -1,11 +1,11 @@
 import { memo, useMemo } from 'react'
-import { TextPartView, ReasoningView, ToolPartView, StepView, ThoughtStackView } from './parts'
+import { TextPartView, ReasoningView, ToolPartView, ThoughtStackView } from './parts'
 import { MessageActionBar } from './shared/MessageActionBar'
 import { StreamingIndicator } from './shared/StreamingIndicator'
 import { shouldUseDocumentLayout } from './shared/Markdown'
 import { User, Cpu } from 'lucide-react'
-import { Card } from '../ui'
-import type { KiloMessage, MessagePart, TextPart, ToolPart, StepStartPart, StepFinishPart, FilePart } from '../../types'
+
+import type { KiloMessage, MessagePart, TextPart, ToolPart, FilePart } from '../../types'
 
 interface MessageItemProps {
   message: KiloMessage

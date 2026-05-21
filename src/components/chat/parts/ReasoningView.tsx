@@ -7,11 +7,6 @@ interface ReasoningViewProps {
   isActive?: boolean
 }
 
-function getPreviewLine(text: string): string {
-  const lines = text.split('\n').filter((l) => l.trim())
-  const first = lines[0] || ''
-  return first.length > 80 ? first.slice(0, 80) + '...' : first
-}
 
 export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
   const [isExpanded, setIsExpanded] = useState(isActive)

@@ -160,8 +160,18 @@ export function ChatView() {
         ? { providerID: activeProvider!, modelID: providerConfig.model }
         : undefined
 
+      if (!providerConfig) {
+        setError('No API provider configured. Please set up a provider in Settings.')
+        return
+      }
+
+      if (!providerConfig.apiKey) {
+        setError('API key not configured. Please enter your API key in Settings.')
+        return
+      }
+
       if (!model) {
-        setError('No model selected. Please configure a provider in Settings.')
+        setError('No model selected. Please select a model in Settings.')
         return
       }
 
@@ -249,12 +259,7 @@ export function ChatView() {
 
   if (!activeSessionId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-bg relative overflow-hidden selection:bg-accent/10">
-        {/* Complex Layered Ambient Glow */}
-        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-accent/3 rounded-full blur-[180px] pointer-events-none animate-pulse-slow" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-accent/4 rounded-full blur-[160px] pointer-events-none animate-pulse-slow [animation-delay:2s]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1400px] h-[1400px] bg-accent/[0.02] rounded-full blur-[240px] pointer-events-none" />
-
+      <div className="flex-1 flex flex-col items-center justify-center bg-transparent relative selection:bg-accent/10">
         <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 sm:px-8 max-w-4xl mx-auto h-full">
           {/* Main Visual Group */}
           <div className="mb-4 sm:mb-8 shrink-0">
@@ -311,12 +316,9 @@ export function ChatView() {
       )}
 
       {/* Main content area - Takes all space */}
-      <div className="flex-1 min-h-0 relative">
+      <div className="flex-1 min-h-0 relative bg-transparent">
         {isEmpty ? (
-          <div className="h-full flex flex-col items-center justify-center px-16 relative overflow-y-auto pb-48">
-            {/* Ambient glow */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-accent/6 rounded-full blur-[180px] pointer-events-none" />
-
+          <div className="h-full flex flex-col items-center justify-center px-16 relative pb-48">
             <div className="text-center relative z-10 w-full flex flex-col items-center">
               <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">Snotra Workspace</p>
 

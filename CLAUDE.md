@@ -10,15 +10,47 @@
 | 样式方案 | Tailwind CSS 4 |
 | 状态管理 | Zustand (with persist middleware) |
 | 图标库 | Lucide React |
-| AI 集成 | @anthropic-ai/claude-agent-sdk (计划中) |
+| AI 集成 | Kilo CLI (参考 ../kilocode-main/) |
 | 包管理器 | npm (bun 有网络问题) |
+
+## Kilo 集成架构
+
+Snotra 使用 Kilo CLI 作为 AI 引擎。
+
+```
+Snotra (Tauri + React) ──HTTP + SSE── kilo serve (子进程)
+```
+
+- `src/utils/kiloClient.ts` — Kilo HTTP 客户端，封装 session/prompt/config/MCP API
+- `ChatView.tsx` → `MessageList` → `MessageItem` → `parts/` — 分层渲染：工具调用、推理过程、文本、步骤
+- SettingsModal 保存 Provider 配置时自动 sync 到 Kilo /config API
+
+### 开发工作流
+1. 启动 Kilo 服务器（在 kilocode-main/ 下）：
+   ```bash
+   bun run --cwd packages/opencode --conditions=browser src/index.ts serve --port=4096
+   ```
+2. 启动 Snotra：`npm run tauri:dev`
+3. 在 Settings 配置 API Key，保存时自动同步到 Kilo
 
 ## 目录结构
 
 ```
 src/
 ├── components/          # UI 组件
-│   ├── chat/           # 聊天相关组件
+│   ├── chat/           # 聊天系统
+│   │   ├── ChatView.tsx         # 聊天主容器
+│   │   ├── MessageList.tsx      # 消息列表
+│   │   ├── MessageItem.tsx      # 单条消息渲染
+│   │   ├── parts/               # 消息部分渲染
+│   │   │   ├── TextPartView.tsx    # 文本
+│   │   │   ├── ToolPartView.tsx    # 工具调用
+│   │   │   ├── ReasoningView.tsx   # 推理过程
+│   │   │   └── StepView.tsx        # 步骤展示
+│   │   └── shared/              # 共享组件
+│   │       ├── Markdown.tsx        # Markdown 渲染
+│   │       ├── Collapsible.tsx     # 折叠面板
+│   │       └── StatusIndicator.tsx # 状态指示器
 │   ├── layout/         # 布局组件 (Sidebar 等)
 │   ├── companion/      # 宠物系统组件
 │   │   ├── PetCompanion.tsx   # 桌面宠物显示
@@ -104,7 +136,14 @@ src-tauri/              # Rust 后端代码
 
 ```bash
 npm run dev        # 前端开发服务器
-npm run tauri dev  # Tauri 完整开发模式
+npm run tauri dev  # Tauri 完整桌面应用 (自动启 Kilo)
 npm run build      # 构建前端
 npm run tauri build # 构建桌面应用
 ```
+
+## 工作规则
+
+- 启动项目一律用 `npm run tauri:dev`，不要手动额外启 Kilo
+- Tauri 自动通过 `resolve_project_dir()` 找 Snotra 项目目录，在其中运行 `npx kilo serve`
+- `npm run tauri:dev` 是阻塞式进程，会打开桌面窗口 — 不要用 `&` / `Start-Process` 后台化它
+- Rust 代码位于 `src-tauri/`，编译用 MSVC 工具链 (rustup default stable-msvc)
