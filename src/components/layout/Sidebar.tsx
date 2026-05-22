@@ -14,7 +14,6 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { ListBox, ListBoxItem } from "@heroui/react"
 import { useAppStore, usePetStore, useTelegramStore } from '../../stores'
 import { MagicButton } from '../ui'
 import type { Page } from '../../App'
@@ -155,74 +154,79 @@ export function Sidebar({
       </div>
 
       {/* Main Content: Session list */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 scrollbar-subtle space-y-1.5">
-        <ListBox
-          key={`sessions-list-${collapsed}`}
-          aria-label="Chat Sessions"
-          items={sessions}
-          onAction={(key: React.Key) => handleSelect(key as string)}
-          selectedKeys={activeSessionId ? [activeSessionId] : []}
-          className="p-0 gap-1.5"
-        >
-          {(session: any) => {
-            const isActive = session.id === activeSessionId && currentPage === 'chat'
-            const title = session.title || 'Untitled Chat'
+      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 scrollbar-subtle space-y-1">
+        {sessions.map((session) => {
+          const isActive = session.id === activeSessionId
+          const title = session.title || 'Untitled Chat'
 
+          if (collapsed) {
             return (
-              <ListBoxItem
-                key={`${session.id}-${collapsed ? 'collapsed' : 'expanded'}`}
-                id={session.id}
-                textValue={title}
-                className={`group relative min-h-[40px] rounded-lg transition-all duration-500 mb-1 overflow-hidden border ${
-                  isActive 
-                    ? 'bg-white dark:bg-white/10 border-accent/20 shadow-sm ring-1 ring-accent/5' 
-                    : 'bg-transparent border-transparent hover:bg-surface-secondary/70 hover:border-black/5 dark:hover:border-white/5'
-                } ${collapsed ? 'p-0' : ''}`}
+              <button
+                key={session.id}
+                onClick={() => handleSelect(session.id)}
+                className={`group relative w-full h-10 rounded-lg transition-all duration-500 flex items-center justify-center border ${
+                  isActive
+                    ? 'bg-accent/15 border-accent/25 shadow-md ring-1 ring-accent/10 cursor-default'
+                    : 'bg-transparent border-transparent hover:bg-surface-secondary/70 hover:border-black/5 dark:hover:border-white/5 cursor-pointer'
+                }`}
               >
-                {collapsed ? (
-                  <div className="flex items-center justify-center w-full h-10">
-                    <div className={`flex items-center justify-center w-6 h-6 rounded-md transition-all duration-500 ${
-                      isActive ? 'bg-accent/10 text-accent' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
-                    }`}>
-                      <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center w-full pl-3 pr-8 py-2 gap-2.5 relative">
-                    <div className={`flex items-center justify-center w-6 h-6 shrink-0 rounded-md transition-all duration-500 ${
-                      isActive ? 'bg-accent/10 text-accent' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
-                    }`}>
-                      <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[13px] truncate tracking-tight transition-all duration-500 ${
-                        isActive ? 'font-bold text-text' : 'font-medium text-text-secondary group-hover:text-text'
-                      }`}>
-                        {title}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(e, session.id);
-                      }}
-                      className="absolute right-3 p-1 rounded-md text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm bg-white/50 dark:bg-black/20 border border-black/5 dark:border-white/5"
-                    >
-                      <Trash2 size={12} strokeWidth={1.5} />
-                    </button>
-                  </div>
-                )}
-                
-                {/* Active Indicator Line */}
+                <div className={`flex items-center justify-center w-6 h-6 rounded-md transition-all duration-500 ${
+                  isActive ? 'bg-accent/15 text-accent shadow-sm shadow-accent/10' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
+                }`}>
+                  <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
+                </div>
                 {isActive && (
-                  <div className="absolute left-0 top-2.5 bottom-2.5 w-0.5 bg-accent rounded-r-full z-20" />
+                  <div className="absolute left-0 top-3 bottom-3 w-1 bg-accent rounded-r-full z-20 shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
                 )}
-              </ListBoxItem>
+              </button>
             )
-          }}
-        </ListBox>
+          }
+
+          return (
+            <button
+              key={session.id}
+              onClick={() => handleSelect(session.id)}
+              className={`group relative w-full min-h-[44px] rounded-lg transition-all duration-500 flex items-center border pl-3 pr-8 py-2 gap-2.5 ${
+                isActive
+                  ? 'bg-accent/8 dark:bg-accent/15 border-accent/25 shadow-md ring-1 ring-accent/10 cursor-default'
+                  : 'bg-transparent border-transparent hover:bg-surface-secondary/70 hover:border-black/5 dark:hover:border-white/5 cursor-pointer'
+              }`}
+            >
+              <div className={`flex items-center justify-center w-6 h-6 shrink-0 rounded-md transition-all duration-500 ${
+                isActive ? 'bg-accent/15 text-accent shadow-sm shadow-accent/10' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
+              }`}>
+                <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
+              </div>
+
+              <div className="flex-1 min-w-0 text-left">
+                <p className={`text-[13px] truncate tracking-tight transition-all duration-500 ${
+                  isActive ? 'font-bold text-accent' : 'font-medium text-text-secondary group-hover:text-text'
+                }`}>
+                  {title}
+                </p>
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(e, session.id);
+                }}
+                className={`p-1 rounded-md transition-all duration-300 ${
+                  isActive
+                    ? 'text-accent/60 hover:text-red-500 hover:bg-red-500/10'
+                    : 'text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100'
+                }`}
+              >
+                <Trash2 size={12} strokeWidth={1.5} />
+              </button>
+
+              {/* Active Indicator Line */}
+              {isActive && (
+                <div className="absolute left-0 top-2 bottom-2 w-1 bg-accent rounded-r-full z-20 shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* Footer: Utilities */}
