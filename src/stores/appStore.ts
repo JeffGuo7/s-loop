@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import i18n from '../i18n'
 import type { Session, ProviderConfig, Companion, ProviderInfo, KiloMessage, MessagePart, MessageInfo } from '../types'
 
 interface AppState {
@@ -23,6 +24,7 @@ interface AppState {
 
   // UI
   theme: 'light' | 'dark'
+  locale: string
   sidebarCollapsed: boolean
   workspaceCollapsed: boolean
   workspaceDir: string | null
@@ -58,6 +60,7 @@ interface AppState {
 
   // Actions - UI
   setTheme: (theme: 'light' | 'dark') => void
+  setLocale: (locale: string) => void
   toggleSidebar: () => void
   toggleWorkspace: () => void
   setWorkspaceDir: (dir: string | null) => void
@@ -86,6 +89,7 @@ export const useAppStore = create<AppState>()(
       providerList: [],
 
       theme: 'light',
+      locale: i18n.language?.startsWith('zh') ? 'zh' : 'en',
       sidebarCollapsed: false,
       workspaceCollapsed: false,
       workspaceDir: null,
@@ -366,6 +370,11 @@ export const useAppStore = create<AppState>()(
         document.documentElement.classList.toggle('dark', theme === 'dark')
       },
 
+      setLocale: (locale) => {
+        set({ locale })
+        i18n.changeLanguage(locale)
+      },
+
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       toggleWorkspace: () => set((state) => ({ workspaceCollapsed: !state.workspaceCollapsed })),
       setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
@@ -381,6 +390,7 @@ export const useAppStore = create<AppState>()(
         activeProvider: state.activeProvider,
         providerConfigs: state.providerConfigs,
         theme: state.theme,
+        locale: state.locale,
         companion: state.companion,
         workspaceDir: state.workspaceDir,
       }),

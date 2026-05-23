@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '../../stores';
 import { Plus, Clock, Trash2, Play, Pause, RefreshCw } from 'lucide-react';
 import { MagicButton } from '../ui';
@@ -8,6 +9,7 @@ interface TaskListProps {
 }
 
 export function TaskList({ onCreateTask }: TaskListProps) {
+  const { t } = useTranslation();
   const { tasks, toggleTask, deleteTask } = useTaskStore();
 
   const formatNextRun = (timestamp: number) => {
@@ -15,10 +17,10 @@ export function TaskList({ onCreateTask }: TaskListProps) {
     const now = new Date();
     const diff = timestamp - now.getTime();
 
-    if (diff < 0) return 'Overdue';
-    if (diff < 60000) return 'In less than a minute';
-    if (diff < 3600000) return `In ${Math.floor(diff / 60000)} minutes`;
-    if (diff < 86400000) return `In ${Math.floor(diff / 3600000)} hours`;
+    if (diff < 0) return t('tasks.overdue');
+    if (diff < 60000) return t('tasks.inMinute');
+    if (diff < 3600000) return t('tasks.inMinutes', { n: Math.floor(diff / 60000) });
+    if (diff < 86400000) return t('tasks.inHours', { n: Math.floor(diff / 3600000) });
 
     return date.toLocaleString();
   };
@@ -26,13 +28,13 @@ export function TaskList({ onCreateTask }: TaskListProps) {
   const getFrequencyLabel = (task: ScheduledTask) => {
     switch (task.frequency) {
       case 'once':
-        return 'Once';
+        return t('tasks.once');
       case 'daily':
-        return 'Daily';
+        return t('tasks.daily');
       case 'weekly':
-        return 'Weekly';
+        return t('tasks.weekly');
       case 'monthly':
-        return 'Monthly';
+        return t('tasks.monthly');
       default:
         return task.frequency;
     }
@@ -59,10 +61,10 @@ export function TaskList({ onCreateTask }: TaskListProps) {
       <div className="shrink-0 px-12 pt-16 pb-10">
         <div className="flex items-center justify-between gap-10">
           <div className="space-y-4">
-            <p className="text-[12px] font-bold uppercase tracking-[0.4em] text-accent opacity-50">Automation Desk</p>
-            <h1 className="text-6xl font-bold tracking-tight text-text leading-none drop-shadow-sm">Scheduled Tasks</h1>
+            <p className="text-[12px] font-bold uppercase tracking-[0.4em] text-accent opacity-50">{t('tasks.automationDesk')}</p>
+            <h1 className="text-6xl font-bold tracking-tight text-text leading-none drop-shadow-sm">{t('tasks.scheduledTasks')}</h1>
             <p className="text-[16px] text-text-tertiary font-medium opacity-70 max-w-2xl leading-relaxed">
-              Automate workflows and agents to run at specific intervals.
+              {t('tasks.description')}
             </p>
           </div>
           <MagicButton
@@ -70,7 +72,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
             className="gap-3 shrink-0 px-6 py-3 rounded-xl shadow-md shadow-accent/10 hover:shadow-accent/25 transition-all duration-500 hover:-translate-y-0.5 group"
           >
             <Plus size={18} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
-            <span className="font-bold text-[15px] tracking-tight">New Task</span>
+            <span className="font-bold text-[15px] tracking-tight">{t('tasks.newTask')}</span>
           </MagicButton>
         </div>
       </div>
@@ -86,16 +88,16 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_4s_infinite]" />
               </div>
             </div>
-            <h3 className="text-4xl font-bold mb-6 text-text tracking-tighter">No tasks scheduled yet</h3>
+            <h3 className="text-4xl font-bold mb-6 text-text tracking-tighter">{t('tasks.emptyTitle')}</h3>
             <p className="text-[16px] text-text-tertiary mb-12 max-w-lg text-center leading-relaxed font-bold opacity-60">
-              Create your first automation to streamline your workflow.
+              {t('tasks.emptyDesc')}
             </p>
             <button
               onClick={onCreateTask}
               className="inline-flex items-center gap-6 px-12 py-5 rounded-[28px] bg-accent text-accent-foreground font-extrabold text-xl shadow-3xl shadow-accent/20 hover:shadow-accent/40 hover:-translate-y-1.5 transition-all duration-700 group"
             >
               <Plus size={24} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
-              Create first task
+              {t('tasks.createFirst')}
             </button>
           </div>
         ) : (
@@ -142,7 +144,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 {/* Status & Time */}
                 <div className="text-right shrink-0 hidden lg:block px-6">
                   <p className={`text-[13px] font-bold uppercase tracking-[0.3em] ${getStatusColor(task.status)}`}>
-                    {task.status}
+                    {t(`tasks.${task.status}`)}
                   </p>
                   <p className="text-[12px] text-text-quaternary mt-2 whitespace-nowrap font-bold opacity-50">
                     {formatNextRun(task.nextRun)}
@@ -181,9 +183,9 @@ export function TaskList({ onCreateTask }: TaskListProps) {
             <div className="flex items-start gap-8">
               <RefreshCw size={24} className="mt-1 text-accent shrink-0 animate-spin-slow opacity-50" />
               <div className="space-y-3">
-                <p className="text-[13px] font-bold text-accent uppercase tracking-[0.4em]">Engine Status</p>
+                <p className="text-[13px] font-bold text-accent uppercase tracking-[0.4em]">{t('tasks.engineStatus')}</p>
                 <p className="text-[15px] text-text-tertiary leading-relaxed font-bold opacity-60">
-                  Your tasks are being orchestrated. Please maintain the application's activity for reliable execution.
+                  {t('tasks.engineNotice')}
                 </p>
               </div>
             </div>

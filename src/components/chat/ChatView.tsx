@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores'
 import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
 import { MessageList } from './MessageList'
@@ -13,6 +14,7 @@ const EMPTY_STREAMING = null
 const ignoredMessageIDs = new Set<string>()
 
 export function ChatView() {
+  const { t } = useTranslation()
   const {
     activeSessionId,
     sessions,
@@ -161,17 +163,17 @@ export function ChatView() {
         : undefined
 
       if (!providerConfig) {
-        setError('No API provider configured. Please set up a provider in Settings.')
+        setError(t('chat.errors.noProvider'))
         return
       }
 
       if (!providerConfig.apiKey) {
-        setError('API key not configured. Please enter your API key in Settings.')
+        setError(t('chat.errors.noApiKey'))
         return
       }
 
       if (!model) {
-        setError('No model selected. Please select a model in Settings.')
+        setError(t('chat.errors.noModel'))
         return
       }
 
@@ -204,7 +206,7 @@ export function ChatView() {
             ),
           }))
         } catch {
-          setError('Failed to create Kilo session')
+          setError(t('chat.errors.sessionFailed'))
           return
         }
       }
@@ -223,7 +225,7 @@ export function ChatView() {
         const msg = err instanceof Error ? err.message : String(err)
         if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
           setServerOnline(false)
-          setError('Kilo server not reachable')
+          setError(t('chat.errors.serverUnreachable'))
         } else {
           setError(msg)
         }
@@ -235,6 +237,7 @@ export function ChatView() {
       activeProvider,
       providerConfigs,
       session,
+      t,
       startStreaming,
       finishStreaming,
       commitStreamingMessage,
@@ -283,11 +286,11 @@ export function ChatView() {
           {/* Typography */}
           <div className="space-y-3 sm:space-y-6 mb-6 sm:mb-12 w-full">
             <h2 className="text-3xl sm:text-5xl lg:text-[4.5rem] font-bold tracking-tight text-text leading-tight drop-shadow-sm select-none">
-              Welcome to <span className="text-accent italic font-serif px-1">Snotra</span>
+              {t('chat.welcome.title')} <span className="text-accent italic font-serif px-1">{t('chat.welcome.appName')}</span>
             </h2>
             <div className="flex justify-center w-full">
               <p className="text-sm sm:text-base lg:text-lg text-text-tertiary leading-relaxed max-w-lg sm:max-w-xl font-medium tracking-tight opacity-70 text-center">
-                Your intelligent orchestration workspace. Seamlessly manage <span className="text-text font-bold">agents</span>, <span className="text-text font-bold">files</span>, and <span className="text-text font-bold">workflows</span>.
+                {t('chat.welcome.description')}
               </p>
             </div>
           </div>
@@ -296,7 +299,7 @@ export function ChatView() {
             <ServerStatus online={serverOnline} />
             <div className="flex items-center gap-8">
               <div className="h-px w-12 bg-border-light" />
-              <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-accent/40">New Conversation</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-accent/40">{t('chat.welcome.newConversation')}</p>
               <div className="h-px w-12 bg-border-light" />
             </div>
           </div>
@@ -311,7 +314,7 @@ export function ChatView() {
       {!serverOnline && (
         <div className="mx-12 mt-8 rounded-[24px] px-6 py-4 text-[14px] font-bold flex items-center gap-4 bg-red-500/10 text-red-500 border border-red-500/20 animate-fade-in shadow-sm z-20 shrink-0">
           <WifiOff size={18} />
-          <span>Kilo server is currently unreachable</span>
+          <span>{t('chat.status.kiloUnreachable')}</span>
         </div>
       )}
 
@@ -328,7 +331,7 @@ export function ChatView() {
               className="h-full flex flex-col items-center justify-center px-16 relative pb-48"
             >
               <div className="text-center relative z-10 w-full flex flex-col items-center">
-                <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">Snotra Workspace</p>
+                <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">{t('chat.welcome.subtitle')}</p>
 
                 <div className="flex justify-center w-full mb-8">
                   <div className="relative group scale-90">
@@ -341,10 +344,10 @@ export function ChatView() {
                 </div>
 
                 <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">
-                  How can I help?
+                  {t('chat.welcome.howCanIHelp')}
                 </h2>
                 <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">
-                  Seamlessly orchestrate your workspace, files, and AI agents.
+                  {t('chat.welcome.emptyDesc')}
                 </p>
               </div>
             </motion.div>
@@ -366,7 +369,7 @@ export function ChatView() {
                     onClick={() => setError(null)}
                     className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]"
                   >
-                    Dismiss
+                    {t('chat.errors.dismiss')}
                   </button>
                 </div>
               )}
@@ -382,14 +385,14 @@ export function ChatView() {
                 onSubmit={handleSubmit}
                 onAbort={abort}
                 isStreaming={isStreaming}
-                placeholder="Ask anything..."
+                placeholder={t('chat.input.placeholder')}
               />
 
               {/* Model info */}
               <div className="mt-2 pb-2 text-[10px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
                 <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
                   <Cpu size={12} className="text-accent/60" />
-                  <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || 'No model'}</span>
+                  <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || t('chat.status.noModel')}</span>
                   <span className="opacity-10 px-1">|</span>
                   <span className="font-bold uppercase tracking-[0.2em]">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
                 </div>
@@ -403,6 +406,7 @@ export function ChatView() {
 }
 
 function ServerStatus({ online }: { online: boolean }) {
+  const { t } = useTranslation()
   return (
     <div
       className={`inline-flex items-center gap-3 px-6 py-3 rounded-full text-[13px] font-bold tracking-widest shadow-sm backdrop-blur-md border ${
@@ -412,7 +416,7 @@ function ServerStatus({ online }: { online: boolean }) {
       }`}
     >
       {online ? <Wifi size={16} /> : <WifiOff size={16} />}
-      <span className="uppercase tracking-widest">{online ? 'Kilo Connected' : 'Kilo Offline'}</span>
+      <span className="uppercase tracking-widest">{online ? t('chat.status.kiloConnected') : t('chat.status.kiloOffline')}</span>
     </div>
   )
 }

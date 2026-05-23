@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { TextPartView, ReasoningView, ToolPartView, ThoughtStackView } from './parts'
 import { MessageActionBar } from './shared/MessageActionBar'
 import { StreamingIndicator } from './shared/StreamingIndicator'
@@ -13,6 +14,7 @@ interface MessageItemProps {
 }
 
 export const MessageItem = memo(function MessageItem({ message, isStreaming = false }: MessageItemProps) {
+  const { t } = useTranslation()
   const isUser = message.info.role === 'user'
 
   const allText = useMemo(
@@ -25,10 +27,10 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
   const streamingVerb = useMemo(() => {
     if (!isStreaming) return undefined
     const lastPart = message.parts[message.parts.length - 1]
-    if (lastPart?.type === 'reasoning') return 'Thinking'
-    if (lastPart?.type === 'tool') return 'Running'
-    return 'Working'
-  }, [isStreaming, message.parts])
+    if (lastPart?.type === 'reasoning') return t('chat.parts.thinking')
+    if (lastPart?.type === 'tool') return t('chat.parts.running')
+    return t('chat.parts.working')
+  }, [isStreaming, message.parts, t])
 
   if (isUser) {
     return (
@@ -177,6 +179,7 @@ interface MessagePartRendererProps {
 }
 
 function MessagePartRenderer({ part, isStreaming }: MessagePartRendererProps) {
+  const { t } = useTranslation()
   switch (part.type) {
     case 'text':
       return (
@@ -204,7 +207,7 @@ function MessagePartRenderer({ part, isStreaming }: MessagePartRendererProps) {
     case 'file':
       return (
         <div className="text-[15px] text-text-secondary font-medium">
-          {(part as FilePart).filename || 'File'}
+          {(part as FilePart).filename || t('chat.parts.file')}
         </div>
       )
     default:

@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores'
 import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle } from 'lucide-react'
 import type { ProviderConfig } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
 import { Kilo } from '../../utils'
-import { ScrollShadow, Select, SelectTrigger, SelectValue, SelectPopover, ListBox, ListBoxItem } from "@heroui/react"
+import { ScrollShadow } from "@heroui/react"
+import i18n from '../../i18n'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -23,7 +25,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setProviderList,
     theme,
     setTheme,
+    locale,
+    setLocale,
   } = useAppStore()
+
+  const { t } = useTranslation()
 
   const [showKey, setShowKey] = useState(false)
   const [activeTab, setActiveTab] = useState('provider')
@@ -31,7 +37,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [localConfigs, setLocalConfigs] = useState<Record<string, ProviderConfig>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [fetching, setFetching] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [modelSearchQuery, setModelSearchQuery] = useState('')
   const [missingModelWarning, setMissingModelWarning] = useState(false)
@@ -43,7 +48,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   }, [])
 
   const fetchProviders = async () => {
-    setFetching(true)
     try {
       const list = await Kilo.listProviders()
       setProviderList(
@@ -57,8 +61,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       )
     } catch {
       // Kilo might not be running
-    } finally {
-      setFetching(false)
     }
   }
 
@@ -137,16 +139,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         {/* Settings Sidebar */}
         <aside className="w-[300px] bg-linear-to-b from-surface-secondary/90 to-surface-tertiary/90 border-r border-border flex flex-col shrink-0 relative backdrop-blur-3xl">
           <div className="px-12 pt-20 pb-12 relative z-10">
-            <h2 className="text-6xl font-bold text-text tracking-tighter leading-none drop-shadow-sm">Settings</h2>
-            <p className="text-[11px] text-accent font-bold uppercase tracking-[0.5em] mt-4 opacity-50">Intelligence Hub</p>
+            <h2 className="text-6xl font-bold text-text tracking-tighter leading-none drop-shadow-sm">{t('settings.title')}</h2>
+            <p className="text-[11px] text-accent font-bold uppercase tracking-[0.5em] mt-4 opacity-50">{t('settings.subtitle')}</p>
           </div>
 
           <nav className="flex-1 px-8 pt-4 space-y-4 overflow-y-auto scrollbar-subtle">
             {[
-              { id: 'provider', icon: Cpu, label: 'AI Providers' },
-              { id: 'mcp', icon: Server, label: 'MCP Servers' },
-              { id: 'skills', icon: Sparkles, label: 'Skills' },
-              { id: 'appearance', icon: theme === 'light' ? Sun : Moon, label: 'Appearance' },
+              { id: 'provider', icon: Cpu, label: t('settings.tabs.aiProviders') },
+              { id: 'mcp', icon: Server, label: t('settings.tabs.mcpServers') },
+              { id: 'skills', icon: Sparkles, label: t('settings.tabs.skills') },
+              { id: 'appearance', icon: theme === 'light' ? Sun : Moon, label: t('settings.tabs.appearance') },
             ].map((item) => (
               <button
                 key={item.id}
@@ -178,7 +180,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${
                 providerList.length > 0 ? 'text-green-600/90' : 'text-red-400/90'
               }`}>
-                Kilo {providerList.length > 0 ? 'Online' : 'Offline'}
+                {providerList.length > 0 ? t('settings.kilostatus.online') : t('settings.kilostatus.offline')}
               </span>
             </div>
           </div>
@@ -190,12 +192,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           <header className="shrink-0 flex items-center justify-between px-16 h-28 border-b border-border-light">
             <div className="flex flex-col">
               <h3 className="text-3xl font-bold text-text tracking-tighter">
-                {activeTab === 'provider' && 'AI Model Providers'}
-                {activeTab === 'mcp' && 'MCP Servers'}
-                {activeTab === 'skills' && 'Skills'}
-                {activeTab === 'appearance' && 'Appearance'}
+                {activeTab === 'provider' && t('settings.sections.aiModelProviders')}
+                {activeTab === 'mcp' && t('settings.sections.mcpServers')}
+                {activeTab === 'skills' && t('settings.sections.skills')}
+                {activeTab === 'appearance' && t('settings.sections.appearance')}
               </h3>
-              <p className="text-[14px] text-text-tertiary font-medium mt-1 tracking-tight opacity-70">Manage your {activeTab} settings</p>
+              <p className="text-[14px] text-text-tertiary font-medium mt-1 tracking-tight opacity-70">{t('settings.descriptions.manageSettings', { tab: activeTab })}</p>
             </div>
             <button
               onClick={onClose}
@@ -218,15 +220,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <div className="space-y-10 animate-fade-in">
                         <div className="flex items-center justify-between">
                           <div className="space-y-1">
-                            <h4 className="text-2xl font-bold text-text tracking-tight">Select Provider</h4>
-                            <p className="text-[13px] text-text-tertiary font-medium">Choose an AI service to configure</p>
+                            <h4 className="text-2xl font-bold text-text tracking-tight">{t('settings.sections.selectProvider')}</h4>
+                            <p className="text-[13px] text-text-tertiary font-medium">{t('settings.descriptions.chooseProvider')}</p>
                           </div>
                           <div className="flex items-center gap-4 px-5 py-2.5 rounded-2xl bg-surface-secondary/50 border border-border-light focus-within:border-accent/50 transition-all duration-300 w-64">
                             <Search size={14} className="text-text-quaternary" />
                             <input
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
-                              placeholder="Search providers..."
+                              placeholder={t('settings.provider.searchPlaceholder')}
                               className="bg-transparent text-[13px] font-bold text-text outline-none w-full"
                             />
                           </div>
@@ -267,7 +269,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                             className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.2em] text-text-tertiary hover:text-accent transition-colors"
                           >
                             <RefreshCw size={14} className="rotate-180" />
-                            Back to list
+                            {t('settings.provider.backToList')}
                           </button>
                         </div>
 
@@ -327,7 +329,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                                 <div className="flex items-center gap-4">
                                   <Sparkles size={20} className={cfg.model ? 'text-accent' : 'text-text-tertiary opacity-40'} />
                                   <span className={`text-[15px] font-bold tracking-tight ${cfg.model ? 'text-text' : 'text-text-tertiary'}`}>
-                                    {cfg.model || 'Choose a model engine...'}
+                                    {cfg.model || t('settings.provider.chooseModel')}
                                   </span>
                                 </div>
                                 <RefreshCw size={18} className={`text-text-tertiary transition-transform duration-500 ${showModelDropdown ? 'rotate-180' : ''}`} />
@@ -345,7 +347,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                                           autoFocus
                                           value={modelSearchQuery}
                                           onChange={(e) => setModelSearchQuery(e.target.value)}
-                                          placeholder="Filter models..."
+                                          placeholder={t('settings.provider.filterModels')}
                                           className="bg-transparent text-[14px] font-bold text-text outline-none w-full"
                                         />
                                       </div>
@@ -392,7 +394,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
                           {/* Gateway Card */}
                           <div className="space-y-6">
-                            <label className="text-[11px] font-black uppercase tracking-[0.3em] text-text-tertiary ml-2 opacity-50">Custom Gateway (Optional)</label>
+                            <label className="text-[11px] font-black uppercase tracking-[0.3em] text-text-tertiary ml-2 opacity-50">{t('settings.provider.customGateway')}</label>
                             <input
                               value={cfg.baseUrl || ''}
                               onChange={(e) => handleConfigChange(expandedProvider, 'baseUrl', e.target.value)}
@@ -413,40 +415,67 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <div className="max-w-3xl mx-auto">
                   <div className="mb-12">
                     <div className="flex flex-col mb-10">
-                      <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-accent mb-4 opacity-60">Visual Style</h4>
-                      <h2 className="text-4xl font-bold text-text tracking-tighter">Interface Theme</h2>
-                      <p className="text-[15px] text-text-tertiary mt-2 font-medium opacity-70 tracking-tight">Customize the look and feel</p>
+                      <h4 className="text-[11px] font-bold uppercase tracking-[0.3em] text-accent mb-4 opacity-60">{t('settings.sections.visualStyle')}</h4>
+                      <h2 className="text-4xl font-bold text-text tracking-tighter">{t('settings.sections.interfaceTheme')}</h2>
+                      <p className="text-[15px] text-text-tertiary mt-2 font-medium opacity-70 tracking-tight">{t('settings.descriptions.customizeLook')}</p>
                     </div>
                     <div className="grid grid-cols-2 gap-8">
-                      {(['light', 'dark'] as const).map((t) => (
+                      {(['light', 'dark'] as const).map((th) => (
                         <button
-                          key={t}
-                          onClick={() => setTheme(t)}
+                          key={th}
+                          onClick={() => setTheme(th)}
                           className={`group relative flex flex-col items-center gap-8 p-12 rounded-[40px] border-2 transition-all duration-700 ${
-                            theme === t 
+                            theme === th 
                               ? 'border-accent bg-accent-subtle shadow-[0_24px_80px_rgba(var(--color-accent-rgb),0.15)] -translate-y-2' 
                               : 'border-border-light hover:border-border-hover bg-surface hover:-translate-y-1 shadow-sm'
                           }`}
                         >
                           <div className={`p-8 rounded-[24px] transition-all duration-700 ${
-                            theme === t 
+                            theme === th 
                               ? 'bg-accent text-accent-foreground shadow-2xl shadow-accent/50' 
                               : 'bg-surface-secondary text-text-tertiary group-hover:text-text group-hover:bg-surface-tertiary'
                           }`}>
-                            {t === 'light' ? <Sun size={40} /> : <Moon size={40} />}
+                            {th === 'light' ? <Sun size={40} /> : <Moon size={40} />}
                           </div>
                           <div className="text-center">
                             <span className={`text-2xl font-bold tracking-tighter block ${
-                              theme === t ? 'text-accent' : 'text-text'
+                              theme === th ? 'text-accent' : 'text-text'
                             }`}>
-                              {t === 'light' ? 'Daylight' : 'Midnight'}
+                              {th === 'light' ? t('settings.theme.daylight') : t('settings.theme.midnight')}
                             </span>
                             <span className="text-[11px] text-text-tertiary font-bold uppercase tracking-[0.25em] mt-2 block opacity-40">
-                              {t === 'light' ? 'Clean & Crisp' : 'Deep & Focused'}
+                              {th === 'light' ? t('settings.theme.cleanCrisp') : t('settings.theme.deepFocused')}
                             </span>
                           </div>
                         </button>
                       ))}
+                    </div>
+
+                    {/* Language Selector */}
+                    <div className="mt-12 pt-12 border-t border-border-light">
+                      <div className="flex flex-col mb-8">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.3em] text-accent mb-4 opacity-60">{t('settingsLocale.language')}</span>
+                      </div>
+                      <div className="flex gap-4">
+                        {['en', 'zh'].map((l) => (
+                          <button
+                            key={l}
+                            onClick={() => {
+                              setLocale(l)
+                              i18n.changeLanguage(l)
+                            }}
+                            className={`flex-1 py-6 px-8 rounded-[32px] border-2 text-center transition-all duration-700 ${
+                              locale === l
+                                ? 'border-accent bg-accent-subtle shadow-lg'
+                                : 'border-border-light hover:border-accent/30 bg-surface/50'
+                            }`}
+                          >
+                            <span className={`text-xl font-bold block ${locale === l ? 'text-accent' : 'text-text'}`}>
+                              {l === 'en' ? 'English' : '中文'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -479,7 +508,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               onClick={onClose}
               className="px-10 py-4 rounded-xl text-[15px] font-bold text-text-secondary hover:bg-surface-secondary hover:text-text transition-all duration-400 border border-transparent hover:border-border-light"
             >
-              Cancel
+              {t('settings.buttons.cancel')}
             </button>
             <button
               onClick={handleSave}
@@ -496,7 +525,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <CheckCircle size={20} className="animate-fade-in" />
               ) : null}
               <span className="relative z-10">
-                {saved ? 'Changes Applied' : saving ? 'Syncing...' : 'Apply & Save'}
+                {saved ? t('settings.buttons.changesApplied') : saving ? t('settings.buttons.syncing') : t('settings.buttons.applySave')}
               </span>
               {!saved && !saving && (
                 <div className="absolute inset-0 bg-linear-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />

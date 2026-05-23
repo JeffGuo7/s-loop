@@ -1,7 +1,9 @@
 import { useMemo, useCallback, useState, useRef, useEffect, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
+import i18n from '../../../i18n'
 
 interface MarkdownProps {
   children: string
@@ -22,6 +24,7 @@ const PROSE_VARIANTS = {
 }
 
 function CodeBlockComponent({ lang, code }: CodeBlock) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -52,12 +55,12 @@ function CodeBlockComponent({ lang, code }: CodeBlock) {
   return (
     <div className="code-block-wrapper">
       <div className="code-block-header">
-        <span>{lang || 'text'}</span>
+        <span>{lang || t('chat.code.text')}</span>
         <button
           onClick={handleCopy}
           className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] hover:bg-border transition-colors"
         >
-          {copied ? '✓ Copied' : 'Copy'}
+          {copied ? t('chat.copy.copied') : t('chat.copy.copy')}
         </button>
       </div>
       <div className="code-block-content">
@@ -99,7 +102,7 @@ const customRenderer = {
   },
   image({ href, text }: { href: string; text: string }) {
     // Let images render normally, but add sensible max dimensions to prevent breaking layout
-    const label = text || 'image'
+    const label = text || i18n.t('chat.code.image')
     return `<img src="${href}" alt="${label}" class="max-w-full h-auto max-h-[400px] rounded-lg border border-border shadow-sm object-contain my-4" />`
   },
 }

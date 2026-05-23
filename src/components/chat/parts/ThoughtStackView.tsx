@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Brain, Sparkles, Wrench, Layers } from 'lucide-react'
 import { Collapsible } from '../shared/Collapsible'
 import { ReasoningView } from './ReasoningView'
@@ -11,6 +12,7 @@ interface ThoughtStackViewProps {
 }
 
 export function ThoughtStackView({ parts, isStreaming = false }: ThoughtStackViewProps) {
+  const { t } = useTranslation()
   const [isExpanded, setIsExpanded] = useState(isStreaming)
 
   // Identify if any part is still active
@@ -55,7 +57,7 @@ export function ThoughtStackView({ parts, isStreaming = false }: ThoughtStackVie
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <span className={`text-[11px] font-black uppercase tracking-[0.3em] ${hasActiveProcess ? 'text-accent' : 'text-text-tertiary'}`}>
-              {hasActiveProcess ? 'Live Orchestration' : 'Execution Logs'}
+              {hasActiveProcess ? t('chat.parts.liveOrchestration') : t('chat.parts.executionLogs')}
             </span>
             {hasActiveProcess && (
               <span className="flex h-1.5 w-1.5 rounded-full bg-accent animate-ping" />
@@ -65,13 +67,13 @@ export function ThoughtStackView({ parts, isStreaming = false }: ThoughtStackVie
             {reasoningCount > 0 && (
               <div className="flex items-center gap-2 px-2 py-0.5 rounded-lg bg-surface-tertiary/50 border border-border-light shadow-sm">
                 <Brain size={12} className="text-accent/60" />
-                <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest">{reasoningCount} {reasoningCount > 1 ? 'Thoughts' : 'Thought'}</span>
+                <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest">{reasoningCount} {reasoningCount > 1 ? t('chat.parts.thoughts') : t('chat.parts.thought')}</span>
               </div>
             )}
             {toolCount > 0 && (
               <div className="flex items-center gap-2 px-2 py-0.5 rounded-lg bg-surface-tertiary/50 border border-border-light shadow-sm">
                 <Wrench size={12} className="text-accent/60" />
-                <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest">{toolCount} {toolCount > 1 ? 'Tools' : 'Tool'}</span>
+                <span className="text-[10px] text-text-secondary font-black uppercase tracking-widest">{toolCount} {toolCount > 1 ? t('chat.parts.tools') : t('chat.parts.tool')}</span>
               </div>
             )}
           </div>

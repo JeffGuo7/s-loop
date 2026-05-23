@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Brain, Sparkles } from 'lucide-react'
 import { Collapsible } from '../shared/Collapsible'
 import { useEffect, useState } from 'react'
@@ -9,6 +10,7 @@ interface ReasoningViewProps {
 
 
 export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
+  const { t } = useTranslation()
   const [isExpanded, setIsExpanded] = useState(isActive)
 
   // Auto-collapse when active state ends
@@ -30,12 +32,12 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
       <div className="relative flex items-center justify-center">
         <Sparkles size={16} className="text-accent animate-spin-slow" />
       </div>
-      <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-accent">Thinking</span>
+      <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-accent">{t('chat.parts.thinking')}</span>
     </span>
   ) : (
     <span className="flex items-center gap-6">
       <Brain size={16} className="text-text-tertiary" />
-      <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-text-tertiary">Thought Process</span>
+      <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-text-tertiary">{t('chat.parts.thoughtProcess')}</span>
     </span>
   )
 
@@ -58,4 +60,3 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
     </div>
   )
 }
-

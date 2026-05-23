@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { usePetStore } from '../../stores';
 import { generatePetAppearance, getSpeciesEmoji, getHatEmoji } from '../../utils';
 import { Sparkles, Heart } from 'lucide-react';
@@ -9,6 +10,7 @@ interface PetHatchModalProps {
 }
 
 export function PetHatchModal({ onClose }: PetHatchModalProps) {
+  const { t } = useTranslation();
   const { hatchPet } = usePetStore();
   const [step, setStep] = useState<'name' | 'preview' | 'done'>('name');
   const [name, setName] = useState('');
@@ -37,15 +39,15 @@ export function PetHatchModal({ onClose }: PetHatchModalProps) {
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
         <div className="w-full max-w-sm p-6 bg-[var(--color-surface)] rounded-xl shadow-2xl text-center">
           <Sparkles size={48} className="mx-auto mb-4 text-[var(--color-accent)] animate-pulse" />
-          <h2 className="text-2xl font-bold mb-2">🎉 Welcome, {name}!</h2>
+          <h2 className="text-2xl font-bold mb-2">{t('pet.welcome', {name})}</h2>
           <p className="text-[var(--color-text-secondary)] mb-4">
-            Your new companion has hatched!
+            {t('pet.hatchedDesc')}
           </p>
           <button
             onClick={onClose}
             className="px-6 py-2 rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
           >
-            Start Adventure
+            {t('pet.startAdventure')}
           </button>
         </div>
       </div>
@@ -57,18 +59,18 @@ export function PetHatchModal({ onClose }: PetHatchModalProps) {
       <div className="w-full max-w-md p-6 bg-[var(--color-surface)] rounded-xl shadow-2xl">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
           <Sparkles size={24} className="text-[var(--color-accent)]" />
-          Hatch a Companion
+          {t('pet.hatchTitle')}
         </h2>
 
         {step === 'name' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Name</label>
+              <label className="block text-sm font-medium mb-1">{t('pet.name')}</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Give your companion a name..."
+                placeholder={t('pet.namePlaceholder')}
                 className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
                 maxLength={20}
               />
@@ -76,13 +78,13 @@ export function PetHatchModal({ onClose }: PetHatchModalProps) {
 
             <div>
               <label className="block text-sm font-medium mb-1">
-                Personality <span className="text-[var(--color-text-secondary)]">(optional)</span>
+                {t('pet.personality')} <span className="text-[var(--color-text-secondary)]">{t('pet.optional')}</span>
               </label>
               <input
                 type="text"
                 value={personality}
                 onChange={(e) => setPersonality(e.target.value)}
-                placeholder="Describe their personality..."
+                placeholder={t('pet.personalityPlaceholder')}
                 className="w-full px-4 py-2 rounded-lg bg-[var(--color-surface-secondary)] border border-[var(--color-border)] focus:outline-none focus:border-[var(--color-accent)]"
                 maxLength={50}
               />
@@ -93,14 +95,14 @@ export function PetHatchModal({ onClose }: PetHatchModalProps) {
                 onClick={onClose}
                 className="px-4 py-2 rounded-lg hover:bg-[var(--color-surface-secondary)] transition-colors"
               >
-                Cancel
+                {t('pet.cancel')}
               </button>
               <button
                 onClick={handlePreview}
                 disabled={!name.trim()}
                 className="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
               >
-                Continue
+                {t('pet.continue')}
               </button>
             </div>
           </div>
@@ -136,7 +138,7 @@ export function PetHatchModal({ onClose }: PetHatchModalProps) {
                     className="text-sm capitalize"
                     style={{ color: preview.shiny ? '#F59E0B' : 'var(--color-text-secondary)' }}
                   >
-                    {preview.shiny && '✨ Shiny '}
+                    {preview.shiny && t('pet.shiny') + ' '}
                     {preview.rarity} {preview.species}
                   </p>
                   {personality && (
@@ -173,7 +175,7 @@ export function PetHatchModal({ onClose }: PetHatchModalProps) {
                 onClick={() => setStep('name')}
                 className="px-4 py-2 rounded-lg hover:bg-[var(--color-surface-secondary)] transition-colors"
               >
-                Back
+                {t('pet.back')}
               </button>
               <div className="flex gap-2">
                 <button
@@ -181,14 +183,14 @@ export function PetHatchModal({ onClose }: PetHatchModalProps) {
                   className="px-4 py-2 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-secondary)] transition-colors flex items-center gap-1"
                 >
                   <Sparkles size={16} />
-                  Reroll
+                  {t('pet.reroll')}
                 </button>
                 <MagicButton
                   onClick={handleHatch}
                   className="flex items-center gap-1"
                 >
                   <Heart size={16} />
-                  Hatch!
+                  {t('pet.hatchBtn')}
                 </MagicButton>
               </div>
             </div>

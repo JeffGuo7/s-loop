@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FolderOpen, Check, ChevronLeft, Files, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores'
@@ -13,6 +14,7 @@ function isTauri(): boolean {
 }
 
 export function WorkspacePanel() {
+  const { t } = useTranslation()
   const { workspaceDir, setWorkspaceDir, workspaceCollapsed: collapsed, toggleWorkspace } = useAppStore()
   const [showInput, setShowInput] = useState(false)
   const [inputValue, setInputValue] = useState('')
@@ -83,7 +85,7 @@ export function WorkspacePanel() {
           whileTap={{ scale: 0.9 }}
           onClick={toggleWorkspace}
           className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-secondary/80 text-accent shadow-lg shadow-accent/5 border border-white/10 backdrop-blur-md transition-all duration-500 hover:shadow-accent/20"
-          title="Show workspace panel"
+          title={t('workspace.tooltip')}
         >
           <FolderOpen size={16} strokeWidth={2.5} />
         </motion.button>
@@ -102,10 +104,10 @@ export function WorkspacePanel() {
       <div className="flex items-start justify-between px-5 pt-6 pb-4 relative z-10">
         <div className="flex flex-col">
           <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent opacity-40 mb-0.5">
-            Resource
+            {t('workspace.resource')}
           </span>
           <h2 className="text-[17px] font-black text-text tracking-tighter leading-none">
-            Workspace
+            {t('workspace.title')}
           </h2>
         </div>
         <motion.button
@@ -131,7 +133,7 @@ export function WorkspacePanel() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-[8px] font-black uppercase tracking-[0.15em] text-accent/60 mb-1">
-                      Environment
+                      {t('workspace.environment')}
                     </div>
                     <div className="bg-surface-secondary/40 p-2 rounded-md border border-black/[0.01] dark:border-white/[0.01] shadow-inner">
                       <p className="text-[10px] font-mono text-text-secondary break-all leading-relaxed font-semibold">
@@ -150,7 +152,7 @@ export function WorkspacePanel() {
                   onClick={handleSelectDir}
                   className="flex-1 text-[11px] px-3 py-2 rounded-lg bg-accent text-white font-bold hover:bg-accent-light transition-all duration-500 shadow-lg shadow-accent/10"
                 >
-                  Switch
+                  {t('workspace.switch')}
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.02, y: -1 }}
@@ -158,7 +160,7 @@ export function WorkspacePanel() {
                   onClick={handleClear}
                   className="text-[11px] px-3 py-2 rounded-lg bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all duration-500 font-bold"
                 >
-                  Reset
+                  {t('workspace.reset')}
                 </motion.button>
               </div>
 
@@ -166,7 +168,7 @@ export function WorkspacePanel() {
               <div className="pt-1">
                 <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.15em] text-accent mb-2.5 px-0.5 opacity-60">
                   <Files size={12} />
-                  Explorer
+                  {t('workspace.explorer')}
                 </div>
                 <div className="-mx-1.5 px-0.5">
                   <FileTree
@@ -182,17 +184,17 @@ export function WorkspacePanel() {
                 className="flex items-center gap-1.5 text-[10px] font-bold text-text-tertiary hover:text-text transition-all"
               >
                 <ChevronLeft size={12} />
-                Back
+                {t('workspace.back')}
               </button>
               <p className="text-[12px] font-bold text-text tracking-tight">
-                Enter path
+                {t('workspace.enterPath')}
               </p>
               <input
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit()}
-                placeholder="C:\\Users\\...\\project"
+                placeholder={t('workspace.pathPlaceholder')}
                 className="w-full px-3.5 py-2.5 rounded-lg bg-surface border border-border text-[10px] font-mono focus:ring-4 focus:ring-accent-subtle focus:border-accent/40 outline-none transition-all shadow-inner"
                 autoFocus
               />
@@ -202,7 +204,7 @@ export function WorkspacePanel() {
                 className="w-full flex items-center justify-center gap-2 text-[11px] px-4 py-2.5 rounded-lg bg-accent text-white font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-xl shadow-accent/20"
               >
                 <Check size={13} strokeWidth={2.5} />
-                Confirm
+                {t('workspace.confirm')}
               </button>
             </div>
           ) : (
@@ -217,10 +219,10 @@ export function WorkspacePanel() {
                 </motion.div>
                 
                 <h3 className="text-[16px] font-black text-text mb-1.5 tracking-tighter">
-                  Empty Space
+                  {t('workspace.emptyTitle')}
                 </h3>
                 <p className="text-[11px] text-text-tertiary mb-8 max-w-[160px] leading-relaxed font-medium opacity-60">
-                  Select a project folder to begin.
+                  {t('workspace.emptyDesc')}
                 </p>
                 
                 <div className="w-full space-y-2.5">
@@ -231,14 +233,14 @@ export function WorkspacePanel() {
                     className="w-full flex items-center justify-center gap-2 text-[11px] px-5 py-3 rounded-lg bg-accent text-white font-black hover:bg-accent-light transition-all duration-500 shadow-xl shadow-accent/10"
                   >
                     <FolderOpen size={13} strokeWidth={2.5} />
-                    Open Project
+                    {t('workspace.openProject')}
                   </motion.button>
-                  
+
                   <button
                     onClick={() => setShowInput(true)}
                     className="w-full text-[10px] text-text-tertiary hover:text-accent font-bold transition-all duration-300 opacity-50 hover:opacity-100 py-1.5"
                   >
-                    Enter path manually
+                    {t('workspace.enterPathManually')}
                   </button>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { CheckCircle, XCircle, Loader2, Play } from 'lucide-react'
 import type { StepStartPart, StepFinishPart } from '../../../types'
 
@@ -7,6 +8,7 @@ interface StepViewProps {
 }
 
 export function StepView({ part, isActive = false }: StepViewProps) {
+  const { t } = useTranslation()
   const isStart = part.type === 'step-start'
   const isFinish = part.type === 'step-finish'
   const reason = isFinish ? (part as StepFinishPart).reason : undefined
@@ -46,11 +48,11 @@ export function StepView({ part, isActive = false }: StepViewProps) {
               ? 'text-red-500'
               : 'text-text-tertiary group-hover:text-text-secondary'
         }`}>
-          {isStillActive ? 'Running sequence...' : isStart ? 'Sequence initialized' : `Step ${reason || 'finalized'}`}
+          {isStillActive ? t('chat.parts.runningSequence') : isStart ? t('chat.parts.sequenceInitialized') : `${t('chat.parts.step')} ${reason || 'finalized'}`}
         </span>
         {isStillActive && (
           <span className="text-[13px] text-text-tertiary opacity-50 animate-pulse font-bold mt-1 tracking-tight">
-            Executing operations...
+            {t('chat.parts.executingOps')}
           </span>
         )}
       </div>

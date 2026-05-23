@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTaskStore, useAppStore } from '../../stores';
 import { X, Clock, Cpu, Shield } from 'lucide-react';
 import { MagicButton } from '../ui';
@@ -9,6 +10,7 @@ interface CreateTaskModalProps {
 }
 
 export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
+  const { t } = useTranslation();
   const { createTask } = useTaskStore();
   const { providerConfigs, activeProvider } = useAppStore();
 
@@ -45,8 +47,8 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
         {/* Header */}
         <div className="modal-header px-12 pt-12 pb-8 border-b border-border-light">
           <div>
-            <p className="text-[12px] font-bold uppercase tracking-[0.4em] text-accent opacity-60 mb-3">Automation</p>
-            <h2 className="text-3xl font-bold tracking-tighter text-text">New Scheduled Task</h2>
+            <p className="text-[12px] font-bold uppercase tracking-[0.4em] text-accent opacity-60 mb-3">{t('createTask.automation')}</p>
+            <h2 className="text-3xl font-bold tracking-tighter text-text">{t('createTask.title')}</h2>
           </div>
           <button
             onClick={onClose}
@@ -62,19 +64,19 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
           <div className="bg-accent-subtle/50 border border-accent/15 rounded-[24px] flex items-start gap-5 p-6 backdrop-blur-xl">
             <Clock size={20} className="text-accent mt-0.5 shrink-0" />
             <p className="text-[15px] text-text-secondary leading-relaxed font-medium">
-              Tasks run while Snotra is open. Schedule AI prompts to execute automatically at your preferred intervals.
+              {t('createTask.info')}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
             {/* Task Name */}
             <div className="space-y-3">
-              <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">Task Name</label>
+              <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">{t('createTask.taskName')}</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Daily Code Review"
+                placeholder={t('createTask.taskPlaceholder')}
                 className="w-full px-6 py-4.5 rounded-[20px] bg-surface-secondary/40 border border-border-light focus:bg-surface focus:border-accent/40 focus:ring-[12px] focus:ring-accent-subtle transition-all outline-none text-[15px] font-bold tracking-tight shadow-inner"
               />
             </div>
@@ -82,13 +84,13 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
             {/* Description */}
             <div className="space-y-3">
               <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">
-                Description <span className="opacity-40 font-normal italic">(optional)</span>
+                {t('createTask.description')} <span className="opacity-40 font-normal italic">{t('createTask.optional')}</span>
               </label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description of this task..."
+                placeholder={t('createTask.descPlaceholder')}
                 className="w-full px-6 py-4.5 rounded-[20px] bg-surface-secondary/40 border border-border-light focus:bg-surface focus:border-accent/40 focus:ring-[12px] focus:ring-accent-subtle transition-all outline-none text-[15px] font-bold tracking-tight shadow-inner"
               />
             </div>
@@ -96,11 +98,11 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
 
           {/* Prompt */}
           <div className="space-y-3">
-            <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">Prompt Instruction</label>
+            <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">{t('createTask.promptInstruction')}</label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="What should the AI do when this task runs?"
+              placeholder={t('createTask.promptPlaceholder')}
               rows={5}
               className="w-full px-6 py-5 rounded-[24px] bg-surface-secondary/40 border border-border-light focus:bg-surface focus:border-accent/40 focus:ring-[12px] focus:ring-accent-subtle transition-all outline-none text-[15px] font-medium leading-relaxed shadow-inner resize-none scrollbar-subtle"
             />
@@ -109,22 +111,22 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
             {/* Frequency */}
             <div className="space-y-3">
-              <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">Frequency</label>
+              <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">{t('createTask.frequency')}</label>
               <select
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as TaskFrequency)}
                 className="w-full px-6 py-4.5 rounded-[20px] bg-surface-secondary/40 border border-border-light focus:bg-surface focus:border-accent/40 transition-all outline-none text-[15px] font-bold tracking-tight shadow-inner appearance-none cursor-pointer"
               >
-                <option value="once">Run Once</option>
-                <option value="daily">Daily Execution</option>
-                <option value="weekly">Weekly Schedule</option>
-                <option value="monthly">Monthly Routine</option>
+                <option value="once">{t('createTask.runOnce')}</option>
+                <option value="daily">{t('createTask.dailyExecution')}</option>
+                <option value="weekly">{t('createTask.weeklySchedule')}</option>
+                <option value="monthly">{t('createTask.monthlyRoutine')}</option>
               </select>
             </div>
 
             {/* Time */}
             <div className="space-y-3">
-              <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">Scheduled Time</label>
+              <label className="text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">{t('createTask.scheduledTime')}</label>
               <input
                 type="datetime-local"
                 value={scheduledTime}
@@ -139,7 +141,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
             <div className="space-y-3">
               <label className="flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">
                 <Cpu size={14} className="text-accent" />
-                Inference Model
+                {t('createTask.inferenceModel')}
               </label>
               <select
                 value={model}
@@ -158,15 +160,15 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
             <div className="space-y-3">
               <label className="flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">
                 <Shield size={14} className="text-accent" />
-                Security Mode
+                {t('createTask.securityMode')}
               </label>
               <select
                 value={permissionMode}
                 onChange={(e) => setPermissionMode(e.target.value as 'auto' | 'ask')}
                 className="w-full px-6 py-4.5 rounded-[20px] bg-surface-secondary/40 border border-border-light focus:bg-surface focus:border-accent/40 transition-all outline-none text-[15px] font-bold tracking-tight shadow-inner appearance-none cursor-pointer"
               >
-                <option value="ask">Manual Approval</option>
-                <option value="auto">Automated Execution</option>
+                <option value="ask">{t('createTask.manualApproval')}</option>
+                <option value="auto">{t('createTask.automatedExecution')}</option>
               </select>
             </div>
           </div>
@@ -178,14 +180,14 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
             onClick={onClose}
             className="px-10 py-4.5 rounded-[18px] text-[15px] font-bold text-text-secondary hover:bg-surface-secondary hover:text-text transition-all duration-300"
           >
-            Discard
+            {t('createTask.discard')}
           </button>
           <MagicButton
             onClick={handleSubmit}
             isDisabled={!name.trim() || !prompt.trim() || !scheduledTime}
             className="px-12 py-4.5 rounded-[18px] shadow-2xl shadow-accent/20"
           >
-            <span className="text-[15px] font-bold">Schedule Automation</span>
+            <span className="text-[15px] font-bold">{t('createTask.scheduleAutomation')}</span>
           </MagicButton>
         </div>
       </div>

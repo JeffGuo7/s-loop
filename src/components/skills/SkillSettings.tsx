@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Sparkles,
   Plus,
@@ -14,6 +15,7 @@ import type { SkillInfo } from '../../types/skill';
 import { CopyButton } from '../chat/shared/CopyButton';
 
 export function SkillSettings() {
+  const { t } = useTranslation();
   const { skills, paths, removeSkill, toggleSkill, addPath, removePath } = useSkillStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPathModal, setShowPathModal] = useState(false);
@@ -25,9 +27,9 @@ export function SkillSettings() {
     <div className="space-y-8 animate-slide-up">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">Skills</h3>
+          <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">{t('skills.title')}</h3>
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-            <span className="font-semibold text-[var(--color-accent)]">{enabledCount}</span> of {skills.length} skills active
+            <span className="font-semibold text-[var(--color-accent)]">{enabledCount}</span> {t('skills.activeCount', { n: enabledCount, m: skills.length })}
           </p>
         </div>
         <div className="flex gap-3">
@@ -36,14 +38,14 @@ export function SkillSettings() {
             className="btn-secondary flex items-center gap-2 text-sm"
           >
             <FolderOpen className="w-4 h-4" />
-            Paths
+            {t('skills.paths')}
           </button>
           <button
             onClick={() => setShowAddModal(true)}
             className="btn-primary flex items-center gap-2 text-sm"
           >
             <Plus className="w-4 h-4" />
-            Add Skill
+            {t('skills.addSkill')}
           </button>
         </div>
       </div>
@@ -53,9 +55,9 @@ export function SkillSettings() {
           <div className="w-16 h-16 bg-[var(--color-accent-muted)] rounded-full flex items-center justify-center mb-4">
             <Sparkles className="w-8 h-8 text-[var(--color-accent)] opacity-80" />
           </div>
-          <h4 className="text-lg font-semibold text-[var(--color-text)]">No skills yet</h4>
+          <h4 className="text-lg font-semibold text-[var(--color-text)]">{t('skills.emptyTitle')}</h4>
           <p className="text-sm text-[var(--color-text-secondary)] text-center max-w-xs mt-2">
-            Skills extend AI capabilities. Add one manually or configure a path to discover skills.
+            {t('skills.emptyDesc')}
           </p>
         </div>
       ) : (
@@ -92,6 +94,7 @@ interface SkillCardProps {
 }
 
 function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: SkillCardProps) {
+  const { t } = useTranslation();
   return (
     <div 
       className={`group transition-all duration-300 border ${
@@ -117,12 +120,12 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
               <span className="font-bold text-[var(--color-text)] truncate">{skill.name}</span>
               {skill.location === 'builtin' && (
                 <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-[var(--color-accent-muted)] text-[var(--color-accent)] font-bold rounded-md">
-                  builtin
+                  {t('skills.builtin')}
                 </span>
               )}
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] truncate mt-0.5">
-              {skill.description || 'No description provided'}
+              {skill.description || t('skills.noDescription')}
             </p>
           </div>
         </div>
@@ -139,9 +142,9 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
             }`}
           >
             {skill.enabled ? (
-              <><Power className="w-3.5 h-3.5" /> Active</>
+              <><Power className="w-3.5 h-3.5" /> {t('skills.active')}</>
             ) : (
-              <><PowerOff className="w-3.5 h-3.5" /> Disabled</>
+              <><PowerOff className="w-3.5 h-3.5" /> {t('skills.disabled')}</>
             )}
           </button>
           
@@ -154,7 +157,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
                 onRemove();
               }}
               className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-bg)] rounded-lg transition-all"
-              title="Remove"
+              title={t('skills.remove')}
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -172,7 +175,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-1.5 block">
-                  Location
+                  {t('skills.location')}
                 </label>
                 <div className="flex items-center gap-2 text-sm font-mono text-[var(--color-text-secondary)] bg-[var(--color-surface-secondary)] p-2 rounded-lg">
                   <FolderOpen className="w-3.5 h-3.5" />
@@ -183,7 +186,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
               {skill.hooks && (skill.hooks.pre || skill.hooks.post) && (
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-1.5 block">
-                    Execution Hooks
+                    {t('skills.executionHooks')}
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {skill.hooks.pre?.map((hook, i) => (
@@ -210,7 +213,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
             {skill.content && (
               <div className="flex flex-col">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-1.5 block">
-                  Instruction Content
+                  {t('skills.instructionContent')}
                 </label>
                 <div className="flex-1 relative group/code">
                   <pre className="text-xs bg-[var(--color-surface-secondary)] p-4 rounded-xl overflow-auto max-h-48 font-mono leading-relaxed border border-[var(--color-border)]">
@@ -234,6 +237,7 @@ interface AddSkillModalProps {
 }
 
 function AddSkillModal({ onClose }: AddSkillModalProps) {
+  const { t } = useTranslation();
   const { addSkill } = useSkillStore();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -258,43 +262,43 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up">
         <div className="px-8 pt-8 pb-6">
-          <h3 className="text-2xl font-bold text-[var(--color-text)]">New Skill</h3>
-          <p className="text-sm text-[var(--color-text-secondary)] mt-1">Define custom instructions for the AI agent.</p>
+          <h3 className="text-2xl font-bold text-[var(--color-text)]">{t('skills.newSkill')}</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t('skills.newSkillDesc')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-5">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Skill Name</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.skillName')}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none text-sm"
-              placeholder="e.g., code-reviewer"
+              placeholder={t('skills.skillPlaceholder')}
               required
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Description</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.descriptionLabel')}</label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none text-sm"
-              placeholder="What does this skill do?"
+              placeholder={t('skills.descPlaceholder')}
               required
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">System Instructions</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.systemInstructions')}</label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none font-mono text-sm leading-relaxed"
               rows={6}
-              placeholder="Act as a senior engineer..."
+              placeholder={t('skills.instructionsPlaceholder')}
               required
             />
           </div>
@@ -305,13 +309,13 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
               onClick={onClose}
               className="px-6 py-2.5 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
             >
-              Cancel
+              {t('skills.cancel')}
             </button>
             <button
               type="submit"
               className="btn-primary px-8"
             >
-              Create Skill
+              {t('skills.createSkill')}
             </button>
           </div>
         </form>
@@ -328,6 +332,7 @@ interface SkillPathsModalProps {
 }
 
 function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModalProps) {
+  const { t } = useTranslation();
   const [newPath, setNewPath] = useState('');
 
   const handleAddPath = (e: React.FormEvent) => {
@@ -342,8 +347,8 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
         <div className="px-8 pt-8 pb-6">
-          <h3 className="text-2xl font-bold text-[var(--color-text)]">Skill Paths</h3>
-          <p className="text-sm text-[var(--color-text-secondary)] mt-1">Scan directories for automated skill loading.</p>
+          <h3 className="text-2xl font-bold text-[var(--color-text)]">{t('skills.skillPaths')}</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t('skills.skillPathsDesc')}</p>
         </div>
 
         <div className="px-8 pb-4">
@@ -351,7 +356,7 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
             {paths.length === 0 ? (
               <div className="text-center py-8 bg-[var(--color-surface-secondary)] rounded-xl border border-dashed border-[var(--color-border)]">
                 <FolderOpen className="w-8 h-8 text-[var(--color-text-tertiary)] mx-auto mb-2 opacity-50" />
-                <p className="text-sm text-[var(--color-text-tertiary)]">No paths configured</p>
+                <p className="text-sm text-[var(--color-text-tertiary)]">{t('skills.noPaths')}</p>
               </div>
             ) : (
               paths.map((path: string) => (
@@ -384,13 +389,13 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
               value={newPath}
               onChange={(e) => setNewPath(e.target.value)}
               className="flex-1 px-4 py-2.5 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm"
-              placeholder="e.g., ./my-skills"
+              placeholder={t('skills.pathPlaceholder')}
             />
             <button
               type="submit"
               className="btn-primary"
             >
-              Add
+              {t('skills.add')}
             </button>
           </form>
 
@@ -399,7 +404,7 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
               onClick={onClose}
               className="btn-secondary w-full"
             >
-              Done
+              {t('skills.done')}
             </button>
           </div>
         </div>

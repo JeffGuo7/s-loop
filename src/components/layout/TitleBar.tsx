@@ -1,28 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minus, Square, X, Copy, Cpu } from 'lucide-react'
+import { X } from 'lucide-react'
 
 const appWindow = getCurrentWindow()
 
 export function TitleBar() {
-  const [isMaximized, setIsMaximized] = useState(false)
-
-  useEffect(() => {
-    const updateMaximized = async () => {
-      const maximized = await appWindow.isMaximized()
-      setIsMaximized(maximized)
-    }
-
-    updateMaximized()
-
-    const unlisten = appWindow.onResized(() => {
-      updateMaximized()
-    })
-
-    return () => {
-      unlisten.then(u => u())
-    }
-  }, [])
 
   const handleMinimize = () => appWindow.minimize()
   const handleMaximize = async () => {

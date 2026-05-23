@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   MessageSquare,
   Plus,
@@ -46,6 +47,7 @@ export function Sidebar({
   const setTheme = useAppStore((s) => s.setTheme)
   const { pet, showPet } = usePetStore()
   const { isConnected } = useTelegramStore()
+  const { t } = useTranslation()
 
   const handleNewChat = useCallback(() => {
     createSession()
@@ -93,27 +95,27 @@ export function Sidebar({
                 className="w-full gap-2.5 rounded-lg py-3.5 shadow-md shadow-accent/10 group transition-all duration-500 hover:shadow-accent/20 hover:-translate-y-0.5 active:translate-y-0"
               >
                 <Plus size={16} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-500" />
-                <span className="font-bold tracking-tight text-[14px]">New Chat</span>
+                <span className="font-bold tracking-tight text-[14px]">{t('sidebar.newChat')}</span>
               </MagicButton>
             </motion.div>
 
             <div className="flex items-center justify-between px-1">
               <div className="flex flex-col gap-0.5">
                 <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent opacity-50">
-                  Workspace
+                  {t('sidebar.workspace')}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-[13px] font-bold text-text tracking-tight">
-                    Recent
+                    {t('sidebar.recent')}
                   </span>
                   <button
                     onClick={() => {
-                      if (window.confirm('Clear all conversations?')) {
+                      if (window.confirm(t('sidebar.clearConfirm'))) {
                         useAppStore.getState().clearSessions()
                       }
                     }}
                     className="p-1 rounded-md text-text-quaternary hover:text-red-500 hover:bg-red-500/10 transition-all duration-300 group/clear"
-                    title="Clear all sessions"
+                    title={t('sidebar.clearTitle')}
                   >
                     <Trash2 size={11} strokeWidth={2} className="group-hover/clear:scale-110 transition-transform" />
                   </button>
@@ -124,7 +126,7 @@ export function Sidebar({
                 whileTap={{ scale: 0.95 }}
                 onClick={onToggleCollapse}
                 className="w-7 h-7 flex items-center justify-center rounded-md bg-surface-secondary/80 text-text-tertiary hover:text-accent transition-all duration-300 shadow-sm border border-black/5 dark:border-white/5"
-                title="Collapse sidebar"
+                title={t('sidebar.collapseTitle')}
               >
                 <ChevronLeft size={14} strokeWidth={2.5} />
               </motion.button>
@@ -145,7 +147,7 @@ export function Sidebar({
               whileTap={{ scale: 0.95 }}
               onClick={onToggleCollapse}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-surface-secondary/80 text-text-tertiary hover:text-accent transition-all duration-300 shadow-md border border-black/5 dark:border-white/5"
-              title="Expand sidebar"
+              title={t('sidebar.expandTitle')}
             >
               <ChevronRight size={16} strokeWidth={2.5} />
             </motion.button>
@@ -157,7 +159,7 @@ export function Sidebar({
       <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 scrollbar-subtle space-y-1">
         {sessions.map((session) => {
           const isActive = session.id === activeSessionId
-          const title = session.title || 'Untitled Chat'
+          const title = session.title || t('sidebar.untitled')
 
           if (collapsed) {
             return (
@@ -236,14 +238,14 @@ export function Sidebar({
         <div className="flex flex-col gap-6 mt-4">
           <NavItem
             icon={Clock}
-            label="Daily Tasks"
+            label={t('sidebar.dailyTasks')}
             active={currentPage === 'tasks'}
             onClick={() => onNavigate('tasks')}
             collapsed={collapsed}
           />
           <NavItem
             icon={Send}
-            label="Telegram Hub"
+            label={t('sidebar.telegramHub')}
             active={currentPage === 'telegram'}
             onClick={() => onNavigate('telegram')}
             collapsed={collapsed}
@@ -251,7 +253,7 @@ export function Sidebar({
           />
           <NavItem
             icon={PawPrint}
-            label={pet ? (showPet ? 'Sleep' : 'Wake Pet') : 'Hatch'}
+            label={pet ? (showPet ? t('sidebar.sleep') : t('sidebar.wakePet')) : t('sidebar.hatch')}
             active={showPet && !!pet}
             onClick={onPetOpen}
             collapsed={collapsed}

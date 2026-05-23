@@ -1,10 +1,10 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTelegramStore } from '../../stores';
 import {
   Send,
   Link,
   Link2Off,
-  Trash2,
   Plus,
   X,
   Loader2,
@@ -17,11 +17,8 @@ import { Button, Card, Input } from '../ui';
 import { MagicButton } from '../ui/MagicButton';
 import { ScrollShadow } from "@heroui/react";
 
-interface TelegramSettingsProps {
-  onClose?: () => void;
-}
-
 export function TelegramSettings() {
+  const { t } = useTranslation();
   const {
     config,
     setConfig,
@@ -70,17 +67,17 @@ export function TelegramSettings() {
             <div className="p-2.5 rounded-2xl bg-accent/10 text-accent shadow-sm">
               <Bot size={22} />
             </div>
-            <h2 className="text-xl font-bold text-text tracking-tighter">Telegram</h2>
+            <h2 className="text-xl font-bold text-text tracking-tighter">{t('telegram.title')}</h2>
           </div>
           <p className="text-[9px] font-black uppercase tracking-[0.3em] text-accent opacity-40">
-            Remote Hub
+            {t('telegram.subtitle')}
           </p>
         </div>
 
         <div className="flex-1 px-4 space-y-1.5">
           {[
-            { id: 'config', icon: Shield, label: 'Configuration' },
-            { id: 'history', icon: MessageSquare, label: 'Activity Log' },
+            { id: 'config', icon: Shield, label: t('telegram.tabs.configuration') },
+            { id: 'history', icon: MessageSquare, label: t('telegram.tabs.activityLog') },
           ].map((item) => (
             <button
               key={item.id}
@@ -108,7 +105,7 @@ export function TelegramSettings() {
               <span className={`text-[10px] font-bold uppercase tracking-[0.15em] ${
                 isConnected ? 'text-green-600/80' : 'text-text-tertiary opacity-60'
               }`}>
-                {isConnected ? 'Hub Active' : 'Offline'}
+                {isConnected ? t('telegram.status.hubActive') : t('telegram.status.offline')}
               </span>
             </div>
           </div>
@@ -119,7 +116,7 @@ export function TelegramSettings() {
       <div className="flex-1 flex flex-col min-w-0 bg-transparent">
         <header className="h-20 flex items-center px-10 shrink-0 border-b border-border-light/50">
           <h3 className="text-[17px] font-black text-text tracking-tighter">
-            {activeTab === 'config' ? 'Bot Configuration' : 'Activity Log'}
+            {activeTab === 'config' ? 'Bot Configuration' : t('telegram.tabs.activityLog')}
           </h3>
         </header>
 
@@ -136,10 +133,10 @@ export function TelegramSettings() {
                       </div>
                       <div>
                         <p className="font-bold text-lg text-text tracking-tight">
-                          {isConnected ? 'Service Connected' : isConnecting ? 'Establishing...' : 'Not Connected'}
+                          {isConnected ? t('telegram.status.serviceConnected') : isConnecting ? t('telegram.status.establishing') : t('telegram.status.notConnected')}
                         </p>
                         <p className="text-[12px] text-text-tertiary mt-1 font-medium opacity-60">
-                          {isConnected ? 'Ready for remote orchestration' : 'Enter credentials to activate bot'}
+                          {isConnected ? t('telegram.status.ready') : t('telegram.status.enterCredentials')}
                         </p>
                       </div>
                     </div>
@@ -151,9 +148,9 @@ export function TelegramSettings() {
                       {isConnecting ? (
                         <Loader2 size={16} className="animate-spin" />
                       ) : isConnected ? (
-                        <span className="flex items-center gap-2"><Link2Off size={16} strokeWidth={2.5} /> Stop</span>
+                        <span className="flex items-center gap-2"><Link2Off size={16} strokeWidth={2.5} /> {t('telegram.buttons.stop')}</span>
                       ) : (
-                        <span className="flex items-center gap-2"><Link size={16} strokeWidth={2.5} /> Start Hub</span>
+                        <span className="flex items-center gap-2"><Link size={16} strokeWidth={2.5} /> {t('telegram.buttons.startHub')}</span>
                       )}
                     </MagicButton>
                   </div>
@@ -169,12 +166,12 @@ export function TelegramSettings() {
                 <div className="space-y-8">
                   <div className="grid grid-cols-1 gap-8">
                     <div className="space-y-3">
-                      <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">Bot Token</label>
+                      <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">{t('telegram.config.botToken')}</label>
                       <Input
                         type="password"
                         value={config.botToken}
                         onChange={(e) => setConfig({ botToken: e.target.value })}
-                        placeholder="7482910..."
+                        placeholder={t('telegram.config.tokenPlaceholder')}
                         className="font-mono h-12 rounded-xl"
                         variant="primary"
                         isDisabled={isConnected || isConnecting}
@@ -182,12 +179,12 @@ export function TelegramSettings() {
                     </div>
 
                     <div className="space-y-3">
-                      <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">Admin Chat ID</label>
+                      <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">{t('telegram.config.adminChatId')}</label>
                       <Input
                         type="text"
                         value={config.chatId}
                         onChange={(e) => setConfig({ chatId: e.target.value })}
-                        placeholder="12345678"
+                        placeholder={t('telegram.config.chatIdPlaceholder')}
                         className="font-mono h-12 rounded-xl"
                         variant="primary"
                         isDisabled={isConnected || isConnecting}
@@ -196,7 +193,7 @@ export function TelegramSettings() {
                   </div>
 
                   <div className="space-y-4">
-                    <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">Authorized Personnel</label>
+                    <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">{t('telegram.config.authorizedPersonnel')}</label>
                     <div className="flex flex-wrap gap-2 p-6 rounded-[24px] bg-surface-secondary/30 border border-border-light/50 min-h-[80px] items-center">
                       {config.allowedUsers.map((user) => (
                         <div
@@ -214,7 +211,7 @@ export function TelegramSettings() {
                       ))}
                       {config.allowedUsers.length === 0 && (
                         <p className="text-[13px] text-text-tertiary italic mx-auto font-bold opacity-30">
-                          No authorized users
+                          {t('telegram.config.noAuthorizedUsers')}
                         </p>
                       )}
                     </div>
@@ -225,12 +222,12 @@ export function TelegramSettings() {
                           autoFocus
                           value={newUser}
                           onChange={(e) => setNewUser(e.target.value)}
-                          placeholder="username"
+                          placeholder={t('telegram.config.usernamePlaceholder')}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddUser()}
                           className="h-11 rounded-xl"
                         />
-                        <Button onClick={handleAddUser} variant="primary" className="px-6 h-11 rounded-xl font-bold">Add</Button>
-                        <Button onClick={() => setShowAddUser(false)} variant="ghost" className="px-4 h-11 rounded-xl">Cancel</Button>
+                        <Button onClick={handleAddUser} variant="primary" className="px-6 h-11 rounded-xl font-bold">{t('telegram.config.add')}</Button>
+                        <Button onClick={() => setShowAddUser(false)} variant="ghost" className="px-4 h-11 rounded-xl">{t('telegram.config.cancel')}</Button>
                       </div>
                     ) : (
                       <button
@@ -240,7 +237,7 @@ export function TelegramSettings() {
                         <div className="p-1 rounded-lg bg-accent/10 group-hover:bg-accent group-hover:text-white transition-all">
                           <Plus size={14} strokeWidth={3} />
                         </div>
-                        Add Access
+                        {t('telegram.config.addAccess')}
                       </button>
                     )}
                   </div>
@@ -250,12 +247,12 @@ export function TelegramSettings() {
                 {isConnected && (
                   <div className="pt-8 border-t border-border-light/50">
                     <div className="space-y-4">
-                      <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">Signal Test</label>
+                      <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">{t('telegram.activity.signalTest')}</label>
                       <div className="flex gap-3">
                         <Input
                           value={testMessage}
                           onChange={(e) => setTestMessage(e.target.value)}
-                          placeholder="Send encrypted signal..."
+                          placeholder={t('telegram.activity.testPlaceholder')}
                           className="h-11 rounded-xl"
                         />
                         <Button
@@ -274,10 +271,10 @@ export function TelegramSettings() {
             ) : (
               <div className="space-y-8">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">Traffic Log</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-tertiary ml-1 opacity-50">{t('telegram.activity.trafficLog')}</span>
                   {messages.length > 0 && (
                     <Button variant="ghost" size="sm" onClick={clearMessages} className="text-red-500 font-bold hover:bg-red-500/5 px-4 rounded-xl h-8 text-[11px] uppercase tracking-wider">
-                      Purge
+                      {t('telegram.activity.purge')}
                     </Button>
                   )}
                 </div>
@@ -306,8 +303,8 @@ export function TelegramSettings() {
                     <div className="p-8 rounded-[40px] bg-surface-secondary/50 mb-6">
                       <MessageSquare size={48} className="text-text-tertiary" />
                     </div>
-                    <p className="text-lg font-bold text-text tracking-tight">System Silent</p>
-                    <p className="text-[12px] mt-1 font-bold">Inbound commands will appear here</p>
+                    <p className="text-lg font-bold text-text tracking-tight">{t('telegram.activity.systemSilent')}</p>
+                    <p className="text-[12px] mt-1 font-bold">{t('telegram.activity.noMessages')}</p>
                   </div>
                 )}
               </div>
@@ -320,10 +317,10 @@ export function TelegramSettings() {
           <div className="max-w-2xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3 text-[10px] font-bold text-text-tertiary uppercase tracking-[0.2em]">
               <Info size={14} strokeWidth={2.5} className="text-accent opacity-50" />
-              Directives
+              {t('telegram.activity.directives')}
             </div>
             <div className="flex gap-2">
-              {['/status', '/chat', '/approve'].map(cmd => (
+              {[t('telegram.activity.statusCmd'), t('telegram.activity.chatCmd'), t('telegram.activity.approveCmd')].map(cmd => (
                 <code key={cmd} className="px-3 py-1.5 rounded-lg bg-surface-secondary/50 border border-border-light/50 text-[10px] text-accent font-black">
                   {cmd}
                 </code>

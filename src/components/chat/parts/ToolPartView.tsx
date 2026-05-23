@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Wrench, FileText, Terminal, Globe, Database, FolderOpen, ChevronDown, Activity } from 'lucide-react'
 import { CopyButton } from '../shared/CopyButton'
 import { Card } from '../../ui'
@@ -52,6 +53,7 @@ function formatOutput(output: unknown): string {
 }
 
 export function ToolPartView({ part }: ToolPartViewProps) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const toolName = part.name || part.tool
   const Icon = getToolIcon(toolName)
@@ -84,7 +86,7 @@ export function ToolPartView({ part }: ToolPartViewProps) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className={`text-[9px] font-bold uppercase tracking-[0.15em] opacity-40 ${isRunning ? 'text-accent' : 'text-text-tertiary'}`}>
-                {isRunning ? 'Executing' : isError ? 'Failed' : 'Call'}
+                {isRunning ? t('chat.parts.executing') : isError ? t('chat.parts.failed') : t('chat.parts.call')}
               </span>
               <span className="text-[13px] font-bold text-text truncate tracking-tight">
                 {toolName.replace(/_/g, ' ')}
@@ -105,7 +107,7 @@ export function ToolPartView({ part }: ToolPartViewProps) {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1">
                     <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${isError ? 'text-red-500/80' : 'text-text-tertiary'}`}>
-                      {isError ? 'Error' : 'Result'}
+                      {isError ? t('chat.parts.error') : t('chat.parts.result')}
                     </span>
                     <CopyButton text={output} />
                   </div>
@@ -125,4 +127,3 @@ export function ToolPartView({ part }: ToolPartViewProps) {
     </div>
   )
 }
-

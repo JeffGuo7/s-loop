@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Folder, ChevronRight, ChevronDown, File,
   FileText, Image, Music,
@@ -61,6 +62,7 @@ interface TreeNodeProps {
 }
 
 function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<FileEntry[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -201,7 +203,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
               className="text-[9px] text-[var(--color-text-quaternary)] italic px-2 py-0.5"
               style={{ paddingLeft: `${paddingLeft + 16}px` }}
             >
-              Empty
+              {t('workspace.empty')}
             </div>
           ) : (
             children.map((child) => (

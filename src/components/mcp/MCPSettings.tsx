@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Server,
   Plus,
@@ -14,6 +15,7 @@ import { useMCPStore } from '../../stores';
 import type { MCPServerConfig, MCPTransportType, MCPTool, MCPResource } from '../../types/mcp';
 
 export function MCPSettings() {
+  const { t } = useTranslation();
   const { servers, serverStatuses, removeServer, toggleServer, refreshServer, refreshAllServers } =
     useMCPStore();
   const [showAddModal, setShowAddModal] = useState(false);
@@ -27,9 +29,9 @@ export function MCPSettings() {
     <div className="space-y-8 animate-slide-up">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">MCP Servers</h3>
+          <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">{t('mcp.title')}</h3>
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-            Connect to external context via Model Context Protocol.
+            {t('mcp.description')}
           </p>
         </div>
         <div className="flex gap-3">
@@ -38,14 +40,14 @@ export function MCPSettings() {
             className="btn-secondary flex items-center gap-2 text-sm"
           >
             <RefreshCw className="w-4 h-4" />
-            Sync All
+            {t('mcp.syncAll')}
           </button>
           <button
             onClick={() => setShowAddModal(true)}
             className="btn-primary flex items-center gap-2 text-sm"
           >
             <Plus className="w-4 h-4" />
-            Add Server
+            {t('mcp.addServer')}
           </button>
         </div>
       </div>
@@ -55,9 +57,9 @@ export function MCPSettings() {
           <div className="w-16 h-16 bg-[var(--color-accent-muted)] rounded-full flex items-center justify-center mb-4">
             <Server className="w-8 h-8 text-[var(--color-accent)] opacity-80" />
           </div>
-          <h4 className="text-lg font-semibold text-[var(--color-text)]">No servers found</h4>
+          <h4 className="text-lg font-semibold text-[var(--color-text)]">{t('mcp.emptyTitle')}</h4>
           <p className="text-sm text-[var(--color-text-secondary)] text-center max-w-xs mt-2">
-            Add your first MCP server to extend AI knowledge with local files, databases, or APIs.
+            {t('mcp.emptyDesc')}
           </p>
         </div>
       ) : (
@@ -103,6 +105,7 @@ function MCPServerCard({
   onRemove,
   onRefresh,
 }: MCPServerCardProps) {
+  const { t } = useTranslation();
   const statusColors: Record<string, string> = {
     connected: 'bg-[var(--color-success)]',
     connecting: 'bg-yellow-500 animate-pulse',
@@ -136,7 +139,7 @@ function MCPServerCard({
               <div className={`w-2 h-2 rounded-full ${statusColors[currentStatus]}`} />
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] truncate mt-0.5 uppercase tracking-wider font-bold opacity-60">
-              {server.type} Protocol
+              {server.type} {t('mcp.protocol')}
             </p>
           </div>
         </div>
@@ -153,9 +156,9 @@ function MCPServerCard({
             }`}
           >
             {!server.disabled ? (
-              <><Power className="w-3.5 h-3.5" /> Online</>
+              <><Power className="w-3.5 h-3.5" /> {t('mcp.online')}</>
             ) : (
-              <><PowerOff className="w-3.5 h-3.5" /> Offline</>
+              <><PowerOff className="w-3.5 h-3.5" /> {t('mcp.offline')}</>
             )}
           </button>
 
@@ -167,7 +170,7 @@ function MCPServerCard({
               onRefresh();
             }}
             className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] rounded-lg transition-all"
-            title="Refresh"
+            title={t('mcp.refresh')}
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -178,7 +181,7 @@ function MCPServerCard({
               onRemove();
             }}
             className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-bg)] rounded-lg transition-all"
-            title="Remove"
+            title={t('mcp.remove')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -195,23 +198,23 @@ function MCPServerCard({
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-1.5 block">
-                  Configuration
+                  {t('mcp.configuration')}
                 </label>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-mono text-[var(--color-text-secondary)] bg-[var(--color-surface-secondary)] p-3 rounded-xl border border-[var(--color-border)]">
-                    <span className="text-[var(--color-accent)] opacity-50 font-bold">TYPE</span>
+                    <span className="text-[var(--color-accent)] opacity-50 font-bold">{t('mcp.type')}</span>
                     {server.type}
                   </div>
                   {server.type === 'stdio' ? (
                     <div className="flex flex-col gap-1 p-3 bg-[var(--color-surface-secondary)] rounded-xl border border-[var(--color-border)]">
-                       <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] opacity-50">Command</span>
+                       <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] opacity-50">{t('mcp.command')}</span>
                        <code className="text-xs font-mono text-[var(--color-text)] break-all">
                         {server.command} {server.args?.join(' ')}
                        </code>
                     </div>
                   ) : (
                     <div className="flex flex-col gap-1 p-3 bg-[var(--color-surface-secondary)] rounded-xl border border-[var(--color-border)]">
-                       <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] opacity-50">URL</span>
+                       <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] opacity-50">{t('mcp.url')}</span>
                        <code className="text-xs font-mono text-[var(--color-text)] break-all">{server.url}</code>
                     </div>
                   )}
@@ -221,7 +224,7 @@ function MCPServerCard({
               {status?.error && (
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-error)] mb-1.5 block">
-                    Connection Error
+                    {t('mcp.connectionError')}
                   </label>
                   <div className="text-xs font-mono p-3 bg-[var(--color-error-bg)] border border-[var(--color-error)]/20 text-[var(--color-error)] rounded-xl">
                     {status.error}
@@ -234,7 +237,7 @@ function MCPServerCard({
               {status?.tools && status.tools.length > 0 && (
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-2 block">
-                    Available Tools ({status.tools.length})
+                    {t('mcp.availableTools', { count: status.tools.length })}
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {status.tools.map((tool, i) => (
@@ -253,7 +256,7 @@ function MCPServerCard({
               {status?.resources && status.resources.length > 0 && (
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-tertiary)] mb-2 block">
-                    Resources ({status.resources.length})
+                    {t('mcp.resources', { count: status.resources.length })}
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {status.resources.map((resource, i) => (
@@ -281,6 +284,7 @@ interface AddMCPServerModalProps {
 }
 
 function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
+  const { t } = useTranslation();
   const { addServer } = useMCPStore();
   const [name, setName] = useState('');
   const [type, setType] = useState<MCPTransportType>('stdio');
@@ -307,34 +311,34 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up">
         <div className="px-8 pt-8 pb-6">
-          <h3 className="text-2xl font-bold text-[var(--color-text)]">New MCP Server</h3>
-          <p className="text-sm text-[var(--color-text-secondary)] mt-1">Connect external tools and context.</p>
+          <h3 className="text-2xl font-bold text-[var(--color-text)]">{t('mcp.newServer')}</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t('mcp.newServerDesc')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-5">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Server Name</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.serverName')}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm transition-all"
-              placeholder="e.g., filesystem-server"
+              placeholder={t('mcp.serverPlaceholder')}
               required
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Transport Protocol</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.transportProtocol')}</label>
             <div className="relative">
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as MCPTransportType)}
                 className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-bold appearance-none cursor-pointer pr-10"
               >
-                <option value="stdio">stdio (Local Command)</option>
-                <option value="sse">sse (Server-Sent Events)</option>
-                <option value="http">http (Standard HTTP)</option>
+                <option value="stdio">{t('mcp.stdio')}</option>
+                <option value="sse">{t('mcp.sse')}</option>
+                <option value="http">{t('mcp.http')}</option>
               </select>
               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-tertiary)]">
                 <ChevronDown size={16} />
@@ -345,36 +349,36 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
           {type === 'stdio' ? (
             <div className="grid grid-cols-1 gap-4 animate-slide-up">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Executable Command</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.executableCommand')}</label>
                 <input
                   type="text"
                   value={command}
                   onChange={(e) => setCommand(e.target.value)}
                   className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
-                  placeholder="npx, python, etc."
+                  placeholder={t('mcp.commandPlaceholder')}
                   required
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Arguments</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.arguments')}</label>
                 <input
                   type="text"
                   value={args}
                   onChange={(e) => setArgs(e.target.value)}
                   className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
-                  placeholder="-y @modelcontextprotocol/server-filesystem ."
+                  placeholder={t('mcp.argsPlaceholder')}
                 />
               </div>
             </div>
           ) : (
             <div className="space-y-1.5 animate-slide-up">
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Server URL</label>
+              <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.serverUrl')}</label>
               <input
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
-                placeholder="http://localhost:3000/mcp"
+                placeholder={t('mcp.urlPlaceholder')}
                 required
               />
             </div>
@@ -386,13 +390,13 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
               onClick={onClose}
               className="px-6 py-2.5 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
             >
-              Cancel
+              {t('mcp.cancel')}
             </button>
             <button
               type="submit"
               className="btn-primary px-8"
             >
-              Connect Server
+              {t('mcp.connectServer')}
             </button>
           </div>
         </form>

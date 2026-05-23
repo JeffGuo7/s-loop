@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Send, Square, X, File, Paperclip } from 'lucide-react'
 import { TextField, TextArea } from "@heroui/react"
 import { Button, Card } from '../ui'
@@ -22,9 +23,10 @@ export function ChatInput({
   onAbort,
   isStreaming = false,
   disabled = false,
-  placeholder = 'Ask anything...',
+  placeholder,
   variant = 'default',
 }: ChatInputProps) {
+  const { t } = useTranslation()
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
@@ -175,7 +177,7 @@ export function ChatInput({
               <div className="rounded-[20px] border-2 border-dashed border-accent/40 bg-accent-subtle px-10 py-6 animate-fade-in-scale">
                 <p className="text-base font-bold text-accent flex items-center gap-3">
                   <Paperclip size={20} />
-                  Drop to reference
+                  {t('chat.input.dropOverlay')}
                 </p>
               </div>
             </div>
@@ -220,7 +222,7 @@ export function ChatInput({
                   onKeyDown={handleKeyDown}
                   onCompositionStart={handleCompositionStart}
                   onCompositionEnd={handleCompositionEnd}
-                  placeholder={attachments.length > 0 ? 'Ask about these files...' : placeholder}
+                  placeholder={attachments.length > 0 ? t('chat.input.placeholderWithFiles') : (placeholder || t('chat.input.placeholder'))}
                   className="w-full bg-transparent hover:bg-transparent focus:!ring-0 focus:!outline-none shadow-none border-none p-6 min-h-[60px] text-[15px] font-bold leading-relaxed custom-scrollbar text-text placeholder:text-text-quaternary/30 resize-none tracking-tight selection:bg-accent/20"
                   rows={1}
                 />
@@ -266,16 +268,16 @@ export function ChatInput({
                   <div className={`w-1.5 h-1.5 rounded-full ${input.trim() || attachments.length > 0 ? 'bg-accent shadow-[0_0_6px_var(--color-accent)]' : 'bg-text-quaternary opacity-30'}`} />
                   <span className="tracking-widest">
                     {attachments.length > 0
-                      ? `${attachments.length} ref`
-                      : 'Shift+Enter: New Line'}
+                      ? t('chat.input.ref', { count: attachments.length })
+                      : t('chat.input.shiftEnter')}
                   </span>
                 </div>
                 <div className="w-1 h-1 rounded-full bg-border-light" />
-                <span className="hidden sm:inline tracking-widest">Enter: Send</span>
+                <span className="hidden sm:inline tracking-widest">{t('chat.input.enterSend')}</span>
               </div>
               <div className={`transition-opacity flex items-center gap-2.5 ${isHero ? 'opacity-60' : 'opacity-30 group-focus-within:opacity-80'}`}>
                 <span className="w-1 h-1 rounded-full bg-border-light" />
-                <span className="tracking-widest">Intelligence</span>
+                <span className="tracking-widest">{t('chat.input.intelligence')}</span>
               </div>
             </div>
           </div>
@@ -284,4 +286,3 @@ export function ChatInput({
     </div>
   )
 }
-
