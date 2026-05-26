@@ -121,4 +121,12 @@
   box-shadow: 0 0 0 2px var(--color-accent-subtle), 0 0 12px var(--color-accent-glow) !important;
 }
 
+/* ── Chat Input: Force text wrapping on HeroUI TextArea ── */
+[data-slot="input-wrapper"] textarea,
+textarea[data-slot="input"] {
+  white-space: pre-wrap !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+}
+
 
