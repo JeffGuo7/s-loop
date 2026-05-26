@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAppStore } from '../../stores'
+import { useAppStore, useAgentStore } from '../../stores'
 import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
@@ -217,7 +217,25 @@ export function ChatView() {
 
       // Send prompt async — all updates come through SSE
       try {
-        const completedMessage = await Kilo.promptAsync(kiloId!, content, model)
+        // Inject active agent context
+        const agentStore = useAgentStore.getState()
+        const activeAgent = agentStore.activeAgentId
+          ? agentStore.agents.find((a) => a.id === agentStore.activeAgentId)
+          : null
+
+        let enrichedContent = content
+        if (activeAgent && (activeAgent.skills.length > 0 || activeAgent.mcpTools.length > 0)) {
+          const contexts: string[] = []
+          if (activeAgent.skills.length > 0) {
+            contexts.push(`Active Skills: ${activeAgent.skills.join(', ')}`)
+          }
+          if (activeAgent.mcpTools.length > 0) {
+            contexts.push(`Active MCP Tools: ${activeAgent.mcpTools.map((t) => `${t.serverName}/${t.toolName}`).join(', ')}`)
+          }
+          enrichedContent = `[Agent: ${activeAgent.name}]\n${contexts.join('\n')}\n\n${content}`
+        }
+
+        const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, model)
         if (completedMessage?.info?.role === 'assistant') {
           commitStreamingMessage(activeSessionId, completedMessage)
         }
@@ -388,13 +406,24 @@ export function ChatView() {
                 placeholder={t('chat.input.placeholder')}
               />
 
-              {/* Model info */}
+              {/* Model & Agent info */}
               <div className="mt-2 pb-2 text-[10px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
                 <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
                   <Cpu size={12} className="text-accent/60" />
                   <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || t('chat.status.noModel')}</span>
                   <span className="opacity-10 px-1">|</span>
                   <span className="font-bold uppercase tracking-[0.2em]">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
+                  {(() => {
+                    const agent = useAgentStore.getState().activeAgentId
+                      ? useAgentStore.getState().agents.find((a) => a.id === useAgentStore.getState().activeAgentId)
+                      : null
+                    return agent ? (
+                      <>
+                        <span className="opacity-10 px-1">|</span>
+                        <span className="font-bold">{agent.avatar} {agent.name}</span>
+                      </>
+                    ) : null
+                  })()}
                 </div>
               </div>
             </div>

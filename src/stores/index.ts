@@ -4,3 +4,4 @@ export { useTaskStore } from './taskStore';
 export { useTelegramStore } from './telegramStore';
 export { useMCPStore } from './mcpStore';
 export { useSkillStore } from './skillStore';
+export { useAgentStore } from './agentStore';

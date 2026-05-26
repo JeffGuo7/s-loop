@@ -1,0 +1,146 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import type { Agent, AgentStore } from '../types/agent'
+
+function generateId(): string {
+  return `agent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+}
+
+const DEFAULT_AVATARS = ['🤖', '🧠', '⚡', '🦾', '🎯', '🔮', '💡', '🚀']
+
+function pickAvatar(): string {
+  return DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)]
+}
+
+export const useAgentStore = create<AgentStore>()(
+  persist(
+    (set, get) => ({
+      agents: [],
+      activeAgentId: null,
+
+      createAgent: (name, description) => {
+        const agent: Agent = {
+          id: generateId(),
+          name,
+          description,
+          avatar: pickAvatar(),
+          skills: [],
+          mcpTools: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+        set((state) => ({
+          agents: [...state.agents, agent],
+          activeAgentId: agent.id,
+        }))
+        return agent
+      },
+
+      updateAgent: (id, updates) => {
+        set((state) => ({
+          agents: state.agents.map((a) =>
+            a.id === id ? { ...a, ...updates, updatedAt: Date.now() } : a
+          ),
+        }))
+      },
+
+      deleteAgent: (id) => {
+        set((state) => {
+          const remaining = state.agents.filter((a) => a.id !== id)
+          return {
+            agents: remaining,
+            activeAgentId:
+              state.activeAgentId === id
+                ? remaining[0]?.id ?? null
+                : state.activeAgentId,
+          }
+        })
+      },
+
+      setActiveAgent: (id) => {
+        set({ activeAgentId: id })
+      },
+
+      duplicateAgent: (id) => {
+        const source = get().agents.find((a) => a.id === id)
+        if (!source) throw new Error('Agent not found')
+        const clone: Agent = {
+          ...source,
+          id: generateId(),
+          name: `${source.name} (copy)`,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+        set((state) => ({
+          agents: [...state.agents, clone],
+          activeAgentId: clone.id,
+        }))
+        return clone
+      },
+
+      addSkillToAgent: (agentId, skillName) => {
+        set((state) => ({
+          agents: state.agents.map((a) => {
+            if (a.id !== agentId) return a
+            if (a.skills.includes(skillName)) return a
+            return { ...a, skills: [...a.skills, skillName], updatedAt: Date.now() }
+          }),
+        }))
+      },
+
+      removeSkillFromAgent: (agentId, skillName) => {
+        set((state) => ({
+          agents: state.agents.map((a) =>
+            a.id === agentId
+              ? {
+                  ...a,
+                  skills: a.skills.filter((s) => s !== skillName),
+                  updatedAt: Date.now(),
+                }
+              : a
+          ),
+        }))
+      },
+
+      addMCPToolToAgent: (agentId, serverName, toolName) => {
+        set((state) => ({
+          agents: state.agents.map((a) => {
+            if (a.id !== agentId) return a
+            const exists = a.mcpTools.some(
+              (t) => t.serverName === serverName && t.toolName === toolName
+            )
+            if (exists) return a
+            return {
+              ...a,
+              mcpTools: [...a.mcpTools, { serverName, toolName }],
+              updatedAt: Date.now(),
+            }
+          }),
+        }))
+      },
+
+      removeMCPToolFromAgent: (agentId, serverName, toolName) => {
+        set((state) => ({
+          agents: state.agents.map((a) =>
+            a.id === agentId
+              ? {
+                  ...a,
+                  mcpTools: a.mcpTools.filter(
+                    (t) => !(t.serverName === serverName && t.toolName === toolName)
+                  ),
+                  updatedAt: Date.now(),
+                }
+              : a
+          ),
+        }))
+      },
+    }),
+    {
+      name: 'snotra-agents',
+      partialize: (state) => ({
+        agents: state.agents,
+        activeAgentId: state.activeAgentId,
+      }),
+    }
+  )
+)
