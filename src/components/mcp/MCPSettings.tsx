@@ -10,6 +10,8 @@ import {
   ChevronDown,
   Wrench,
   FileText,
+  Code,
+  FileCode,
 } from 'lucide-react';
 import { useMCPStore } from '../../stores';
 import type { MCPServerConfig, MCPTransportType, MCPTool, MCPResource } from '../../types/mcp';
@@ -279,6 +281,67 @@ function MCPServerCard({
   );
 }
 
+function parseJSONConfig(data: unknown): MCPServerConfig[] {
+  const results: MCPServerConfig[] = [];
+
+  if (!data || typeof data !== 'object') return results;
+
+  const obj = data as Record<string, unknown>;
+
+  // Format 1: { mcpServers: { name: { type, command, args, ... } } }
+  if (obj.mcpServers && typeof obj.mcpServers === 'object' && !Array.isArray(obj.mcpServers)) {
+    for (const [name, cfg] of Object.entries(obj.mcpServers)) {
+      if (cfg && typeof cfg === 'object') {
+        const server = cfg as Record<string, unknown>;
+        results.push({
+          name,
+          type: (server.type as MCPTransportType) || 'stdio',
+          command: server.command as string | undefined,
+          args: server.args as string[] | undefined,
+          url: server.url as string | undefined,
+          env: server.env as Record<string, string> | undefined,
+          disabled: false,
+        });
+      }
+    }
+    return results;
+  }
+
+  // Format 2: Array of server configs
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (item && typeof item === 'object') {
+        const server = item as Record<string, unknown>;
+        results.push({
+          name: (server.name as string) || 'unnamed',
+          type: (server.type as MCPTransportType) || 'stdio',
+          command: server.command as string | undefined,
+          args: server.args as string[] | undefined,
+          url: server.url as string | undefined,
+          env: server.env as Record<string, string> | undefined,
+          disabled: false,
+        });
+      }
+    }
+    return results;
+  }
+
+  // Format 3: Single object with name
+  if (obj.name) {
+    results.push({
+      name: obj.name as string,
+      type: (obj.type as MCPTransportType) || 'stdio',
+      command: obj.command as string | undefined,
+      args: obj.args as string[] | undefined,
+      url: obj.url as string | undefined,
+      env: obj.env as Record<string, string> | undefined,
+      disabled: false,
+    });
+  }
+
+  return results;
+}
+
 interface AddMCPServerModalProps {
   onClose: () => void;
 }
@@ -291,9 +354,30 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
   const [command, setCommand] = useState('');
   const [args, setArgs] = useState('');
   const [url, setUrl] = useState('');
+  const [inputMode, setInputMode] = useState<'form' | 'json'>('form');
+  const [jsonText, setJsonText] = useState('');
+  const [jsonError, setJsonError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (inputMode === 'json') {
+      try {
+        const parsed = JSON.parse(jsonText);
+        const configs = parseJSONConfig(parsed);
+        if (configs.length === 0) {
+          setJsonError(t('mcp.jsonParseError'));
+          return;
+        }
+        for (const config of configs) {
+          addServer(config);
+        }
+        onClose();
+      } catch (err) {
+        setJsonError(err instanceof Error ? err.message : t('mcp.invalidJson'));
+      }
+      return;
+    }
 
     const config: MCPServerConfig = {
       name,
@@ -315,72 +399,127 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t('mcp.newServerDesc')}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.serverName')}</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm transition-all"
-              placeholder={t('mcp.serverPlaceholder')}
-              required
-            />
+        <form onSubmit={handleSubmit} className="px-8 pb-8">
+          <div className="flex gap-1 p-1 bg-[var(--color-surface-secondary)] rounded-xl mb-4">
+            <button
+              type="button"
+              onClick={() => setInputMode('form')}
+              className={`flex-1 py-2 px-4 text-xs font-bold rounded-lg transition-all ${
+                inputMode === 'form'
+                  ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm'
+                  : 'text-[var(--color-text-tertiary)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              <Code className="w-3.5 h-3.5 inline mr-1.5" />
+              {t('mcp.formMode')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode('json')}
+              className={`flex-1 py-2 px-4 text-xs font-bold rounded-lg transition-all ${
+                inputMode === 'json'
+                  ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm'
+                  : 'text-[var(--color-text-tertiary)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              <FileCode className="w-3.5 h-3.5 inline mr-1.5" />
+              {t('mcp.jsonMode')}
+            </button>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.transportProtocol')}</label>
-            <div className="relative">
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as MCPTransportType)}
-                className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-bold appearance-none cursor-pointer pr-10"
-              >
-                <option value="stdio">{t('mcp.stdio')}</option>
-                <option value="sse">{t('mcp.sse')}</option>
-                <option value="http">{t('mcp.http')}</option>
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-tertiary)]">
-                <ChevronDown size={16} />
-              </div>
+          {inputMode === 'json' ? (
+            <div className="space-y-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">
+                {t('mcp.jsonConfig')}
+              </label>
+              <textarea
+                value={jsonText}
+                onChange={(e) => {
+                  setJsonText(e.target.value);
+                  setJsonError(null);
+                }}
+                className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono leading-relaxed"
+                rows={10}
+                placeholder={t('mcp.jsonPlaceholder')}
+              />
+              {jsonError && (
+                <p className="text-xs text-[var(--color-error)] flex items-center gap-1">
+                  <span>⚠</span> {jsonError}
+                </p>
+              )}
+              <p className="text-[10px] text-[var(--color-text-tertiary)] opacity-60 leading-relaxed">
+                {t('mcp.jsonHint')}
+              </p>
             </div>
-          </div>
-
-          {type === 'stdio' ? (
-            <div className="grid grid-cols-1 gap-4 animate-slide-up">
+          ) : (
+            <div className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.executableCommand')}</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.serverName')}</label>
                 <input
                   type="text"
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                  className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
-                  placeholder={t('mcp.commandPlaceholder')}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm transition-all"
+                  placeholder={t('mcp.serverPlaceholder')}
                   required
                 />
               </div>
+
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.arguments')}</label>
-                <input
-                  type="text"
-                  value={args}
-                  onChange={(e) => setArgs(e.target.value)}
-                  className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
-                  placeholder={t('mcp.argsPlaceholder')}
-                />
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.transportProtocol')}</label>
+                <div className="relative">
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value as MCPTransportType)}
+                    className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-bold appearance-none cursor-pointer pr-10"
+                  >
+                    <option value="stdio">{t('mcp.stdio')}</option>
+                    <option value="sse">{t('mcp.sse')}</option>
+                    <option value="http">{t('mcp.http')}</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-tertiary)]">
+                    <ChevronDown size={16} />
+                  </div>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5 animate-slide-up">
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.serverUrl')}</label>
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
-                placeholder={t('mcp.urlPlaceholder')}
-                required
-              />
+
+              {type === 'stdio' ? (
+                <div className="grid grid-cols-1 gap-4 animate-slide-up">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.executableCommand')}</label>
+                    <input
+                      type="text"
+                      value={command}
+                      onChange={(e) => setCommand(e.target.value)}
+                      className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                      placeholder={t('mcp.commandPlaceholder')}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.arguments')}</label>
+                    <input
+                      type="text"
+                      value={args}
+                      onChange={(e) => setArgs(e.target.value)}
+                      className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                      placeholder={t('mcp.argsPlaceholder')}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5 animate-slide-up">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.serverUrl')}</label>
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                    placeholder={t('mcp.urlPlaceholder')}
+                    required
+                  />
+                </div>
+              )}
             </div>
           )}
 

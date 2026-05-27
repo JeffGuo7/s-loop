@@ -273,6 +273,12 @@ export interface ModelRef {
   modelID: string
 }
 
+export interface ToolDefinition {
+  name: string
+  description: string
+  input_schema: Record<string, unknown>
+}
+
 /**
  * Send a prompt asynchronously. The response comes through the SSE event stream.
  * Subscribe to events first via subscribeToEvents().
@@ -281,12 +287,16 @@ export async function promptAsync(
   sessionId: string,
   content: string,
   model?: ModelRef,
+  tools?: ToolDefinition[],
 ): Promise<KiloMessage | undefined> {
   const body: Record<string, unknown> = {
     parts: [{ type: 'text', text: content }],
   }
   if (model) {
     body.model = model
+  }
+  if (tools && tools.length > 0) {
+    body.tools = tools
   }
 
   const res = await post(`/session/${sessionId}/message`, body)
@@ -520,12 +530,40 @@ export async function setProviderApiKey(providerId: string, apiKey: string): Pro
 
 export interface MCPServerInfo {
   name: string
-  status?: 'connected' | 'connecting' | 'error' | 'disabled'
-  tools?: string[]
+  status: 'connected' | 'connecting' | 'error' | 'disabled'
+  tools?: Array<{
+    name: string
+    description: string
+    inputSchema: Record<string, unknown>
+  }>
+  resources?: Array<{
+    name: string
+    uri: string
+    description?: string
+    mimeType?: string
+  }>
+  error?: string
 }
 
-export async function getMCPServers(): Promise<MCPServerInfo[]> {
-  return getJson<MCPServerInfo[]>('/mcp')
+export async function getMCPServers(): Promise<Record<string, MCPServerInfo>> {
+  const data = await getJson<unknown>('/mcp')
+  if (Array.isArray(data)) {
+    const record: Record<string, MCPServerInfo> = {}
+    for (const server of data) {
+      if (typeof server === 'object' && server !== null) {
+        const s = server as Record<string, unknown>
+        record[s.name as string] = {
+          name: s.name as string,
+          status: (s.status as MCPServerInfo['status']) || 'connected',
+          tools: s.tools as MCPServerInfo['tools'],
+          resources: s.resources as MCPServerInfo['resources'],
+          error: s.error as string | undefined,
+        }
+      }
+    }
+    return record
+  }
+  return data as Record<string, MCPServerInfo>
 }
 
 export async function addMCPServer(config: {
@@ -535,5 +573,42 @@ export async function addMCPServer(config: {
   args?: string[]
   url?: string
 }): Promise<void> {
-  await post('/mcp', { config })
+  const name = config.name
+
+  // Map to Kilo's expected format:
+  // - "stdio" → type: "local" with command as full string array
+  // - "sse"/"http" → type: "remote" with url
+  const mcpConfig: Record<string, unknown> =
+    config.type === 'stdio'
+      ? {
+          type: 'local',
+          command: [...(config.command ? [config.command] : []), ...(config.args || [])],
+        }
+      : {
+          type: 'remote',
+          url: config.url,
+        }
+
+  await post('/mcp', { name, config: mcpConfig })
+}
+
+export async function connectMCPServer(name: string): Promise<void> {
+  await post(`/mcp/${encodeURIComponent(name)}/connect`)
+}
+
+export async function disconnectMCPServer(name: string): Promise<void> {
+  await post(`/mcp/${encodeURIComponent(name)}/disconnect`)
+}
+
+// ----- Skills -----
+
+export interface SkillEntry {
+  name: string
+  description: string
+  content?: string
+  location?: string
+}
+
+export async function getSkills(): Promise<SkillEntry[]> {
+  return getJson<SkillEntry[]>('/skill')
 }

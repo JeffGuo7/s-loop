@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   Sparkles,
   Plus,
@@ -9,17 +10,25 @@ import {
   ChevronDown,
   FolderOpen,
   FileCode,
+  RefreshCw,
+  Loader2,
+  Upload,
+  Check,
 } from 'lucide-react';
+import JSZip from 'jszip';
 import { useSkillStore } from '../../stores';
 import type { SkillInfo } from '../../types/skill';
 import { CopyButton } from '../chat/shared/CopyButton';
 
 export function SkillSettings() {
   const { t } = useTranslation();
-  const { skills, paths, removeSkill, toggleSkill, addPath, removePath } = useSkillStore();
+  const { skills, paths, skillMeta, isScanning, lastScanTime, scanError, removeSkill, toggleSkill, addSkill, addPath, removePath, refreshSkills, clearScanError } = useSkillStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPathModal, setShowPathModal] = useState(false);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
+  const [dropInstalling, setDropInstalling] = useState(false);
+  const [dropInstalled, setDropInstalled] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
 
   const enabledCount = skills.filter((s) => s.enabled).length;
 
@@ -31,6 +40,17 @@ export function SkillSettings() {
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">
             <span className="font-semibold text-[var(--color-accent)]">{enabledCount}</span> {t('skills.activeCount', { n: enabledCount, m: skills.length })}
           </p>
+          {lastScanTime && (
+            <p className="text-[10px] text-[var(--color-text-tertiary)] mt-1 opacity-60">
+              {t('skills.lastScan')}: {new Date(lastScanTime).toLocaleString()}
+            </p>
+          )}
+          {scanError && (
+            <p className="text-xs text-[var(--color-error)] mt-1 flex items-center gap-1">
+              <span>⚠</span> {scanError}
+              <button onClick={clearScanError} className="ml-1 underline opacity-70 hover:opacity-100">Dismiss</button>
+            </p>
+          )}
         </div>
         <div className="flex gap-3">
           <button
@@ -41,6 +61,23 @@ export function SkillSettings() {
             {t('skills.paths')}
           </button>
           <button
+            onClick={() => { clearScanError(); refreshSkills(); }}
+            disabled={isScanning}
+            className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50"
+            title={lastScanTime ? `Last scanned: ${new Date(lastScanTime).toLocaleTimeString()}` : 'Scan for skills'}
+          >
+            {isScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            {t('skills.scan')}
+          </button>
+          <button
+            onClick={() => document.getElementById('skill-zip-input')?.click()}
+            className="btn-secondary flex items-center gap-2 text-sm"
+            title={t('skills.installFromZip')}
+          >
+            {dropInstalling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {t('skills.installFromZip')}
+          </button>
+          <button
             onClick={() => setShowAddModal(true)}
             className="btn-primary flex items-center gap-2 text-sm"
           >
@@ -49,6 +86,69 @@ export function SkillSettings() {
           </button>
         </div>
       </div>
+
+      <input
+        type="file"
+        accept=".zip"
+        className="hidden"
+        id="skill-zip-input"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+
+          setDropError(null);
+          setDropInstalled(false);
+          setDropInstalling(true);
+
+          try {
+            const bytes = await file.arrayBuffer();
+            const zip = await JSZip.loadAsync(bytes);
+
+            const skillEntry = Object.entries(zip.files).find(([name]) =>
+              name.toLowerCase().endsWith('skill.md')
+            );
+
+            if (!skillEntry) {
+              setDropError(t('skills.zipNoSkill'));
+              return;
+            }
+
+            const [, skillFile] = skillEntry;
+            const rawContent = await skillFile.async('string');
+            const { name, description, body } = parseFrontmatterInline(rawContent);
+
+            addSkill({
+              name,
+              description,
+              content: body,
+              location: 'zip-import',
+              enabled: true,
+            });
+
+            setDropInstalled(true);
+            setTimeout(() => setDropInstalled(false), 2000);
+          } catch (err) {
+            setDropError(err instanceof Error ? err.message : t('skills.zipParseError'));
+          } finally {
+            setDropInstalling(false);
+          }
+
+          e.target.value = '';
+        }}
+      />
+
+      {dropInstalled && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-sm text-[var(--color-success)] font-bold animate-fade-in">
+          <Check className="w-4 h-4" />
+          {t('skills.installed')}
+        </div>
+      )}
+      {dropError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[var(--color-error)]/10 border border-[var(--color-error)]/20 text-sm text-[var(--color-error)] animate-fade-in">
+          <span>⚠</span> {dropError}
+          <button onClick={() => setDropError(null)} className="ml-auto text-[10px] underline opacity-70 hover:opacity-100">Dismiss</button>
+        </div>
+      )}
 
       {skills.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface-secondary)]/50">
@@ -95,6 +195,7 @@ interface SkillCardProps {
 
 function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: SkillCardProps) {
   const { t } = useTranslation();
+  const skillMeta = useSkillStore((s) => s.skillMeta);
   return (
     <div 
       className={`group transition-all duration-300 border ${
@@ -110,10 +211,10 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
         onClick={onToggleExpand}
       >
         <div className="flex items-center gap-4 min-w-0">
-          <div className={`p-2 rounded-xl transition-colors ${
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-colors ${
             skill.enabled ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-tertiary)]'
           }`}>
-            <Sparkles className="w-5 h-5" />
+            {skillMeta[skill.name]?.emoji || '📋'}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -331,6 +432,33 @@ interface SkillPathsModalProps {
   onClose: () => void;
 }
 
+function parseFrontmatterInline(content: string): { name: string; description: string; body: string } {
+  let name = '';
+  let description = '';
+  let body = content;
+
+  const trimmed = content.trimStart();
+  if (trimmed.startsWith('---')) {
+    const afterFirst = trimmed.slice(3);
+    const endPos = afterFirst.indexOf('\n---');
+    if (endPos !== -1) {
+      const front = afterFirst.slice(0, endPos).trim();
+      body = afterFirst.slice(endPos + 4).trim();
+      for (const line of front.split('\n')) {
+        const colonPos = line.indexOf(':');
+        if (colonPos !== -1) {
+          const key = line.slice(0, colonPos).trim().toLowerCase();
+          const value = line.slice(colonPos + 1).trim();
+          if (key === 'name') name = value;
+          if (key === 'description') description = value;
+        }
+      }
+    }
+  }
+
+  return { name, description, body };
+}
+
 function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModalProps) {
   const { t } = useTranslation();
   const [newPath, setNewPath] = useState('');
@@ -383,12 +511,44 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
         </div>
 
         <div className="px-8 pb-8 space-y-6">
+          {/* Browse button - primary method */}
+          <button
+            onClick={async () => {
+              try {
+                const selected = await open({
+                  directory: true,
+                  multiple: false,
+                  title: t('skills.selectFolder'),
+                });
+                if (selected) {
+                  addPath(selected);
+                }
+              } catch {
+                // Tauri dialog not available — user can type manually
+              }
+            }}
+            className="w-full flex items-center justify-center gap-3 py-4 bg-[var(--color-surface-secondary)] border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-accent)] rounded-xl text-sm font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] transition-all"
+          >
+            <FolderOpen className="w-5 h-5" />
+            {t('skills.browseFolder')}
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-[var(--color-border)]" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] opacity-50">
+              {t('skills.orManual')}
+            </span>
+            <div className="flex-1 h-px bg-[var(--color-border)]" />
+          </div>
+
+          {/* Manual path input - secondary / fallback */}
           <form onSubmit={handleAddPath} className="flex gap-2">
             <input
               type="text"
               value={newPath}
               onChange={(e) => setNewPath(e.target.value)}
-              className="flex-1 px-4 py-2.5 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm"
+              className="flex-1 px-4 py-2.5 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
               placeholder={t('skills.pathPlaceholder')}
             />
             <button

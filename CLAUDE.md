@@ -116,9 +116,45 @@ src-tauri/              # Rust 后端代码
 - [x] Telegram 接入 (配置界面、连接状态、消息发送)
 - [x] MCP/Skills 系统 (MCP服务器管理、Skills管理、设置界面集成)
 
-### 进行中
-- [ ] 实际 MCP 连接实现 (通过 Tauri 后端)
-- [ ] Skills 自动发现 (扫描 SKILL.md 文件)
+### 地基工程 (2026-05 已完工)
+
+#### Rust 后端
+- [x] `scan_skill_files` Tauri 命令 — 递归扫描目录查找 SKILL.md，解析 YAML frontmatter
+- [x] `parse_skill_file` Tauri 命令 — 读取并解析单个 SKILL.md 文件
+- [x] 安全处理：最大深度 32、最大文件 1MB、跳过隐藏文件、符号链接循环检测
+
+#### Kilo 通信层 (`src/utils/kiloClient.ts`)
+- [x] `connectMCPServer(name)` / `disconnectMCPServer(name)` — MCP 连接管理
+- [x] `getMCPServers()` — 增强返回格式，支持 Array/Record 双格式解析
+- [x] `getSkills()` — 读取 Kilo 端注册的技能列表
+
+#### MCP Store (`src/stores/mcpStore.ts`)
+- [x] `refreshServer()` 改用真实 Kilo API — 同步配置 → 连接 → 查询真实 tools/resources
+- [x] `syncToKilo()` — 添加/启用服务器时自动同步配置到 Kilo
+- [x] `initializeFromKilo()` — 启动时从 Kilo 拉取已有 MCP 服务器
+- [x] `classifyKiloError()` — 网络/超时/解析错误友好提示
+- [x] `toggleServer()` — 启用时自动连接，禁用时自动断开
+
+#### Skill Store (`src/stores/skillStore.ts`)
+- [x] `refreshSkills()` — 调用 Tauri `scan_skill_files` 扫描 SKILL.md
+- [x] YAML frontmatter 解析 — 提取 name, description, emoji, version
+- [x] `skillMeta` — 存储 emoji/version 供 UI 展示
+- [x] 并发保护 + 错误处理 + Tauri 不可用降级
+
+#### Chat 上下文 (ChatView.tsx)
+- [x] Skill content 结构化注入 — 用 `<skill>` 标签包裹完整指令内容
+- [x] MCP tools 真实工具描述 — 从 MCP Store 读取已连接服务器的 tools
+- [x] 清晰的 `---` 分隔符区分上下文与用户消息
+
+#### UI 更新
+- [x] SkillCard 显示 emoji（从 skillMeta 读取）
+- [x] 扫描按钮 + 加载动画 + 上次扫描时间
+- [x] 扫描错误展示 + 关闭按钮
+- [x] 国际化 (en/zh) 新 key
+
+#### 启动初始化 (App.tsx)
+- [x] 自动调用 `initializeFromKilo()` — 同步 MCP 服务器
+- [x] 自动调用 `refreshSkills()` — 发现 SKILL.md 文件
 
 ### 计划中
 - [ ] 宠物动画与交互增强

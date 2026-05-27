@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore, useAgentStore } from '../../stores'
+import { useSkillStore } from '../../stores/skillStore'
+import { useMCPStore } from '../../stores/mcpStore'
 import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
@@ -217,7 +219,7 @@ export function ChatView() {
 
       // Send prompt async — all updates come through SSE
       try {
-        // Inject active agent context
+        // Inject active agent context with REAL skill content and MCP tool info
         const agentStore = useAgentStore.getState()
         const activeAgent = agentStore.activeAgentId
           ? agentStore.agents.find((a) => a.id === agentStore.activeAgentId)
@@ -225,17 +227,111 @@ export function ChatView() {
 
         let enrichedContent = content
         if (activeAgent && (activeAgent.skills.length > 0 || activeAgent.mcpTools.length > 0)) {
-          const contexts: string[] = []
+          const contextBlocks: string[] = []
+
+          // 1. Skill content injection (actual skill instructions, not just names)
           if (activeAgent.skills.length > 0) {
-            contexts.push(`Active Skills: ${activeAgent.skills.join(', ')}`)
+            const skillStore = useSkillStore.getState()
+            const skillBlocks: string[] = []
+            
+            for (const skillName of activeAgent.skills) {
+              const skill = skillStore.skills.find((s) => s.name === skillName)
+              const meta = skillStore.skillMeta[skillName]
+              
+              if (skill && skill.content && skill.enabled) {
+                skillBlocks.push(
+                  `<skill name="${skill.name}">\n` +
+                  `${skill.description ? `Description: ${skill.description}\n` : ''}` +
+                  `${skill.content}\n` +
+                  `</skill>`
+                )
+              } else if (skill && skill.enabled) {
+                // Skill exists but has no content body
+                skillBlocks.push(
+                  `<skill name="${skill.name}">\n` +
+                  `${skill.description || ''}\n` +
+                  `</skill>`
+                )
+              }
+            }
+
+            if (skillBlocks.length > 0) {
+              contextBlocks.push(
+                `## Active Skills\n` +
+                `The following skills are activated and their instructions should be followed:\n` +
+                skillBlocks.join('\n\n')
+              )
+            }
           }
+
+          // 2. MCP tool context (informational — Kilo handles tool registration automatically)
           if (activeAgent.mcpTools.length > 0) {
-            contexts.push(`Active MCP Tools: ${activeAgent.mcpTools.map((t) => `${t.serverName}/${t.toolName}`).join(', ')}`)
+            const mcpStore = useMCPStore.getState()
+            const toolListings: string[] = []
+            
+            for (const mcpRef of activeAgent.mcpTools) {
+              const status = mcpStore.serverStatuses[mcpRef.serverName]
+              if (status && status.status === 'connected' && status.tools.length > 0) {
+                const tool = status.tools.find(t => t.name === mcpRef.toolName)
+                if (tool) {
+                  toolListings.push(
+                    `- \`${mcpRef.serverName}/${tool.name}\`: ${tool.description || 'No description'}`
+                  )
+                } else {
+                  toolListings.push(`- \`${mcpRef.serverName}/${mcpRef.toolName}\``)
+                }
+              } else {
+                toolListings.push(`- \`${mcpRef.serverName}/${mcpRef.toolName}\` (server status: ${status?.status || 'unknown'})`)
+              }
+            }
+
+            if (toolListings.length > 0) {
+              contextBlocks.push(
+                `## Available MCP Tools\n` +
+                `The following MCP tools are available for use:\n` +
+                toolListings.join('\n')
+              )
+            }
           }
-          enrichedContent = `[Agent: ${activeAgent.name}]\n${contexts.join('\n')}\n\n${content}`
+
+          // 3. Assemble enriched content with agent header
+          if (contextBlocks.length > 0) {
+            enrichedContent = 
+              `[Agent: ${activeAgent.name}]\n` +
+              `---\n` +
+              contextBlocks.join('\n\n') +
+              `\n---\n\n` +
+              content
+          }
         }
 
-        const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, model)
+        // Build MCP tool definitions from active agent's bound tools
+        let mcpTools: Kilo.ToolDefinition[] | undefined
+        if (activeAgent && activeAgent.mcpTools.length > 0) {
+          const mcpState = useMCPStore.getState()
+          const tools: Kilo.ToolDefinition[] = []
+
+          for (const mcpRef of activeAgent.mcpTools) {
+            const status = mcpState.serverStatuses[mcpRef.serverName]
+            if (status && status.status === 'connected' && status.tools) {
+              for (const tool of status.tools) {
+                if (tool.name === mcpRef.toolName) {
+                  tools.push({
+                    name: `${mcpRef.serverName}__${tool.name}`,
+                    description: tool.description || '',
+                    input_schema: tool.inputSchema || {},
+                  })
+                }
+              }
+            }
+          }
+
+          if (tools.length > 0) {
+            mcpTools = tools
+          }
+        }
+
+        const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, model, mcpTools)
         if (completedMessage?.info?.role === 'assistant') {
           commitStreamingMessage(activeSessionId, completedMessage)
         }

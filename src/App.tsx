@@ -9,6 +9,9 @@ import { useAppStore } from './stores'
 import { useTaskScheduler } from './hooks'
 import { WorkspacePanel } from './components/workspace'
 import { Kilo } from './utils'
+import { useMCPStore } from './stores/mcpStore'
+import { useSkillStore } from './stores/skillStore'
+import { SkillDropZone } from './components/skills'
 
 export type Page = 'chat' | 'tasks' | 'telegram'
 
@@ -31,12 +34,18 @@ function App() {
         const url = await invoke<string>('get_kilo_url')
         if (url) {
           Kilo.setBaseUrl(url)
+          // Sync MCP configs from Kilo if it's running
+          useMCPStore.getState().refreshAllServers().catch(() => {})
         }
       } catch {
         // Not running inside Tauri — use default URL (Vite dev mode)
       }
     }
     initKiloUrl()
+
+    // Auto-discover skills (scans configured paths for SKILL.md files)
+    // This works regardless of Kilo being online (uses Tauri Rust commands)
+    useSkillStore.getState().refreshSkills().catch(() => {})
 
     const projectDir = import.meta.env.VITE_KILO_PROJECT_DIR || null
     if (projectDir) {
@@ -87,6 +96,7 @@ function App() {
       <WorkspacePanel />
 
       <PetCompanion />
+      <SkillDropZone />
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showHatchModal && <PetHatchModal onClose={() => setShowHatchModal(false)} />}
