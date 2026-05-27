@@ -92,6 +92,7 @@ const en = {
       seconds: '{{n}}s',
       minutesSeconds: '{{n}}m {{n2}}s',
     },
+    slashCommands: 'Slash Commands',
   },
   settings: {
     title: 'Settings',

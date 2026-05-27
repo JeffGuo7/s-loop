@@ -320,6 +320,19 @@ export function ChatView() {
         const effectiveModel = activeAgent?.model
           ? { providerID: activeProvider!, modelID: activeAgent.model }
           : model
+
+        // Sync agent config to Kilo session
+        if (activeAgent && kiloId) {
+          const syncAgentToKilo = async () => {
+            try {
+              await Kilo.setPermissionMode(kiloId!, activeAgent.permissionMode)
+            } catch {
+              // Kilo might not support this yet
+            }
+          }
+          syncAgentToKilo().catch(() => {})
+        }
+
         const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, effectiveModel)
         if (completedMessage?.info?.role === 'assistant') {
           commitStreamingMessage(activeSessionId, completedMessage)

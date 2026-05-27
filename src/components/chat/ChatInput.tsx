@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Send, Square, X, File, Paperclip } from 'lucide-react'
 import { TextField, TextArea } from "@heroui/react"
 import { Button, Card } from '../ui'
+import { SlashCommandMenu } from './shared/SlashCommandMenu'
+import type { SlashCommand } from '../../types/agent'
 
 interface FileAttachment {
   path: string
@@ -30,6 +32,7 @@ export function ChatInput({
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false)
   const composingRef = useRef(false)
 
   const removeAttachment = useCallback((index: number) => {
@@ -114,6 +117,7 @@ export function ChatInput({
 
     onSubmit(parts.join('\n'))
     setInput('')
+    setSlashMenuOpen(false)
     setAttachments([])
   }, [input, attachments, onSubmit])
 
@@ -136,6 +140,14 @@ export function ChatInput({
     },
     [submitWithAttachments],
   )
+
+  const handleSlashSelect = useCallback((cmd: SlashCommand) => {
+    const lastSlash = input.lastIndexOf('/')
+    const beforeSlash = input.slice(0, lastSlash).replace(/\s*$/, '')
+    const newText = beforeSlash ? `${beforeSlash} ${cmd.prompt}` : cmd.prompt
+    setInput(newText)
+    setSlashMenuOpen(false)
+  }, [input])
 
   const handleCompositionStart = useCallback(() => {
     composingRef.current = true
@@ -207,10 +219,14 @@ export function ChatInput({
             )}
 
             <div className="flex items-end px-3">
-            <div className="flex-1">
+            <div className="flex-1 relative">
               <TextField
                 value={input}
-                onChange={setInput}
+                onChange={(value: string) => {
+                  setInput(value)
+                  const lastWord = value.split(' ').pop() || ''
+                  setSlashMenuOpen(lastWord.startsWith('/'))
+                }}
                 isDisabled={disabled || isStreaming}
                 className="w-full selection:bg-accent/20"
                 classNames={{
@@ -227,6 +243,13 @@ export function ChatInput({
                   rows={1}
                 />
               </TextField>
+              {slashMenuOpen && (
+                <SlashCommandMenu
+                  text={input}
+                  onSelect={handleSlashSelect}
+                  onClose={() => setSlashMenuOpen(false)}
+                />
+              )}
             </div>
 
               <div className="flex items-center p-4">

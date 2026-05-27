@@ -1,8 +1,83 @@
+import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useAgentStore, useAppStore } from '../../stores'
 import { ComponentLibrary } from './ComponentLibrary'
 import { AssemblyArea } from './AssemblyArea'
 import { AgentSwitcher } from './AgentSwitcher'
+
+function AddSlashCommandForm({ agentId }: { agentId: string }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [prompt, setPrompt] = useState('')
+  const updateAgent = useAgentStore((s) => s.updateAgent)
+  const agents = useAgentStore((s) => s.agents)
+  const agent = agents.find((a) => a.id === agentId)
+
+  const handleAdd = () => {
+    if (!name.trim() || !agent) return
+    updateAgent(agentId, {
+      slashCommands: [
+        ...agent.slashCommands,
+        { name: name.trim(), description: description.trim(), prompt: prompt.trim() },
+      ],
+    })
+    setName('')
+    setDescription('')
+    setPrompt('')
+    setOpen(false)
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full py-1 rounded-md bg-surface-secondary/40 text-[9px] text-text-quaternary hover:text-accent border border-dashed border-border-light/30 hover:border-accent/30 transition-all"
+      >
+        + Add Command
+      </button>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5 p-2 rounded-lg bg-surface-secondary/30 border border-border-light/20">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Command name (e.g. explain)"
+        className="w-full px-2 py-1 rounded-md bg-surface-secondary/60 border border-border-light/30 text-[9px] font-medium text-text placeholder:text-text-quaternary/30 outline-none focus:border-accent/30"
+      />
+      <input
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Short description"
+        className="w-full px-2 py-1 rounded-md bg-surface-secondary/60 border border-border-light/30 text-[9px] font-medium text-text placeholder:text-text-quaternary/30 outline-none focus:border-accent/30"
+      />
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        placeholder="Prompt template"
+        rows={2}
+        className="w-full px-2 py-1 rounded-md bg-surface-secondary/60 border border-border-light/30 text-[9px] font-medium text-text placeholder:text-text-quaternary/30 outline-none focus:border-accent/30 resize-none"
+      />
+      <div className="flex gap-1.5">
+        <button
+          onClick={handleAdd}
+          disabled={!name.trim()}
+          className="flex-1 py-1 rounded-md bg-accent text-[9px] font-bold text-white disabled:opacity-40"
+        >
+          Save
+        </button>
+        <button
+          onClick={() => setOpen(false)}
+          className="px-3 py-1 rounded-md bg-surface-secondary/40 text-[9px] text-text-tertiary hover:text-text"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export function AgentAssemblyPanel() {
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
@@ -134,6 +209,37 @@ export function AgentAssemblyPanel() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Slash Commands */}
+          <div className="rounded-xl bg-surface-secondary/20 border border-border-light/20 p-2.5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] font-black uppercase tracking-[0.15em] text-accent/60">
+                Slash Commands
+              </span>
+              <div className="flex-1 border-t border-border-light/30" />
+            </div>
+            {agent.slashCommands.length === 0 ? (
+              <p className="text-[9px] text-text-quaternary/50 italic">No slash commands defined</p>
+            ) : (
+              <div className="space-y-1 mb-2">
+                {agent.slashCommands.map((cmd, idx) => (
+                  <div key={idx} className="flex items-center gap-2 px-2 py-1 rounded-md bg-surface-secondary/40 text-[9px]">
+                    <span className="font-bold text-accent font-mono">/{cmd.name}</span>
+                    <span className="text-text-tertiary flex-1 truncate">{cmd.description}</span>
+                    <button
+                      onClick={() => updateAgent(agent.id, {
+                        slashCommands: agent.slashCommands.filter((_, i) => i !== idx)
+                      })}
+                      className="text-text-quaternary hover:text-red-500"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <AddSlashCommandForm agentId={agent.id} />
           </div>
 
           {/* Accessible Paths */}
