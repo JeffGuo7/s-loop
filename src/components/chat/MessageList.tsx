@@ -4,12 +4,14 @@ import { useAppStore } from '../../stores'
 import { MessageItem } from './MessageItem'
 import type { KiloMessage } from '../../types'
 
+const EMPTY_MESSAGES: never[] = []
+
 interface MessageListProps {
   sessionId: string
 }
 
 export function MessageList({ sessionId }: MessageListProps) {
-  const messages = useAppStore((state) => state.sessionMessages[sessionId] || [])
+  const messages = useAppStore((state) => state.sessionMessages[sessionId]) ?? EMPTY_MESSAGES
   const streamingMessage = useAppStore((state) => state.streamingMessage[sessionId])
   const virtuosoRef = useRef(null)
 
