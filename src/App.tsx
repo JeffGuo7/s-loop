@@ -12,6 +12,8 @@ import { Kilo } from './utils'
 import { useMCPStore } from './stores/mcpStore'
 import { useSkillStore } from './stores/skillStore'
 import { SkillDropZone } from './components/skills'
+import { initDatabase } from './utils/database'
+import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
 
 export type Page = 'chat' | 'tasks' | 'telegram'
 
@@ -34,7 +36,6 @@ function App() {
         const url = await invoke<string>('get_kilo_url')
         if (url) {
           Kilo.setBaseUrl(url)
-          // Sync MCP configs from Kilo if it's running
           useMCPStore.getState().refreshAllServers().catch(() => {})
         }
       } catch {
@@ -43,27 +44,66 @@ function App() {
     }
     initKiloUrl()
 
-    // Auto-discover skills (scans configured paths for SKILL.md files)
-    // This works regardless of Kilo being online (uses Tauri Rust commands)
     useSkillStore.getState().refreshSkills().catch(() => {})
 
     const projectDir = import.meta.env.VITE_KILO_PROJECT_DIR || null
     if (projectDir) {
       Kilo.setProjectDir(projectDir)
     }
+
+    // Initialize SQLite database and migrate localStorage data
+    initDatabase().then(async () => {
+      // Migrate from localStorage to DB if needed
+      const storedState = localStorage.getItem('snotra-app-storage')
+      if (storedState) {
+        try {
+          const parsed = JSON.parse(storedState)
+          const { sessions, sessionMessages } = parsed?.state || {}
+          if (sessions?.length > 0) {
+            const existing = await getAllSessions()
+            if (existing.length === 0) {
+              for (const s of sessions) {
+                await dbCreateSession(s.id, s.title || '', s.model || '')
+              }
+              if (sessionMessages) {
+                for (const [sessionId, msgs] of Object.entries(sessionMessages)) {
+                  if (Array.isArray(msgs)) {
+                    for (const msg of msgs as any[]) {
+                      await dbSaveMessage(
+                        msg.info?.id || msg.id,
+                        sessionId,
+                        msg.info?.role || 'assistant',
+                        msg.parts || [],
+                        msg.info || {}
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch { /* migration failed, continue with empty DB */ }
+      }
+
+      // Load sessions from DB into store
+      await useAppStore.getState().loadFromDb()
+
+      // Load messages for active session if any
+      const state = useAppStore.getState()
+      if (state.activeSessionId) {
+        await state.loadMessages(state.activeSessionId)
+      }
+    }).catch(console.warn)
   }, [])
 
   return (
     <div className="app-shell flex h-screen w-screen overflow-hidden bg-bg relative">
       <TitleBar />
       
-      {/* Global Unified Background - Provides the "How can I help" vibe everywhere */}
+      {/* Global Unified Background */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        {/* Main Center Glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-accent/5 rounded-full blur-[160px] opacity-60" />
-        {/* Top Left Accent */}
         <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] rounded-full bg-accent/8 blur-[140px]" />
-        {/* Bottom Right Accent */}
         <div className="absolute bottom-[-5%] right-[-5%] w-[35%] h-[35%] rounded-full bg-accent/6 blur-[120px]" />
       </div>
 

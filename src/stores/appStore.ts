@@ -2,9 +2,10 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import i18n from '../i18n'
 import type { Session, ProviderConfig, Companion, ProviderInfo, KiloMessage, MessagePart, MessageInfo } from '../types'
+import * as db from '../utils/database'
 
 interface AppState {
-  // Sessions
+  // Sessions (cached from DB)
   sessions: Session[]
   activeSessionId: string | null
   sessionMessages: Record<string, KiloMessage[]>
@@ -31,6 +32,10 @@ interface AppState {
 
   // Companion (pet)
   companion: Companion | null
+
+  // Actions - Database
+  loadFromDb: () => Promise<void>
+  loadMessages: (sessionId: string) => Promise<void>
 
   // Actions - Sessions
   createSession: () => string
@@ -78,7 +83,7 @@ const generateId = () => Math.random().toString(36).substring(2, 15)
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       sessions: [],
       activeSessionId: null,
       sessionMessages: {},
@@ -95,35 +100,73 @@ export const useAppStore = create<AppState>()(
       workspaceDir: null,
       companion: null,
 
-      // Session actions
+      // ---- Database actions ----
+
+      loadFromDb: async () => {
+        try {
+          const rows = await db.getAllSessions()
+          const sessions: Session[] = rows.map(r => ({
+            id: r.id,
+            title: r.title,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+          }))
+          set({ sessions })
+        } catch (err) {
+          console.warn('[appStore] loadFromDb failed:', err)
+        }
+      },
+
+      loadMessages: async (sessionId: string) => {
+        try {
+          const messages = await db.getMessages(sessionId)
+          set((state) => ({
+            sessionMessages: { ...state.sessionMessages, [sessionId]: messages },
+          }))
+        } catch (err) {
+          console.warn('[appStore] loadMessages failed:', err)
+        }
+      },
+
+      // ---- Session actions ----
+
       createSession: () => {
         const id = generateId()
         const now = Date.now()
+        const session: Session = { id, title: 'New Chat', createdAt: now, updatedAt: now }
         set((state) => ({
-          sessions: [...state.sessions, { id, title: 'New Chat', createdAt: now, updatedAt: now }],
+          sessions: [...state.sessions, session],
           activeSessionId: id,
           sessionMessages: { ...state.sessionMessages, [id]: [] },
         }))
+        db.createSession(id, 'New Chat').catch(console.warn)
         return id
       },
 
       deleteSession: (id) => {
-        set((state) => {
-          const all = state.sessions.filter((s) => s.id !== id)
-          const msgs = { ...state.sessionMessages }
-          delete msgs[id]
-          const streaming = { ...state.streamingMessage }
-          delete streaming[id]
-          return {
-            sessions: all,
-            activeSessionId: state.activeSessionId === id ? all[0]?.id ?? null : state.activeSessionId,
-            sessionMessages: msgs,
-            streamingMessage: streaming,
-          }
+        const state = get()
+        set({
+          sessions: state.sessions.filter((s) => s.id !== id),
+          activeSessionId: state.activeSessionId === id ? (state.sessions.find(s => s.id !== id)?.id ?? null) : state.activeSessionId,
+          sessionMessages: Object.fromEntries(
+            Object.entries(state.sessionMessages).filter(([k]) => k !== id)
+          ),
+          streamingMessage: Object.fromEntries(
+            Object.entries(state.streamingMessage).filter(([k]) => k !== id)
+          ),
         })
+        db.deleteSession(id).catch(console.warn)
       },
 
-      setActiveSession: (id) => set({ activeSessionId: id }),
+      setActiveSession: (id) => {
+        set({ activeSessionId: id })
+        if (id) {
+          const existing = get().sessionMessages[id]
+          if (!existing || existing.length === 0) {
+            get().loadMessages(id).catch(console.warn)
+          }
+        }
+      },
 
       updateSessionTitle: (id, title) => {
         set((state) => ({
@@ -131,18 +174,22 @@ export const useAppStore = create<AppState>()(
             s.id === id ? { ...s, title, updatedAt: Date.now() } : s,
           ),
         }))
+        db.updateSession(id, { title }).catch(console.warn)
       },
 
       clearSessions: () => {
+        const ids = get().sessions.map(s => s.id)
         set({
           sessions: [],
           activeSessionId: null,
           sessionMessages: {},
           streamingMessage: {},
         })
+        Promise.all(ids.map(sid => db.deleteSession(sid))).catch(console.warn)
       },
 
-      // Message actions
+      // ---- Message actions ----
+
       addMessage: (sessionId, message) => {
         set((state) => ({
           sessionMessages: {
@@ -150,6 +197,13 @@ export const useAppStore = create<AppState>()(
             [sessionId]: [...(state.sessionMessages[sessionId] || []), message],
           },
         }))
+        db.saveMessage(
+          message.info.id,
+          sessionId,
+          message.info.role,
+          message.parts,
+          message.info as unknown as Record<string, unknown>,
+        ).catch(console.warn)
       },
 
       updateMessagePart: (sessionId, messageID, partID, part) => {
@@ -158,7 +212,6 @@ export const useAppStore = create<AppState>()(
           const updated = messages.map((msg) => {
             if (msg.info.id !== messageID) return msg
             const parts = msg.parts.map((p) => (p.id === partID ? part : p))
-            // Add new part if not found
             if (!parts.find((p) => p.id === partID)) {
               parts.push(part)
             }
@@ -203,7 +256,8 @@ export const useAppStore = create<AppState>()(
         })
       },
 
-      // Streaming actions
+      // ---- Streaming actions ----
+
       startStreaming: (sessionId, messageID) => {
         set((state) => ({
           streamingMessage: {
@@ -230,9 +284,7 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           const streaming = state.streamingMessage[sessionId]
           if (!streaming) return state
-          
-          // STRICT CHECK: Ensure part belongs to the streaming message
-          // Only enforce this if we have locked onto a non-pending messageID
+
           if (!streaming.messageID.startsWith('pending-') && part.messageID !== streaming.messageID) {
             return state
           }
@@ -298,33 +350,31 @@ export const useAppStore = create<AppState>()(
       },
 
       finishStreaming: (sessionId) => {
-        set((state) => {
-          const streaming = state.streamingMessage[sessionId]
-          if (!streaming) return state
+        const state = get()
+        const streaming = state.streamingMessage[sessionId]
+        if (!streaming) return
 
-          // Use info from SSE events if available, otherwise create default
-          const info = streaming.info || {
-            id: streaming.messageID,
-            sessionID: sessionId,
-            role: 'assistant' as const,
-            time: { created: Date.now(), completed: Date.now() },
-          }
+        const info = streaming.info || {
+          id: streaming.messageID,
+          sessionID: sessionId,
+          role: 'assistant' as const,
+          time: { created: Date.now(), completed: Date.now() },
+        }
 
-          const newMessage: KiloMessage = {
-            info,
-            parts: streaming.parts,
-          }
+        const newMessage: KiloMessage = {
+          info,
+          parts: streaming.parts,
+        }
 
-          const updated = { ...state.streamingMessage }
-          delete updated[sessionId]
+        const updated = { ...state.streamingMessage }
+        delete updated[sessionId]
 
-          return {
-            sessionMessages: {
-              ...state.sessionMessages,
-              [sessionId]: [...(state.sessionMessages[sessionId] || []), newMessage],
-            },
-            streamingMessage: updated,
-          }
+        set({
+          sessionMessages: {
+            ...state.sessionMessages,
+            [sessionId]: [...(state.sessionMessages[sessionId] || []), newMessage],
+          },
+          streamingMessage: updated,
         })
       },
 
@@ -348,9 +398,17 @@ export const useAppStore = create<AppState>()(
             streamingMessage: updatedStreaming,
           }
         })
+        db.saveMessage(
+          message.info.id,
+          sessionId,
+          message.info.role,
+          message.parts,
+          message.info as unknown as Record<string, unknown>,
+        ).catch(console.warn)
       },
 
-      // Provider actions
+      // ---- Provider actions ----
+
       setActiveProvider: (id) => set({ activeProvider: id }),
 
       setProviderConfig: (id, config) => {
@@ -364,7 +422,8 @@ export const useAppStore = create<AppState>()(
 
       setProviderList: (list) => set({ providerList: list }),
 
-      // UI actions
+      // ---- UI actions ----
+
       setTheme: (theme) => {
         set({ theme })
         document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -379,14 +438,13 @@ export const useAppStore = create<AppState>()(
       toggleWorkspace: () => set((state) => ({ workspaceCollapsed: !state.workspaceCollapsed })),
       setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
 
-      // Companion actions
+      // ---- Companion actions ----
+
       setCompanion: (companion) => set({ companion }),
     }),
     {
       name: 'snotra-storage',
       partialize: (state) => ({
-        sessions: state.sessions,
-        sessionMessages: state.sessionMessages,
         activeProvider: state.activeProvider,
         providerConfigs: state.providerConfigs,
         theme: state.theme,
@@ -394,20 +452,12 @@ export const useAppStore = create<AppState>()(
         companion: state.companion,
         workspaceDir: state.workspaceDir,
       }),
-      // Migrate old data format to new format
-      version: 1,
+      version: 2,
       migrate: (persistedState: unknown) => {
-        const persisted = (persistedState || {}) as Record<string, unknown>
-        // Ensure sessionMessages is in the new KiloMessage[] format
-        if (persisted.sessionMessages && typeof persisted.sessionMessages === 'object') {
-          const msgs = persisted.sessionMessages as Record<string, unknown[]>
-          for (const key of Object.keys(msgs)) {
-            if (!Array.isArray(msgs[key])) {
-              msgs[key] = []
-            }
-          }
-        }
-        return persisted as Partial<AppState>
+        const state = (persistedState || {}) as Record<string, unknown>
+        delete state.sessions
+        delete state.sessionMessages
+        return state as Partial<AppState>
       },
     },
   ),

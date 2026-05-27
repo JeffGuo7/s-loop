@@ -27,6 +27,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-sql": "^2.4.0",
     "@uiw/react-codemirror": "^4.25.10",
     "clsx": "^2.1.1",
     "framer-motion": "^12.40.0",
