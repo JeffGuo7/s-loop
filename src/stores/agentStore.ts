@@ -22,10 +22,13 @@ export const useAgentStore = create<AgentStore>()(
         const agent: Agent = {
           id: generateId(),
           name,
-          description,
+          description: description || '',
           avatar: pickAvatar(),
+          instructions: '',
+          model: '',
           skills: [],
           mcpTools: [],
+          mcpServers: [],
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }
@@ -97,6 +100,26 @@ export const useAgentStore = create<AgentStore>()(
                   skills: a.skills.filter((s) => s !== skillName),
                   updatedAt: Date.now(),
                 }
+              : a
+          ),
+        }))
+      },
+
+      addMCPServerToAgent: (agentId, serverName) => {
+        set((state) => ({
+          agents: state.agents.map((a) =>
+            a.id === agentId
+              ? { ...a, mcpServers: a.mcpServers.includes(serverName) ? a.mcpServers : [...a.mcpServers, serverName], updatedAt: Date.now() }
+              : a
+          ),
+        }))
+      },
+
+      removeMCPServerFromAgent: (agentId, serverName) => {
+        set((state) => ({
+          agents: state.agents.map((a) =>
+            a.id === agentId
+              ? { ...a, mcpServers: a.mcpServers.filter((s) => s !== serverName), updatedAt: Date.now() }
               : a
           ),
         }))

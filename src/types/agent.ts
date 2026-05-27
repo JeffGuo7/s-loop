@@ -8,8 +8,11 @@ export interface Agent {
   name: string
   description: string
   avatar: string
+  instructions: string
+  model: string
   skills: string[]
   mcpTools: AgentMCPTool[]
+  mcpServers: string[]
   createdAt: number
   updatedAt: number
 }
@@ -28,4 +31,6 @@ export interface AgentStore {
   removeSkillFromAgent: (agentId: string, skillName: string) => void
   addMCPToolToAgent: (agentId: string, serverName: string, toolName: string) => void
   removeMCPToolFromAgent: (agentId: string, serverName: string, toolName: string) => void
+  addMCPServerToAgent: (agentId: string, serverName: string) => void
+  removeMCPServerFromAgent: (agentId: string, serverName: string) => void
 }

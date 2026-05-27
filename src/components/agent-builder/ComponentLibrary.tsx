@@ -2,23 +2,28 @@ import { useState } from 'react'
 import { Search } from 'lucide-react'
 import { useMCPStore } from '../../stores'
 import { useSkillStore } from '../../stores'
-import { SkillChip, MCPToolChip } from './parts'
+import { SkillChip, MCPToolChip, MCPServerChip } from './parts'
 
 interface ComponentLibraryProps {
   selectedSkills: string[]
   selectedMCPTools: Array<{ serverName: string; toolName: string }>
+  selectedMCPServers: string[]
   onToggleSkill: (name: string) => void
   onToggleMCPTool: (serverName: string, toolName: string) => void
+  onToggleMCPServer: (serverName: string) => void
 }
 
 export function ComponentLibrary({
   selectedSkills,
   selectedMCPTools,
+  selectedMCPServers,
   onToggleSkill,
   onToggleMCPTool,
+  onToggleMCPServer,
 }: ComponentLibraryProps) {
   const [skillSearch, setSkillSearch] = useState('')
   const [mcpSearch, setMcpSearch] = useState('')
+  const [serverSearch, setServerSearch] = useState('')
 
   const mcpServers = useMCPStore((s) => s.servers)
   const mcpStatuses = useMCPStore((s) => s.serverStatuses)
@@ -30,6 +35,10 @@ export function ComponentLibrary({
 
   const filteredMCPServers = mcpServers.filter((server) =>
     server.name.toLowerCase().includes(mcpSearch.toLowerCase())
+  )
+
+  const filteredMCPServerList = mcpServers.filter((server) =>
+    server.name.toLowerCase().includes(serverSearch.toLowerCase())
   )
 
   const isToolSelected = (serverName: string, toolName: string) =>
@@ -52,6 +61,43 @@ export function ComponentLibrary({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* ── MCP Servers Section ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[9px] font-black uppercase tracking-[0.15em] text-accent/60">
+            MCP Servers
+          </span>
+          <div className="flex-1 border-t border-border-light/30" />
+        </div>
+
+        <div className="relative mb-2">
+          <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-quaternary/50" />
+          <input
+            value={serverSearch}
+            onChange={(e) => setServerSearch(e.target.value)}
+            placeholder="Search servers..."
+            className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-surface-secondary/40 border border-border-light/30 text-[10px] font-medium text-text placeholder:text-text-quaternary/30 outline-none focus:border-accent/30 transition-all"
+          />
+        </div>
+
+        <div className="space-y-0.5 max-h-[180px] overflow-y-auto custom-scrollbar">
+          {filteredMCPServerList.length > 0 ? (
+            filteredMCPServerList.map((server) => (
+              <MCPServerChip
+                key={server.name}
+                serverName={server.name}
+                selected={selectedMCPServers.includes(server.name)}
+                onClick={() => onToggleMCPServer(server.name)}
+              />
+            ))
+          ) : (
+            <p className="text-[10px] text-text-tertiary/40 text-center py-3 font-medium">
+              No MCP servers available
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* ── MCP Tools Section ── */}
       <div>
         <div className="flex items-center gap-2 mb-2">

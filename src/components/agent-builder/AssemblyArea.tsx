@@ -6,6 +6,7 @@ export function AssemblyArea() {
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
   const removeSkill = useAgentStore((s) => s.removeSkillFromAgent)
   const removeMCPTool = useAgentStore((s) => s.removeMCPToolFromAgent)
+  const removeMCPServer = useAgentStore((s) => s.removeMCPServerFromAgent)
 
   const agent = agents.find((a) => a.id === activeAgentId)
 
@@ -48,6 +49,35 @@ export function AssemblyArea() {
           ) : (
             <p className="text-[10px] text-text-tertiary/30 text-center py-3">
               No skills added
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* MCP Servers */}
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[9px] font-black uppercase tracking-[0.15em] text-accent/50">
+            MCP Servers
+          </span>
+          <span className="text-[9px] text-text-quaternary/40 font-mono">
+            {agent.mcpServers.length}
+          </span>
+          <div className="flex-1 border-t border-border-light/20" />
+        </div>
+        <div className="space-y-1.5">
+          {agent.mcpServers.length > 0 ? (
+            agent.mcpServers.map((serverName) => (
+              <AssemblyItem
+                key={serverName}
+                type="mcp-server"
+                label={serverName}
+                onRemove={() => removeMCPServer(agent.id, serverName)}
+              />
+            ))
+          ) : (
+            <p className="text-[10px] text-text-tertiary/30 text-center py-3">
+              No MCP servers added
             </p>
           )}
         </div>

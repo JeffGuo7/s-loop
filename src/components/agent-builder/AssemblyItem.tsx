@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 
 interface AssemblyItemProps {
-  type: 'skill' | 'mcp-tool'
+  type: 'skill' | 'mcp-tool' | 'mcp-server'
   label: string
   subtitle?: string
   onRemove: () => void
@@ -12,7 +12,7 @@ export function AssemblyItem({ type, label, subtitle, onRemove }: AssemblyItemPr
     <div className="group flex items-center gap-2.5 px-3 py-2 rounded-xl bg-surface-secondary/30 border border-border-light/30 transition-all duration-300 hover:bg-surface-secondary/50 hover:border-accent/20">
       <div
         className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-          type === 'skill' ? 'bg-accent' : 'bg-emerald-400'
+          type === 'skill' ? 'bg-accent' : type === 'mcp-server' ? 'bg-violet-400' : 'bg-emerald-400'
         }`}
       />
       <div className="min-w-0 flex-1">

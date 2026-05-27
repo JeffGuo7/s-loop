@@ -1,1 +1,1 @@
-export { SkillChip, MCPToolChip } from './SkillChip'
+export { SkillChip, MCPToolChip, MCPServerChip } from './SkillChip'

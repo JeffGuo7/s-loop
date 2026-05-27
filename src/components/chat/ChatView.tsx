@@ -289,17 +289,25 @@ export function ChatView() {
           )
         }
 
-        // 3. Assemble enriched content
+        // 3. Inject agent instructions
+        if (activeAgent?.instructions) {
+          contextBlocks.unshift(`## System Instructions\n${activeAgent.instructions}`)
+        }
+
+        // 4. Assemble enriched content
         if (contextBlocks.length > 0) {
           const header = activeAgent ? `[Agent: ${activeAgent.name}]` : '[Global Context]'
           enrichedContent = `${header}\n---\n${contextBlocks.join('\n\n')}\n---\n\n${content}`
         }
 
-        // 4. MCP tools are described in context text above.
+        // 5. MCP tools are described in context text above.
         // We do NOT pass them as tool schemas to Kilo, because Kilo can't execute them.
         // The AI will know about available tools from the context text.
 
-        const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, model)
+        const effectiveModel = activeAgent?.model
+          ? { providerID: activeProvider!, modelID: activeAgent.model }
+          : model
+        const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, effectiveModel)
         if (completedMessage?.info?.role === 'assistant') {
           commitStreamingMessage(activeSessionId, completedMessage)
         }
