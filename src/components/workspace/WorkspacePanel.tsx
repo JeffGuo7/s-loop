@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { FolderOpen, Check, ChevronLeft, Files, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores'
-import { Kilo } from '../../utils'
+import { OpenCode } from '../../utils'
 import { FileTree } from './FileTree'
 import { AgentBuilder } from '../agent-builder'
 
@@ -23,12 +23,12 @@ export function WorkspacePanel() {
 
   // Sync persisted workspaceDir to Kilo on mount
   useEffect(() => {
-    Kilo.setProjectDir(workspaceDir)
+    OpenCode.setProjectDir(workspaceDir)
   }, [workspaceDir])
 
   const applyDir = useCallback((dir: string) => {
     setWorkspaceDir(dir)
-    Kilo.setProjectDir(dir)
+    OpenCode.setProjectDir(dir)
     setShowInput(false)
     setInputValue('')
   }, [setWorkspaceDir])
@@ -66,7 +66,7 @@ export function WorkspacePanel() {
 
   const handleClear = useCallback(() => {
     setWorkspaceDir(null)
-    Kilo.setProjectDir(null)
+    OpenCode.setProjectDir(null)
   }, [setWorkspaceDir])
 
   const handleInputSubmit = useCallback(() => {

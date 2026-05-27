@@ -40,8 +40,8 @@ const zh = {
       noProvider: '未配置 API 提供商。请在设置中配置提供商。',
       noApiKey: 'API 密钥未配置。请在设置中输入您的 API 密钥。',
       noModel: '未选择模型。请在设置中选择一个模型。',
-      sessionFailed: '创建 Kilo 会话失败',
-      serverUnreachable: 'Kilo 服务器无法访问',
+      sessionFailed: '创建 OpenCode 会话失败',
+      serverUnreachable: 'OpenCode 服务器无法访问',
       dismiss: '关闭',
     },
     status: {
@@ -117,8 +117,8 @@ const zh = {
       customizeLook: '自定义外观和感觉',
     },
     kilostatus: {
-      online: 'Kilo 在线',
-      offline: 'Kilo 离线',
+      online: 'OpenCode 在线',
+      offline: 'OpenCode 离线',
     },
     provider: {
       searchPlaceholder: '搜索提供商...',

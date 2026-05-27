@@ -8,7 +8,7 @@ import { TelegramPage } from './components/telegram/index'
 import { useAppStore } from './stores'
 import { useTaskScheduler } from './hooks'
 import { WorkspacePanel } from './components/workspace'
-import { Kilo } from './utils'
+import { OpenCode } from './utils'
 import { useMCPStore } from './stores/mcpStore'
 import { useSkillStore } from './stores/skillStore'
 import { SkillDropZone } from './components/skills'
@@ -35,7 +35,7 @@ function App() {
         const { invoke } = await import('@tauri-apps/api/core')
         const url = await invoke<string>('get_kilo_url')
         if (url) {
-          Kilo.setBaseUrl(url)
+          OpenCode.setBaseUrl(url)
           useMCPStore.getState().refreshAllServers().catch(() => {})
         }
       } catch {
@@ -48,7 +48,7 @@ function App() {
 
     const projectDir = import.meta.env.VITE_KILO_PROJECT_DIR || null
     if (projectDir) {
-      Kilo.setProjectDir(projectDir)
+      OpenCode.setProjectDir(projectDir)
     }
 
     // Initialize SQLite database and migrate localStorage data

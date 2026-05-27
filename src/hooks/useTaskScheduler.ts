@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useTaskStore } from '../stores'
-import * as Kilo from '../utils/kiloClient'
+import * as OpenCode from '../utils/opencodeClient'
 
 const POLL_INTERVAL = 10_000 // 10 seconds
 
@@ -21,9 +21,9 @@ export function useTaskScheduler() {
 
       try {
         // Create Kilo session for this task run
-        const session = await Kilo.createSession(`Task: ${task.name}`)
+        const session = await OpenCode.createSession(`Task: ${task.name}`)
 
-        await Kilo.prompt(session.id, task.prompt, {
+        await OpenCode.prompt(session.id, task.prompt, {
           onPartUpdated: (_sessionID, _messageID, _partID, part) => {
             // Collect text from text parts
             if (part.type === 'text') {

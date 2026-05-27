@@ -6,13 +6,13 @@ import { useMCPStore } from '../../stores/mcpStore'
 import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
-import * as Kilo from '../../utils/kiloClient'
+import * as OpenCode from '../../utils/opencodeClient'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
 
-// Store Kilo message IDs that belong to the user, so we don't accidentally treat them as the assistant's streaming response
+// Store OpenCode message IDs that belong to the user, so we don't accidentally treat them as the assistant's streaming response
 const ignoredMessageIDs = new Set<string>()
 
 export function ChatView() {
@@ -38,7 +38,7 @@ export function ChatView() {
 
   // Subscribe to SSE events on mount
   useEffect(() => {
-    const unsubscribe = Kilo.subscribeToEvents({
+    const unsubscribe = OpenCode.subscribeToEvents({
       onPartUpdated: (part) => {
         const kiloSessionId = part.sessionID
         if (!kiloSessionId || !part.messageID) return
@@ -140,7 +140,7 @@ export function ChatView() {
   // Health check as fallback
   useEffect(() => {
     const check = async () => {
-      const ok = await Kilo.health()
+      const ok = await OpenCode.health()
       setServerOnline(ok)
     }
     check()
@@ -200,7 +200,7 @@ export function ChatView() {
       let kiloId = session?.kiloId
       if (!kiloId) {
         try {
-          const ks = await Kilo.createSession(session?.title)
+          const ks = await OpenCode.createSession(session?.title)
           kiloId = ks.id
           useAppStore.setState((state) => ({
             sessions: state.sessions.map((s) =>
@@ -325,7 +325,7 @@ export function ChatView() {
         if (activeAgent && kiloId) {
           const syncAgentToKilo = async () => {
             try {
-              await Kilo.setPermissionMode(kiloId!, activeAgent.permissionMode)
+              await OpenCode.setPermissionMode(kiloId!, activeAgent.permissionMode)
             } catch {
               // Kilo might not support this yet
             }
@@ -333,7 +333,7 @@ export function ChatView() {
           syncAgentToKilo().catch(() => {})
         }
 
-        const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, effectiveModel)
+        const completedMessage = await OpenCode.promptAsync(kiloId!, enrichedContent, effectiveModel)
         if (completedMessage?.info?.role === 'assistant') {
           commitStreamingMessage(activeSessionId, completedMessage)
         }
@@ -366,7 +366,7 @@ export function ChatView() {
     if (activeSessionId) {
       const s = sessions.find((s) => s.id === activeSessionId)
       if (s?.kiloId) {
-        Kilo.abortSession(s.kiloId).catch(() => {})
+        OpenCode.abortSession(s.kiloId).catch(() => {})
       }
       finishStreaming(activeSessionId)
     }

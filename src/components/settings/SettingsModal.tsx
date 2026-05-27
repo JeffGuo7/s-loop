@@ -7,7 +7,7 @@ import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, 
 import type { ProviderConfig } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
-import { Kilo } from '../../utils'
+import { OpenCode } from '../../utils'
 import { ScrollShadow } from "@heroui/react"
 import i18n from '../../i18n'
 
@@ -49,7 +49,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const fetchProviders = async () => {
     try {
-      const list = await Kilo.listProviders()
+      const list = await OpenCode.listProviders()
       setProviderList(
         list.map((p) => ({
           id: p.id,
@@ -90,7 +90,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     try {
       for (const [id, cfg] of Object.entries(localConfigs)) {
         if (cfg.apiKey) {
-          await Kilo.setProviderApiKey(id, cfg.apiKey)
+          await OpenCode.setProviderApiKey(id, cfg.apiKey)
         }
       }
     } catch {

@@ -1,6 +1,3 @@
-// HTTP client for Kilo serve API
-// Uses EventSource for SSE event subscription + promptAsync for sending messages
-
 import type { MessagePart, MessageInfo, KiloMessage } from '../types'
 
 const DEFAULT_BASE = 'http://127.0.0.1:4096'
@@ -33,7 +30,7 @@ function getHeaders(): Record<string, string> {
     'Content-Type': 'application/json',
   }
   if (_projectDir) {
-    headers['x-kilo-directory'] = _projectDir
+    headers['x-opencode-directory'] = _projectDir
   }
   return headers
 }
@@ -46,7 +43,7 @@ async function post(paths: string, body?: unknown) {
   })
   if (!res.ok) {
     const txt = await res.text()
-    throw new Error(`Kilo ${res.status}: ${txt}`)
+    throw new Error(`OpenCode ${res.status}: ${txt}`)
   }
   return res
 }
@@ -58,7 +55,7 @@ async function del(paths: string) {
   })
   if (!res.ok) {
     const txt = await res.text()
-    throw new Error(`Kilo ${res.status}: ${txt}`)
+    throw new Error(`OpenCode ${res.status}: ${txt}`)
   }
   return res
 }
@@ -69,7 +66,7 @@ async function get(paths: string) {
   })
   if (!res.ok) {
     const txt = await res.text()
-    throw new Error(`Kilo ${res.status}: ${txt}`)
+    throw new Error(`OpenCode ${res.status}: ${txt}`)
   }
   return res
 }
@@ -82,7 +79,7 @@ async function patch(paths: string, body?: unknown) {
   })
   if (!res.ok) {
     const txt = await res.text()
-    throw new Error(`Kilo ${res.status}: ${txt}`)
+    throw new Error(`OpenCode ${res.status}: ${txt}`)
   }
   return res
 }
@@ -100,8 +97,6 @@ async function getJson<T>(paths: string): Promise<T> {
   }
 }
 
-// ----- Health -----
-
 export async function health(): Promise<boolean> {
   try {
     const data = await getJson<{ healthy: boolean }>('/global/health')
@@ -111,16 +106,14 @@ export async function health(): Promise<boolean> {
   }
 }
 
-// ----- Session -----
-
-export interface KiloSession {
+export interface OpenCodeSession {
   id: string
   title?: string
   createdAt?: number
   updatedAt?: number
 }
 
-export async function createSession(title?: string): Promise<KiloSession> {
+export async function createSession(title?: string): Promise<OpenCodeSession> {
   const body: Record<string, unknown> = {}
   if (title) body.title = title
   const res = await post('/session', body)
@@ -131,15 +124,13 @@ export async function createSession(title?: string): Promise<KiloSession> {
   return JSON.parse(text)
 }
 
-export async function listSessions(): Promise<KiloSession[]> {
-  return getJson<KiloSession[]>('/session')
+export async function listSessions(): Promise<OpenCodeSession[]> {
+  return getJson<OpenCodeSession[]>('/session')
 }
 
 export async function deleteSession(id: string): Promise<void> {
   await del(`/session/${id}`)
 }
-
-// ----- Messages -----
 
 export async function getMessages(sessionId: string): Promise<KiloMessage[]> {
   const data = await getJson<{ info: MessageInfo; parts: MessagePart[] }[]>(`/session/${sessionId}/message`)
@@ -148,8 +139,6 @@ export async function getMessages(sessionId: string): Promise<KiloMessage[]> {
     parts: msg.parts || [],
   }))
 }
-
-// ----- SSE Event Subscription -----
 
 export interface SSECallbacks {
   onPartUpdated: (part: MessagePart) => void
@@ -178,7 +167,7 @@ function connectSSE() {
   const params = new URLSearchParams()
   if (_projectDir) params.set('directory', _projectDir)
   const qs = params.toString()
-  const eventUrl = url(`/event${qs ? '?' + qs : ''}`)
+  const eventUrl = url(`/global/event${qs ? '?' + qs : ''}`)
 
   const es = new EventSource(eventUrl)
   _eventSource = es
@@ -249,18 +238,15 @@ function connectSSE() {
         case 'session.status':
         case 'session.turn.open':
         case 'session.turn.close':
-          // Ignore
           break
       }
     } catch {
-      // Skip unparseable events
     }
   }
 
   es.onerror = () => {
     es.close()
     _eventSource = null
-    // Reconnect after 3 seconds
     if (_sseCallbacks) {
       _reconnectTimer = setTimeout(connectSSE, 3000)
     }
@@ -279,8 +265,6 @@ export function unsubscribeFromEvents() {
   }
 }
 
-// ----- Prompt (async via SSE) -----
-
 export interface ModelRef {
   providerID: string
   modelID: string
@@ -292,10 +276,6 @@ export interface ToolDefinition {
   input_schema: Record<string, unknown>
 }
 
-/**
- * Send a prompt asynchronously. The response comes through the SSE event stream.
- * Subscribe to events first via subscribeToEvents().
- */
 export async function promptAsync(
   sessionId: string,
   content: string,
@@ -322,19 +302,13 @@ export async function promptAsync(
       }
     }
   } catch {
-    // Ignore JSON parse errors
   }
   return undefined
 }
 
-/**
- * Abort the current prompt for a session.
- */
 export async function abortSession(sessionId: string): Promise<void> {
   await post(`/session/${sessionId}/abort`)
 }
-
-// ----- Legacy prompt (for task scheduler) -----
 
 let _activeAbort: AbortController | null = null
 
@@ -342,10 +316,6 @@ export function abortPrompt() {
   _activeAbort?.abort()
 }
 
-/**
- * Legacy synchronous prompt with inline SSE parsing.
- * Used by the task scheduler. For chat, use promptAsync + subscribeToEvents instead.
- */
 export async function prompt(
   sessionId: string,
   content: string,
@@ -376,7 +346,7 @@ export async function prompt(
       Accept: 'text/event-stream',
     }
     if (_projectDir) {
-      headers['x-kilo-directory'] = _projectDir
+      headers['x-opencode-directory'] = _projectDir
     }
 
     const res = await fetch(url(`/session/${sessionId}/message`), {
@@ -388,16 +358,15 @@ export async function prompt(
 
     if (!res.ok) {
       const txt = await res.text()
-      throw new Error(`Kilo ${res.status}: ${txt}`)
+      throw new Error(`OpenCode ${res.status}: ${txt}`)
     }
 
     const contentType = res.headers.get('content-type') || ''
 
-    // Handle direct JSON response
     if (contentType.includes('application/json')) {
       const text = await res.text()
       if (!text || text.trim() === '') {
-        throw new Error('Empty response from Kilo API')
+        throw new Error('Empty response from OpenCode API')
       }
       const data = JSON.parse(text)
       if (data.info?.id) {
@@ -417,7 +386,6 @@ export async function prompt(
       return messageID
     }
 
-    // Handle SSE streaming response (legacy path)
     const reader = res.body?.getReader()
     if (!reader) throw new Error('No response body')
 
@@ -475,7 +443,6 @@ export async function prompt(
             callbacks.onError(new Error(evt.properties.error?.message || 'Session error'))
           }
         } catch {
-          // Skip unparseable events
         }
 
         eventBoundary = buffer.indexOf('\n\n')
@@ -495,9 +462,7 @@ export async function prompt(
   }
 }
 
-// ----- Provider / Config -----
-
-export interface KiloProvider {
+export interface OpenCodeProvider {
   id: string
   name: string
   source?: string
@@ -505,12 +470,12 @@ export interface KiloProvider {
   models?: Record<string, { id: string; name: string }>
 }
 
-export async function listProviders(): Promise<KiloProvider[]> {
-  const data = await getJson<{ all?: KiloProvider[] } | KiloProvider[]>('/provider')
+export async function listProviders(): Promise<OpenCodeProvider[]> {
+  const data = await getJson<{ all?: OpenCodeProvider[] } | OpenCodeProvider[]>('/provider')
   if (data && typeof data === 'object' && 'all' in data) {
     return data.all ?? []
   }
-  return data as KiloProvider[]
+  return data as OpenCodeProvider[]
 }
 
 export async function getConfig(): Promise<Record<string, unknown>> {
@@ -539,9 +504,7 @@ export async function setProviderApiKey(providerId: string, apiKey: string): Pro
   })
 }
 
-// ----- MCP -----
-
-export interface MCPServerInfo {
+export interface OpenCodeMCPServerInfo {
   name: string
   status: 'connected' | 'connecting' | 'error' | 'disabled'
   tools?: Array<{
@@ -558,25 +521,25 @@ export interface MCPServerInfo {
   error?: string
 }
 
-export async function getMCPServers(): Promise<Record<string, MCPServerInfo>> {
-  const data = await getJson<unknown>('/mcp')
+export async function getMCPServers(): Promise<Record<string, OpenCodeMCPServerInfo>> {
+  const data = await getJson<unknown>('/mcp/servers')
   if (Array.isArray(data)) {
-    const record: Record<string, MCPServerInfo> = {}
+    const record: Record<string, OpenCodeMCPServerInfo> = {}
     for (const server of data) {
       if (typeof server === 'object' && server !== null) {
         const s = server as Record<string, unknown>
         record[s.name as string] = {
           name: s.name as string,
-          status: (s.status as MCPServerInfo['status']) || 'connected',
-          tools: s.tools as MCPServerInfo['tools'],
-          resources: s.resources as MCPServerInfo['resources'],
+          status: (s.status as OpenCodeMCPServerInfo['status']) || 'connected',
+          tools: s.tools as OpenCodeMCPServerInfo['tools'],
+          resources: s.resources as OpenCodeMCPServerInfo['resources'],
           error: s.error as string | undefined,
         }
       }
     }
     return record
   }
-  return data as Record<string, MCPServerInfo>
+  return data as Record<string, OpenCodeMCPServerInfo>
 }
 
 export async function addMCPServer(config: {
@@ -587,10 +550,6 @@ export async function addMCPServer(config: {
   url?: string
 }): Promise<void> {
   const name = config.name
-
-  // Map to Kilo's expected format:
-  // - "stdio" → type: "local" with command as full string array
-  // - "sse"/"http" → type: "remote" with url
   const mcpConfig: Record<string, unknown> =
     config.type === 'stdio'
       ? {
@@ -613,8 +572,6 @@ export async function disconnectMCPServer(name: string): Promise<void> {
   await post(`/mcp/${encodeURIComponent(name)}/disconnect`)
 }
 
-// ----- Skills -----
-
 export interface SkillEntry {
   name: string
   description: string
@@ -626,9 +583,6 @@ export async function getSkills(): Promise<SkillEntry[]> {
   return getJson<SkillEntry[]>('/skill')
 }
 
-// ----- Permissions -----
-
-/** Respond to a permission request from the AI */
 export async function respondToPermission(
   sessionId: string,
   permissionId: string,
@@ -637,12 +591,10 @@ export async function respondToPermission(
   await post(`/session/${sessionId}/permissions/${permissionId}`, { action })
 }
 
-/** List all pending permission requests */
 export async function listPermissions(): Promise<Array<{ id: string; permission: string; sessionID: string }>> {
   return getJson('/permission')
 }
 
-/** Set permission mode for a session */
 export async function setPermissionMode(
   sessionId: string,
   mode: 'ask' | 'allow' | 'deny',
