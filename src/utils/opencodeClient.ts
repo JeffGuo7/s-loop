@@ -292,18 +292,110 @@ export async function promptAsync(
     body.tools = tools
   }
 
-  const res = await post(`/session/${sessionId}/message`, body)
-  try {
-    const data = (await res.json()) as Partial<KiloMessage> | undefined
-    if (data?.info?.id) {
-      return {
-        info: data.info,
-        parts: Array.isArray(data.parts) ? data.parts : [],
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+  }
+  if (_projectDir) {
+    headers['x-opencode-directory'] = _projectDir
+  }
+
+  const res = await fetch(url(`/session/${sessionId}/message`), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const txt = await res.text()
+    throw new Error(`OpenCode ${res.status}: ${txt}`)
+  }
+
+  const contentType = res.headers.get('content-type') || ''
+
+  // Handle direct JSON response (non-streaming)
+  if (contentType.includes('application/json')) {
+    try {
+      const data = (await res.json()) as Partial<KiloMessage> | undefined
+      if (data?.info?.id) {
+        return {
+          info: data.info,
+          parts: Array.isArray(data.parts) ? data.parts : [],
+        }
+      }
+    } catch {
+    }
+    return undefined
+  }
+
+  // Handle NDJSON streaming response (OpenCode default)
+  const reader = res.body?.getReader()
+  if (!reader) return undefined
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let messageId = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('{')) continue
+
+      try {
+        const evt = JSON.parse(trimmed)
+
+        if (evt.type === 'message' || evt.type === 'message.part.updated') {
+          const partData = evt.properties?.part || evt.data
+          if (partData?.id) {
+            messageId = partData.messageID || partData.sessionID || messageId
+            const safePart = partData as MessagePart
+            _sseCallbacks?.onPartUpdated(safePart)
+          }
+        } else if (evt.type === 'message.part.delta') {
+          const props = evt.properties || evt
+          if (props.sessionID && props.messageID && props.partID && props.delta) {
+            _sseCallbacks?.onPartDelta(props.sessionID, props.messageID, props.partID, props.delta)
+          }
+        } else if (evt.type === 'tool' || evt.type === 'tool-call') {
+          const toolData = evt.data || evt
+          if (toolData.tool || toolData.name) {
+            const part: MessagePart = {
+              id: `tool_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              type: 'tool',
+              name: toolData.tool || toolData.name || '',
+              state: { status: 'running' },
+            } as unknown as MessagePart
+            _sseCallbacks?.onPartUpdated(part)
+          }
+        } else if (evt.type === 'message.updated') {
+          const info = evt.properties?.info || evt.info
+          if (info) {
+            _sseCallbacks?.onMessageUpdated(info as MessageInfo)
+          }
+        } else if (evt.type === 'complete') {
+          messageId = evt.data?.messageID || evt.messageID || messageId
+        } else if (evt.type === 'error') {
+          _sseCallbacks?.onError({ message: evt.error?.message || evt.data?.message || 'Stream error' })
+        }
+      } catch {
+        // Skip unparseable lines
       }
     }
-  } catch {
   }
-  return undefined
+
+  if (!messageId) return undefined
+
+  return {
+    info: { id: messageId, sessionID: sessionId, role: 'assistant', time: Date.now() },
+    parts: [],
+  }
 }
 
 export async function abortSession(sessionId: string): Promise<void> {

@@ -445,6 +445,8 @@ export const useAppStore = create<AppState>()(
     {
       name: 'snotra-storage',
       partialize: (state) => ({
+        sessions: state.sessions,
+        sessionMessages: state.sessionMessages,
         activeProvider: state.activeProvider,
         providerConfigs: state.providerConfigs,
         theme: state.theme,
@@ -452,13 +454,7 @@ export const useAppStore = create<AppState>()(
         companion: state.companion,
         workspaceDir: state.workspaceDir,
       }),
-      version: 2,
-      migrate: (persistedState: unknown) => {
-        const state = (persistedState || {}) as Record<string, unknown>
-        delete state.sessions
-        delete state.sessionMessages
-        return state as Partial<AppState>
-      },
+      version: 3,
     },
   ),
 )
