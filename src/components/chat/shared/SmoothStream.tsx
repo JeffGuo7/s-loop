@@ -93,7 +93,7 @@ export function SmoothStream({ text, isStreaming }: SmoothStreamProps) {
 
       // Fixed rate: 2 chars per frame ≈ 120 cps at 60fps
       // Gives a smooth, consistent typing feel instead of burst-trickle
-      const CHARS_PER_FRAME = 2
+      const CHARS_PER_FRAME = 6
       const charsToRender = isDone
         ? chunkQueueRef.current.length // flush all when done
         : Math.min(CHARS_PER_FRAME, chunkQueueRef.current.length)

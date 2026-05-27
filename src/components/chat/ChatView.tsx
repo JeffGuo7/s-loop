@@ -295,27 +295,11 @@ export function ChatView() {
           enrichedContent = `${header}\n---\n${contextBlocks.join('\n\n')}\n---\n\n${content}`
         }
 
-        // 4. Build MCP tool definitions for Kilo
-        let mcpTools: Kilo.ToolDefinition[] | undefined
-        if (connectedMCPTools.length > 0) {
-          const tools: Kilo.ToolDefinition[] = []
-          for (const { serverName, toolName } of connectedMCPTools) {
-            const status = mcpStore.serverStatuses[serverName]
-            if (status && status.status === 'connected' && status.tools) {
-              const tool = status.tools.find(t => t.name === toolName)
-              if (tool) {
-                tools.push({
-                  name: `${serverName}__${tool.name}`,
-                  description: tool.description || '',
-                  input_schema: tool.inputSchema || {},
-                })
-              }
-            }
-          }
-          if (tools.length > 0) mcpTools = tools
-        }
+        // 4. MCP tools are described in context text above.
+        // We do NOT pass them as tool schemas to Kilo, because Kilo can't execute them.
+        // The AI will know about available tools from the context text.
 
-        const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, model, mcpTools)
+        const completedMessage = await Kilo.promptAsync(kiloId!, enrichedContent, model)
         if (completedMessage?.info?.role === 'assistant') {
           commitStreamingMessage(activeSessionId, completedMessage)
         }
