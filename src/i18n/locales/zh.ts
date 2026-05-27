@@ -63,6 +63,7 @@ const zh = {
       tools: '工具',
       tool: '工具',
       thoughtProcess: '推理过程',
+      toolCalls: '工具调用',
       executing: '执行中',
       failed: '失败',
       call: '调用',

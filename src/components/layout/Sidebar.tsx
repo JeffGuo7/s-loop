@@ -208,19 +208,27 @@ export function Sidebar({
                 </p>
               </div>
 
-              <button
+              <div
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDelete(e, session.id);
                 }}
-                className={`p-1 rounded-md transition-all duration-300 ${
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    handleDelete(e as unknown as React.MouseEvent, session.id);
+                  }
+                }}
+                className={`p-1 rounded-md transition-all duration-300 cursor-pointer ${
                   isActive
                     ? 'text-accent/60 hover:text-red-500 hover:bg-red-500/10'
                     : 'text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100'
                 }`}
               >
                 <Trash2 size={12} strokeWidth={1.5} />
-              </button>
+              </div>
 
               {/* Active Indicator Line */}
               {isActive && (

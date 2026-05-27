@@ -1,4 +1,5 @@
-import { Markdown, shouldUseDocumentLayout } from '../shared/Markdown'
+import { shouldUseDocumentLayout } from '../shared/Markdown'
+import { SmoothStream } from '../shared/SmoothStream'
 
 interface TextPartViewProps {
   text: string
@@ -12,9 +13,7 @@ export function TextPartView({ text, isStreaming = false }: TextPartViewProps) {
 
   return (
     <div className={isDocument ? '' : 'min-w-0'}>
-      <Markdown variant={isDocument ? 'document' : 'default'}>
-        {text}
-      </Markdown>
+      <SmoothStream text={text} isStreaming={isStreaming} />
       {isStreaming && (
         <span className="shimmer-cursor" />
       )}

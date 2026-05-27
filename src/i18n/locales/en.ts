@@ -63,6 +63,7 @@ const en = {
       tools: 'Tools',
       tool: 'Tool',
       thoughtProcess: 'Thought Process',
+      toolCalls: 'Tool Calls',
       executing: 'Executing',
       failed: 'Failed',
       call: 'Call',

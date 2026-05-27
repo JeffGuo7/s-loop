@@ -165,7 +165,7 @@ fn walk_skill_files(dir: &std::path::Path, entries: &mut Vec<SkillFileEntry>, vi
 /// Scan directories recursively for SKILL.md files and parse them
 #[tauri::command]
 pub async fn scan_skill_files(paths: Vec<String>) -> Result<Vec<SkillFileEntry>, String> {
-    tokio::task::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         let mut results = Vec::new();
         for path_str in &paths {
             let path = std::path::Path::new(path_str);
@@ -178,7 +178,7 @@ pub async fn scan_skill_files(paths: Vec<String>) -> Result<Vec<SkillFileEntry>,
         Ok(results)
     })
     .await
-    .map_err(|e| format!("Scan interrupted: {}", e))?
+    .map_err(|e| format!("Scan interrupted: {:?}", e))?
 }
 
 /// Parse a single SKILL.md file and return its contents

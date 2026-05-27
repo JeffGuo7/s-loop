@@ -1,12 +1,19 @@
 import { memo, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { TextPartView, ReasoningView, ToolPartView, ThoughtStackView } from './parts'
+import { StackBlock, MainTextBlock } from './blocks'
 import { MessageActionBar } from './shared/MessageActionBar'
 import { StreamingIndicator } from './shared/StreamingIndicator'
 import { shouldUseDocumentLayout } from './shared/Markdown'
 import { User, Cpu } from 'lucide-react'
 
-import type { KiloMessage, MessagePart, TextPart, ToolPart, FilePart } from '../../types'
+import type { KiloMessage, MessagePart, TextPart, FilePart } from '../../types'
+
+type BlockType = 'stack' | 'text'
+
+interface MessageBlock {
+  type: BlockType
+  parts: MessagePart[]
+}
 
 interface MessageItemProps {
   message: KiloMessage
@@ -96,7 +103,17 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
 
             <div className="relative">
               <div className="space-y-4">
-                {renderGroupedParts(message.parts, isStreaming)}
+                {(() => {
+                  const blocks = groupPartsIntoBlocks(message.parts)
+                  return blocks.map((block, idx) => {
+                    switch (block.type) {
+                      case 'stack':
+                        return <StackBlock key={`stack-${idx}`} parts={block.parts} isStreaming={isStreaming} />
+                      case 'text':
+                        return <MainTextBlock key={`text-${idx}`} parts={block.parts} isStreaming={isStreaming} isDocument={isDocument} />
+                    }
+                  })
+                })()}
               </div>
             </div>
           </div>
@@ -132,85 +149,23 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
   )
 })
 
-function renderGroupedParts(parts: MessagePart[], isStreaming: boolean) {
-  const renderedParts: React.ReactNode[] = []
-  let currentStack: MessagePart[] = []
+function groupPartsIntoBlocks(parts: MessagePart[]): MessageBlock[] {
+  const blocks: MessageBlock[] = []
 
-  const flushStack = (idx: number) => {
-    if (currentStack.length > 0) {
-      renderedParts.push(
-        <ThoughtStackView 
-          key={`stack-${idx}`} 
-          parts={[...currentStack]} 
-          isStreaming={isStreaming} 
-        />
-      )
-      currentStack = []
-    }
-  }
+  for (const part of parts) {
+    if (part.type === 'step-start' || part.type === 'step-finish') continue
 
-  parts.forEach((part, idx) => {
-    // Skip decluttering parts entirely so they don't break the stack
-    if (part.type === 'step-start' || part.type === 'step-finish') {
-      return
-    }
+    let isStack = part.type === 'reasoning' || part.type === 'tool'
+    let blockType: BlockType = isStack ? 'stack' : 'text'
+    if (part.type !== 'text' && part.type !== 'reasoning' && part.type !== 'tool') continue
 
-    if (part.type === 'reasoning' || part.type === 'tool') {
-      currentStack.push(part)
+    const lastBlock = blocks[blocks.length - 1]
+    if (lastBlock && lastBlock.type === blockType) {
+      lastBlock.parts.push(part)
     } else {
-      flushStack(idx)
-      renderedParts.push(
-        <MessagePartRenderer 
-          key={part.id || idx} 
-          part={part} 
-          isStreaming={isStreaming} 
-        />
-      )
+      blocks.push({ type: blockType, parts: [part] })
     }
-  })
-
-  flushStack(parts.length)
-  return renderedParts
-}
-
-interface MessagePartRendererProps {
-  part: MessagePart
-  isStreaming?: boolean
-}
-
-function MessagePartRenderer({ part, isStreaming }: MessagePartRendererProps) {
-  const { t } = useTranslation()
-  switch (part.type) {
-    case 'text':
-      return (
-        <div className={`
-          relative px-6 py-5 rounded-[28px] rounded-tl-[4px] transition-all duration-700 group/text-part
-          ${isStreaming 
-            ? 'bg-accent-subtle/20 border-accent/20 shadow-[0_8px_32px_rgba(var(--color-accent-rgb),0.08)]' 
-            : 'bg-surface/40 backdrop-blur-xl border border-black/[0.03] dark:border-white/[0.03] shadow-sm hover:shadow-md hover:bg-surface/60'
-          }
-        `}>
-          <TextPartView text={part.text} isStreaming={isStreaming} />
-          {isStreaming && (
-            <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-accent rounded-full animate-pulse shadow-[0_0_8px_var(--color-accent)]" />
-          )}
-        </div>
-      )
-    case 'reasoning':
-      return <ReasoningView text={part.text} isActive={isStreaming} />
-    case 'tool':
-      return <ToolPartView part={part as ToolPart} />
-    case 'step-start':
-    case 'step-finish':
-      // Hide step-start and step-finish to declutter the UI, as tool/reasoning cards already show status
-      return null
-    case 'file':
-      return (
-        <div className="text-[15px] text-text-secondary font-medium">
-          {(part as FilePart).filename || t('chat.parts.file')}
-        </div>
-      )
-    default:
-      return null
   }
+
+  return blocks
 }
