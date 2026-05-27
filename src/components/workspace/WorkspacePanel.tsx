@@ -21,7 +21,7 @@ export function WorkspacePanel() {
   const [inputValue, setInputValue] = useState('')
   const hiddenInputRef = useRef<HTMLInputElement>(null)
 
-  // Sync persisted workspaceDir to Kilo on mount
+  // Sync persisted workspaceDir to OpenCode on mount
   useEffect(() => {
     OpenCode.setProjectDir(workspaceDir)
   }, [workspaceDir])

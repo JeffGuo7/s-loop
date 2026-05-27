@@ -59,7 +59,7 @@ export function ChatView() {
             return
           }
 
-          // Update messageID from real Kilo ID if still placeholder
+          // Update messageID from real OpenCode session ID if still placeholder
           if (streaming.messageID.startsWith('pending-')) {
             updateStreamingMessageID(localId, part.messageID)
           }
@@ -314,23 +314,23 @@ export function ChatView() {
         }
 
         // 5. MCP tools are described in context text above.
-        // We do NOT pass them as tool schemas to Kilo, because Kilo can't execute them.
+        // We do NOT pass them as tool schemas to OpenCode, because OpenCode can't execute them.
         // The AI will know about available tools from the context text.
 
         const effectiveModel = activeAgent?.model
           ? { providerID: activeProvider!, modelID: activeAgent.model }
           : model
 
-        // Sync agent config to Kilo session
+        // Sync agent config to OpenCode session
         if (activeAgent && kiloId) {
-          const syncAgentToKilo = async () => {
+          const syncAgentToOpenCode = async () => {
             try {
               await OpenCode.setPermissionMode(kiloId!, activeAgent.permissionMode)
             } catch {
-              // Kilo might not support this yet
+              // OpenCode might not support this yet
             }
           }
-          syncAgentToKilo().catch(() => {})
+          syncAgentToOpenCode().catch(() => {})
         }
 
         const completedMessage = await OpenCode.promptAsync(kiloId!, enrichedContent, effectiveModel)

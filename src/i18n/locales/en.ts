@@ -45,9 +45,9 @@ const en = {
       dismiss: 'Dismiss',
     },
     status: {
-      kiloConnected: 'Kilo Connected',
-      kiloOffline: 'Kilo Offline',
-      kiloUnreachable: 'Kilo server is currently unreachable',
+      kiloConnected: 'OpenCode Connected',
+      kiloOffline: 'OpenCode Offline',
+      kiloUnreachable: 'OpenCode server is currently unreachable',
       noModel: 'No model',
     },
     parts: {

@@ -18,7 +18,7 @@ interface AppState {
     info?: MessageInfo
   }>
 
-  // Provider — now dynamic (any Kilo provider ID)
+  // Provider — now dynamic (any OpenCode provider ID)
   activeProvider: string
   providerConfigs: Record<string, ProviderConfig>
   providerList: ProviderInfo[]

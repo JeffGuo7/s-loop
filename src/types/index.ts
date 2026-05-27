@@ -1,4 +1,4 @@
-// Kilo API types matching @kilocode/sdk
+// OpenCode API types matching @opencode-ai/sdk
 
 // ----- Message Parts -----
 

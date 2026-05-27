@@ -30,10 +30,10 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    async function initKiloUrl() {
+    async function initOpenCodeUrl() {
       try {
         const { invoke } = await import('@tauri-apps/api/core')
-        const url = await invoke<string>('get_kilo_url')
+        const url = await invoke<string>('get_opencode_url')
         if (url) {
           OpenCode.setBaseUrl(url)
           useMCPStore.getState().refreshAllServers().catch(() => {})
@@ -42,7 +42,7 @@ function App() {
         // Not running inside Tauri — use default URL (Vite dev mode)
       }
     }
-    initKiloUrl()
+    initOpenCodeUrl()
 
     useSkillStore.getState().refreshSkills().catch(() => {})
 

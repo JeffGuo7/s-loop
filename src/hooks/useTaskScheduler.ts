@@ -20,7 +20,7 @@ export function useTaskScheduler() {
       let output = ''
 
       try {
-        // Create Kilo session for this task run
+        // Create OpenCode session for this task run
         const session = await OpenCode.createSession(`Task: ${task.name}`)
 
         await OpenCode.prompt(session.id, task.prompt, {

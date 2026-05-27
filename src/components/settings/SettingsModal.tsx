@@ -41,7 +41,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [modelSearchQuery, setModelSearchQuery] = useState('')
   const [missingModelWarning, setMissingModelWarning] = useState(false)
 
-  // Load providers from Kilo on mount
+  // Load providers from OpenCode on mount
   useEffect(() => {
     if (providerList.length > 0) return
     fetchProviders()
@@ -60,7 +60,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         })),
       )
     } catch {
-      // Kilo might not be running
+      // OpenCode might not be running
     }
   }
 
@@ -85,7 +85,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
     setActiveProvider(expandedProvider || activeProvider)
 
-    // Sync to Kilo backend
+    // Sync to OpenCode backend
     setSaving(true)
     try {
       for (const [id, cfg] of Object.entries(localConfigs)) {
@@ -94,7 +94,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         }
       }
     } catch {
-      // Kilo might not be running
+      // OpenCode might not be running
     }
     setSaving(false)
     setSaved(true)

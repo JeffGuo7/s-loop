@@ -45,9 +45,9 @@ const zh = {
       dismiss: '关闭',
     },
     status: {
-      kiloConnected: 'Kilo 已连接',
-      kiloOffline: 'Kilo 离线',
-      kiloUnreachable: 'Kilo 服务器当前不可用',
+      kiloConnected: 'OpenCode 已连接',
+      kiloOffline: 'OpenCode 离线',
+      kiloUnreachable: 'OpenCode 服务器当前不可用',
       noModel: '无模型',
     },
     parts: {
