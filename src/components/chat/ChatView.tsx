@@ -256,7 +256,6 @@ export function ChatView() {
         // 1. Inject enabled skills
         if (enabledSkills.length > 0) {
           const skillBlocks = enabledSkills.map(skill => {
-            const meta = skillStore.skillMeta[skill.name]
             return skill.content
               ? `<skill name="${skill.name}">\n${skill.description ? `Description: ${skill.description}\n` : ''}${skill.content}\n</skill>`
               : `<skill name="${skill.name}">\n${skill.description || ''}\n</skill>`

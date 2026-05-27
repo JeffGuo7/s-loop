@@ -393,7 +393,7 @@ export async function promptAsync(
   if (!messageId) return undefined
 
   return {
-    info: { id: messageId, sessionID: sessionId, role: 'assistant', time: Date.now() },
+    info: { id: messageId, sessionID: sessionId, role: 'assistant', time: { created: Date.now() } },
     parts: [],
   }
 }
