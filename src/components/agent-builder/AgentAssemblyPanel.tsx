@@ -14,6 +14,8 @@ export function AgentAssemblyPanel() {
   const removeMCPTool = useAgentStore((s) => s.removeMCPToolFromAgent)
   const addMCPServer = useAgentStore((s) => s.addMCPServerToAgent)
   const removeMCPServer = useAgentStore((s) => s.removeMCPServerFromAgent)
+  const addAccessiblePath = useAgentStore((s) => s.addAccessiblePath)
+  const removeAccessiblePath = useAgentStore((s) => s.removeAccessiblePath)
 
   const activeProvider = useAppStore((s) => s.activeProvider)
   const providerList = useAppStore((s) => s.providerList)
@@ -107,6 +109,64 @@ export function AgentAssemblyPanel() {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Permission Mode */}
+          <div className="rounded-xl bg-surface-secondary/20 border border-border-light/20 p-2.5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] font-black uppercase tracking-[0.15em] text-accent/60">
+                Permission Mode
+              </span>
+              <div className="flex-1 border-t border-border-light/30" />
+            </div>
+            <div className="flex gap-1.5">
+              {(['ask', 'allow', 'deny'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => updateAgent(agent.id, { permissionMode: mode })}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                    agent.permissionMode === mode
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'bg-surface-secondary/40 text-text-tertiary hover:text-text border border-border-light/20'
+                  }`}
+                >
+                  {mode === 'ask' ? '🔍 Ask' : mode === 'allow' ? '✓ Allow' : '✗ Deny'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Accessible Paths */}
+          <div className="rounded-xl bg-surface-secondary/20 border border-border-light/20 p-2.5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] font-black uppercase tracking-[0.15em] text-accent/60">
+                Workspace Paths
+              </span>
+              <div className="flex-1 border-t border-border-light/30" />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {agent.accessiblePaths.map((p) => (
+                <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-secondary/60 text-[9px] font-mono text-text-secondary border border-border-light/20">
+                  {p}
+                  <button onClick={() => removeAccessiblePath(agent.id, p)} className="text-text-quaternary hover:text-red-500 ml-0.5">×</button>
+                </span>
+              ))}
+              <button
+                onClick={async () => {
+                  try {
+                    const { open } = await import('@tauri-apps/plugin-dialog')
+                    const dir = await open({ directory: true, title: 'Select workspace path' })
+                    if (dir) addAccessiblePath(agent.id, dir)
+                  } catch {
+                    const p = prompt('Enter workspace path:')
+                    if (p) addAccessiblePath(agent.id, p)
+                  }
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-secondary/40 text-[9px] text-text-quaternary hover:text-accent border border-dashed border-border-light/30 hover:border-accent/30 transition-all"
+              >
+                + Add
+              </button>
+            </div>
           </div>
 
           {/* Components grid */}

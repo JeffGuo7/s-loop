@@ -294,7 +294,20 @@ export function ChatView() {
           contextBlocks.unshift(`## System Instructions\n${activeAgent.instructions}`)
         }
 
-        // 4. Assemble enriched content
+        // 4. Inject permission settings
+        if (activeAgent?.permissionMode) {
+          contextBlocks.push(
+            `## Permission Settings\n` +
+            `Tool execution permission mode: ${activeAgent.permissionMode}.\n` +
+            (activeAgent.permissionMode === 'ask'
+              ? 'The AI will ask for permission before executing tools.'
+              : activeAgent.permissionMode === 'allow'
+              ? 'All tool executions are pre-approved.'
+              : 'Tool execution is denied.')
+          )
+        }
+
+        // 5. Assemble enriched content
         if (contextBlocks.length > 0) {
           const header = activeAgent ? `[Agent: ${activeAgent.name}]` : '[Global Context]'
           enrichedContent = `${header}\n---\n${contextBlocks.join('\n\n')}\n---\n\n${content}`

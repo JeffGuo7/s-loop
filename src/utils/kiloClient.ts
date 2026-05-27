@@ -74,6 +74,19 @@ async function get(paths: string) {
   return res
 }
 
+async function patch(paths: string, body?: unknown) {
+  const res = await fetch(url(paths), {
+    method: 'PATCH',
+    headers: getHeaders(),
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    const txt = await res.text()
+    throw new Error(`Kilo ${res.status}: ${txt}`)
+  }
+  return res
+}
+
 async function getJson<T>(paths: string): Promise<T> {
   const res = await get(paths)
   const text = await res.text()
@@ -611,4 +624,31 @@ export interface SkillEntry {
 
 export async function getSkills(): Promise<SkillEntry[]> {
   return getJson<SkillEntry[]>('/skill')
+}
+
+// ----- Permissions -----
+
+/** Respond to a permission request from the AI */
+export async function respondToPermission(
+  sessionId: string,
+  permissionId: string,
+  action: 'allow' | 'deny'
+): Promise<void> {
+  await post(`/session/${sessionId}/permissions/${permissionId}`, { action })
+}
+
+/** List all pending permission requests */
+export async function listPermissions(): Promise<Array<{ id: string; permission: string; sessionID: string }>> {
+  return getJson('/permission')
+}
+
+/** Set permission mode for a session */
+export async function setPermissionMode(
+  sessionId: string,
+  mode: 'ask' | 'allow' | 'deny',
+  rules?: Record<string, 'ask' | 'allow' | 'deny'>
+): Promise<void> {
+  await patch(`/session/${sessionId}`, {
+    permission: mode === 'allow' ? 'allow' : mode === 'deny' ? 'deny' : rules || 'ask'
+  })
 }

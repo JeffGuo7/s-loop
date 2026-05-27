@@ -29,6 +29,10 @@ export const useAgentStore = create<AgentStore>()(
           skills: [],
           mcpTools: [],
           mcpServers: [],
+          accessiblePaths: [],
+          permissionMode: 'ask',
+          permissionRules: {},
+          slashCommands: [],
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }
@@ -153,6 +157,26 @@ export const useAgentStore = create<AgentStore>()(
                   ),
                   updatedAt: Date.now(),
                 }
+              : a
+          ),
+        }))
+      },
+
+      addAccessiblePath: (agentId, path) => {
+        set((state) => ({
+          agents: state.agents.map((a) =>
+            a.id === agentId
+              ? { ...a, accessiblePaths: a.accessiblePaths.includes(path) ? a.accessiblePaths : [...a.accessiblePaths, path], updatedAt: Date.now() }
+              : a
+          ),
+        }))
+      },
+
+      removeAccessiblePath: (agentId, path) => {
+        set((state) => ({
+          agents: state.agents.map((a) =>
+            a.id === agentId
+              ? { ...a, accessiblePaths: a.accessiblePaths.filter((p) => p !== path), updatedAt: Date.now() }
               : a
           ),
         }))
