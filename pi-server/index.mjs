@@ -1,7 +1,8 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, getModels } from '@earendil-works/pi-ai'
-import { createAgentSession, createCodingTools, createReadOnlyTools, AuthStorage } from '@earendil-works/pi-coding-agent'
+import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const sessions = new Map()
@@ -14,29 +15,29 @@ function getTools(dir) {
   const all = [...createCodingTools(dir), ...createReadOnlyTools(dir)]
   const seen = new Set()
   const tools = all.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true })
-
-  // Add custom web_search tool
   if (!seen.has('web_search')) {
     tools.push({
-      name: 'web_search',
-      label: 'Web Search',
-      description: 'Search the web for current information. Use this when the user asks about news, weather, or anything requiring real-time data.',
-      parameters: { type: 'object', properties: { query: { type: 'string', description: 'The search query' } }, required: ['query'] },
+      name: 'web_search', label: 'Web Search',
+      description: 'Search the web for current information.',
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] },
       execute: async (_id, params) => {
-        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(params.query)}`
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
-        const html = await res.text()
-        const resultRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>.*?<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]*)</gs
-        const results = []
-        let m
-        while ((m = resultRegex.exec(html)) !== null && results.length < 5) {
-          results.push({ title: m[2].replace(/<[^>]+>/g, '').trim(), url: m[1], snippet: m[3].replace(/<[^>]+>/g, '').trim() })
+        try {
+          const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(params.query)}`
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) })
+          const html = await res.text()
+          const results = []
+          const r = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>.*?<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]*)</gs
+          let m
+          while ((m = r.exec(html)) !== null && results.length < 5) {
+            results.push({ title: m[2].replace(/<[^>]+>/g, '').trim(), url: m[1], snippet: m[3].replace(/<[^>]+>/g, '').trim() })
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }], details: {} }
+        } catch (e) {
+          return { content: [{ type: 'text', text: `Search failed: ${e.message}` }], details: {} }
         }
-        return { content: [{ type: 'text', text: results.length > 0 ? JSON.stringify(results, null, 2) : 'No results found' }], details: {} }
       },
     })
   }
-
   return tools
 }
 
@@ -50,24 +51,19 @@ createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ healthy: true })); return
   }
-  // GET /models?provider=xxx — list Pi SDK models for a provider
+
   if (req.method === 'GET' && url.pathname === '/models') {
     const provider = url.searchParams.get('provider') || 'anthropic'
-    try {
-      const models = getModels(provider)
-      const list = models.map(m => ({ id: m.id, name: m.name }))
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(list))
-    } catch {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify([]))
-    }
+    try { const list = getModels(provider).map(m => ({ id: m.id, name: m.name })); res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(list)) }
+    catch { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify([])) }
     return
   }
+
   if (req.method === 'POST' && url.pathname === '/session') {
     const id = randomUUID()
     sessions.set(id, null)
@@ -93,41 +89,37 @@ createServer((req, res) => {
     try {
       const provider = providerID || 'anthropic'
       const modelId = modelID || 'claude-sonnet-4-20250514'
-      const cwd = workspaceDir || process.cwd()
+
+      const model = getModel(provider, modelId)
+      if (!model) {
+        emit('error', { message: `Unknown model "${modelId}" for provider "${provider}". Click Settings → Fetch Models to see available models.` })
+        emit('done', {}); res.end(); return
+      }
 
       if (!wrapper) {
-        // First message: create session like openclaw
-const authStorage = AuthStorage.inMemory()
-          if (apiKey) authStorage.runtimeOverrides.set(provider, apiKey)
-
+        const cwd = workspaceDir || process.cwd()
+        const tools = getTools(cwd)
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
 
-        const created = await createAgentSession({
-          cwd,
-          model: getModel(provider, modelId),
-          systemPrompt: fullPrompt,
-          thinkingLevel: thinkingLevel || 'medium',
-          tools: ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'],
-          customTools: getTools(cwd),
-          authStorage,
+        const agent = new Agent({
+          initialState: {
+            systemPrompt: fullPrompt,
+            model,
+            tools,
+            thinkingLevel: model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off',
+          },
+          sessionId,
+          getApiKey: async () => apiKey,
+          beforeToolCall: async ({ toolCall }) => {
+            emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments || {} })
+            return undefined
+          },
+          toolExecution: 'parallel',
         })
 
-          const session = created.session
-          session.setActiveToolsByName(['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'])
-          console.log('[pi-server] Tools registered:', session.agent.state.tools.map(t => t.name).join(', '), `(${session.agent.state.tools.length})`)
-          console.log('[pi-server] Using provider:', provider, 'model:', modelId)
-
-          // Log API responses to diagnose tool continuation issue
-          session.agent.onResponse = (response, _model) => {
-            console.log('[pi-server] API response status:', response.status)
-          }
-
-        wrapper = { session, emit: null }
-        sessions.set(sessionId, wrapper)
-
         let pid = ''
-        session.subscribe((event) => {
+        agent.subscribe((event) => {
           const e = sessions.get(sessionId)?.emit
           if (!e) return
           switch (event.type) {
@@ -137,36 +129,28 @@ const authStorage = AuthStorage.inMemory()
               else if (ev?.type === 'thinking_delta') e('thinking_delta', { delta: ev.delta })
               break
             }
-            case 'tool_execution_start':
-              e('tool_execution_start', { id: event.toolCallId, name: event.toolName, args: event.args }); break
-            case 'tool_execution_end':
-              e('tool_execution_end', { id: event.toolCallId, name: event.toolName, result: event.result, isError: event.isError }); break
+            case 'tool_execution_start': e('tool_execution_start', { id: event.toolCallId, name: event.toolName, args: event.args }); break
+            case 'tool_execution_end': e('tool_execution_end', { id: event.toolCallId, name: event.toolName, result: event.result, isError: event.isError }); break
           }
         })
+
+        wrapper = { agent, emit: null }
+        sessions.set(sessionId, wrapper)
+        console.log('[pi-server] Tools:', tools.length, '| Provider:', provider, '| Model:', modelId)
       } else {
-        // Update model on existing session
-        const m = getModel(provider, modelId)
-        if (m) wrapper.session.agent.state.model = m
+        if (model) wrapper.agent.state.model = model
+        wrapper.agent.state.tools = getTools(workspaceDir || process.cwd())
       }
 
       wrapper.emit = emit
+      const ac = new AbortController()
+      const promptPromise = wrapper.agent.prompt(content)
+      const timeout = setTimeout(() => { ac.abort(); wrapper.agent.abort(); console.log('[pi-server] Timed out') }, 120_000)
+      try { await promptPromise } finally { clearTimeout(timeout) }
 
-      // Timeout to prevent hanging (60s)
-      const promptPromise = wrapper.session.agent.prompt(content)
-      const timeoutId = setTimeout(() => {
-        wrapper.session.agent.abort()
-        console.log('[pi-server] Agent prompt timed out, aborted')
-      }, 60_000)
-      try {
-        await promptPromise
-      } finally {
-        clearTimeout(timeoutId)
-      }
-
-      const msgs = wrapper.session.agent.state.messages
+      const msgs = wrapper.agent.state.messages
       const last = [...msgs].reverse().find(m => m.role === 'assistant')
-      const text = last?.content?.find?.(c => c.type === 'text')?.text
-        || (last?.errorMessage ? `Error: ${last.errorMessage}` : '')
+      const text = last?.content?.find?.(c => c.type === 'text')?.text || (last?.errorMessage ? `Error: ${last.errorMessage}` : '')
 
       emit('result', { text: text || '' })
       emit('done', {})
