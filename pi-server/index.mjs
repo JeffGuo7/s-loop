@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { getModel } from '@earendil-works/pi-ai'
+import { getModel, getModels } from '@earendil-works/pi-ai'
 import { createAgentSession, createCodingTools, createReadOnlyTools, AuthStorage } from '@earendil-works/pi-coding-agent'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
@@ -53,6 +53,20 @@ createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ healthy: true })); return
+  }
+  // GET /models?provider=xxx — list Pi SDK models for a provider
+  if (req.method === 'GET' && url.pathname === '/models') {
+    const provider = url.searchParams.get('provider') || 'anthropic'
+    try {
+      const models = getModels(provider)
+      const list = models.map(m => ({ id: m.id, name: m.name }))
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(list))
+    } catch {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify([]))
+    }
+    return
   }
   if (req.method === 'POST' && url.pathname === '/session') {
     const id = randomUUID()
@@ -137,12 +151,17 @@ const authStorage = AuthStorage.inMemory()
 
       wrapper.emit = emit
 
-      // Timeout to prevent hanging (5 minutes max)
+      // Timeout to prevent hanging (60s)
       const promptPromise = wrapper.session.agent.prompt(content)
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Agent prompt timed out (300s)')), 300_000)
-      )
-      await Promise.race([promptPromise, timeoutPromise])
+      const timeoutId = setTimeout(() => {
+        wrapper.session.agent.abort()
+        console.log('[pi-server] Agent prompt timed out, aborted')
+      }, 60_000)
+      try {
+        await promptPromise
+      } finally {
+        clearTimeout(timeoutId)
+      }
 
       const msgs = wrapper.session.agent.state.messages
       const last = [...msgs].reverse().find(m => m.role === 'assistant')
