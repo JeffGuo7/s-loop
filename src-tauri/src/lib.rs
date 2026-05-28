@@ -37,7 +37,7 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
 fn resolve_project_dir() -> String {
     std::env::var("SNOTRA_PROJECT_DIR").unwrap_or_else(|_| {
         std::env::current_dir()
-            .map(|d| d.join("..").to_string_lossy().into_owned())
+            .map(|d| d.to_string_lossy().into_owned())
             .unwrap_or_else(|_| ".".into())
     })
 }

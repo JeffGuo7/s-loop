@@ -15,7 +15,7 @@ impl PiServerProcess {
             return Err(format!("Project directory not found: {}", project_dir));
         }
 
-        let node_path = std::env::var("NODE_PATH").unwrap_or_else(|_| "node".into());
+        let node_path = std::env::var("PI_NODE_PATH").unwrap_or_else(|_| "node".into());
 
         let mut cmd = Command::new(&node_path);
         cmd.args([&format!("{}/pi-server/index.mjs", project_dir)]);
