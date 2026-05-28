@@ -90,6 +90,7 @@ export async function prompt(
     thinkingLevel?: string
     tools?: McpToolDef[]
     apiKey?: string
+    workspaceDir?: string
   },
 ): Promise<PromptResult> {
   const controller = new AbortController()
@@ -103,6 +104,7 @@ export async function prompt(
     if (options?.thinkingLevel) body.thinkingLevel = options.thinkingLevel
     if (options?.apiKey) body.apiKey = options.apiKey
     if (options?.tools && options.tools.length > 0) body.tools = options.tools
+    if (options?.workspaceDir) body.workspaceDir = options.workspaceDir
 
     const res = await fetch(`${_base}/session/${sessionId}/message`, {
       method: 'POST',

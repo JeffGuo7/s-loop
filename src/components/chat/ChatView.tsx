@@ -20,6 +20,7 @@ export function ChatView() {
     sessions,
     providerConfigs,
     activeProvider,
+    workspaceDir,
     startStreaming,
     appendStreamingDelta,
     finishStreaming,
@@ -200,8 +201,8 @@ export function ChatView() {
         providerID: effectiveModel?.providerID,
         modelID: effectiveModel?.modelID,
         thinkingLevel: 'medium',
-        tools: mcpToolDefs,
         apiKey: providerConfig?.apiKey,
+        workspaceDir: workspaceDir,
       })
 
       if (result.error) {

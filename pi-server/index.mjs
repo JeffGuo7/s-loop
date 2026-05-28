@@ -2,6 +2,7 @@ import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, Type } from '@earendil-works/pi-ai'
+import { createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const sessions = new Map()
@@ -45,7 +46,7 @@ createServer((req, res) => {
     let body = ''
     req.on('data', chunk => body += chunk)
     req.on('end', async () => {
-      const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, tools } = JSON.parse(body)
+      const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir } = JSON.parse(body)
 
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -66,20 +67,31 @@ createServer((req, res) => {
         }
 
         if (!session.agent) {
-          session.agent = new Agent({
+          // Build system prompt with workspace context
+          const wsPrompt = systemPrompt || 'You are a helpful assistant.'
+          const fullPrompt = workspaceDir
+            ? `${wsPrompt}\n\nYour workspace directory is: ${workspaceDir}\nYou have access to read-only tools to explore and read files in the workspace.`
+            : wsPrompt
+
+          // Create agent with built-in read-only tools
+          const agent = new Agent({
             initialState: {
-              systemPrompt: systemPrompt || 'You are a helpful assistant.',
+              systemPrompt: fullPrompt,
               model,
-              tools: [],
+              tools: createReadOnlyTools(workspaceDir || process.cwd()),
               thinkingLevel: model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off',
             },
             sessionId,
             getApiKey: async () => apiKey,
+            beforeToolCall: async ({ toolCall }) => {
+              emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments })
+              return undefined
+            },
           })
 
           let pid = ''
 
-          session.agent.subscribe((event) => {
+          agent.subscribe((event) => {
             const e = sessions.get(sessionId)?.emit
             if (!e) return
 
@@ -92,9 +104,18 @@ createServer((req, res) => {
                 else if (ev.type === 'toolcall_end') { e('tool_call_end', { id: ev.toolCall.id, name: ev.toolCall.name, args: ev.toolCall.arguments }) }
                 break
               }
-              case 'tool_execution_end': { e('tool_result', { id: event.toolCallId, name: event.toolName, result: event.result }); break }
+              case 'tool_execution_start': {
+                e('tool_execution_start', { id: event.toolCallId, name: event.toolName, args: event.args })
+                break
+              }
+              case 'tool_execution_end': {
+                e('tool_execution_end', { id: event.toolCallId, name: event.toolName, result: event.result, isError: event.isError })
+                break
+              }
             }
           })
+
+          session.agent = agent
         } else {
           if (providerID && modelID && getModel(providerID, modelID)) {
             session.agent.state.model = getModel(providerID, modelID)
@@ -103,7 +124,6 @@ createServer((req, res) => {
           if (model?.reasoning && thinkingLevel) session.agent.state.thinkingLevel = thinkingLevel
         }
 
-        // Register this request's emit function so the agent subscription uses it
         session.emit = emit
 
         await session.agent.prompt(content)
@@ -118,7 +138,6 @@ createServer((req, res) => {
         try { emit('error', { message: err.message || String(err) }); emit('done', {}) } catch {}
       }
 
-      // Clear emit after done
       session.emit = null
       try { res.end() } catch {}
     })
