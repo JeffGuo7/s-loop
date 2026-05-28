@@ -213,11 +213,7 @@ export function ChatView() {
         }
       }
 
-      // Start streaming — messageID will be updated from SSE events
-      const assistantMessageID = `pending-${Date.now()}`
-      startStreaming(activeSessionId, assistantMessageID)
-
-      // Send prompt async — all updates come through SSE
+      // Send prompt async with streaming callbacks
       try {
         // Determine which skills and MCP tools to use
         const agentStore = useAgentStore.getState()
@@ -332,9 +328,53 @@ export function ChatView() {
           syncAgentToPi().catch(() => {})
         }
 
-        const completedMessage = await Pi.promptAsync(kiloId!, enrichedContent, effectiveModel)
-        if (completedMessage?.info?.role === 'assistant') {
-          commitStreamingMessage(activeSessionId, completedMessage)
+        // Start streaming session
+        const pendingId = 'pending-' + Date.now()
+        startStreaming(activeSessionId, pendingId)
+
+        // Send message to Pi Agent with streaming callbacks
+        const result = await Pi.promptAsync(kiloId!, enrichedContent, effectiveModel, undefined, {
+          onPartStart: (_sid, mid, _pid, _type, _text) => {
+            // Create a new streaming part if not already started
+            if (!useAppStore.getState().streamingMessage[activeSessionId]) {
+              startStreaming(activeSessionId, mid)
+            }
+          },
+          onPartDelta: (_sid, _mid, pid, delta) => {
+            // Append delta to streaming part
+            if (delta) {
+              appendStreamingDelta(activeSessionId, pid, delta)
+            }
+          },
+          onPartEnd: (_sid, _mid, _pid) => {
+            // Part ended - no special handling needed
+          },
+          onMessageEnd: (_sid, _mid) => {
+            // Complete the streaming message
+            finishStreaming(activeSessionId)
+          },
+        })
+
+        // If we got a complete message back, commit it
+        if (result) {
+          const message: import('../../types').KiloMessage = {
+            info: {
+              id: `pi-msg-${Date.now()}`,
+              sessionID: activeSessionId,
+              role: 'assistant',
+              time: { created: Date.now() },
+            },
+            parts: (result as any).content
+              ? [{
+                  id: `pi-part-${Date.now()}`,
+                  type: 'text' as const,
+                  text: (result as any).content as string,
+                  sessionID: activeSessionId,
+                  messageID: `pi-msg-${Date.now()}`,
+                }]
+              : [],
+          }
+          commitStreamingMessage(activeSessionId, message)
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

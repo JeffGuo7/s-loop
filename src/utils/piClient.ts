@@ -50,10 +50,14 @@ export async function promptAsync(
   content: string,
   model?: ModelRef,
   _tools?: ToolDefinition[],
-): Promise<void> {
+  callbacks?: StreamCallbacks,
+): Promise<AgentMessage | null> {
   let agent = agents.get(sessionId)
-  const callbacks = callbacksMap.get(sessionId)
-  if (!callbacks) return
+  const cbs = callbacks || callbacksMap.get(sessionId)
+  if (!cbs) {
+    console.warn(`[pi] No callbacks for session ${sessionId}, skipping prompt`)
+    return null
+  }
 
   if (!agent) {
     const piModel = getModel(
@@ -89,7 +93,7 @@ export async function promptAsync(
         const msg = event.message
         if (msg.role === 'assistant') {
           const partId = nextPartId(sessionId)
-          callbacks.onPartStart(sessionId, messageID, partId, 'text', '')
+          cbs.onPartStart(sessionId, messageID, partId, 'text', '')
         }
         break
       }
@@ -98,7 +102,7 @@ export async function promptAsync(
         const delta = evt.assistantMessageEvent?.delta
         if (delta) {
           const partId = `text-${messageID}`
-          callbacks.onPartDelta(sessionId, messageID, partId, delta)
+          cbs.onPartDelta(sessionId, messageID, partId, delta)
         }
         break
       }
@@ -106,19 +110,19 @@ export async function promptAsync(
         const msg = event.message
         if (msg.role === 'assistant') {
           const partId = `text-${messageID}`
-          callbacks.onPartEnd(sessionId, messageID, partId)
+          cbs.onPartEnd(sessionId, messageID, partId)
         }
         break
       }
       case 'tool_execution_start': {
         const evt = event as { type: 'tool_execution_start'; toolCallId: string; toolName: string; args: any }
         const partId = nextPartId(sessionId, 'tool')
-        callbacks.onPartStart(sessionId, messageID, partId, 'tool', evt.toolName)
+        cbs.onPartStart(sessionId, messageID, partId, 'tool', evt.toolName)
         break
       }
       case 'tool_execution_end': {
         const evt = event as { type: 'tool_execution_end'; toolCallId: string; toolName: string; result: any; isError: boolean }
-        callbacks.onPartEnd(sessionId, messageID, evt.toolCallId)
+        cbs.onPartEnd(sessionId, messageID, evt.toolCallId)
         break
       }
     }
@@ -128,7 +132,14 @@ export async function promptAsync(
 
   unsub()
 
-  callbacks.onMessageEnd(sessionId, messageID)
+  cbs.onMessageEnd(sessionId, messageID)
+
+  // Return the last assistant message if available
+  if (agent.state.messages.length > 0) {
+    const lastMessages = agent.state.messages.filter(m => m.role === 'assistant')
+    return lastMessages[lastMessages.length - 1] || null
+  }
+  return null
 }
 
 export async function abortSession(sessionId: string): Promise<void> {
