@@ -89,6 +89,7 @@ createServer((req, res) => {
     try {
       const provider = providerID || 'anthropic'
       const modelId = modelID || 'claude-sonnet-4-20250514'
+      console.log('[pi-server] Received prompt:', { provider, modelId, contentLen: content?.length })
 
       const model = getModel(provider, modelId)
       if (!model) {
