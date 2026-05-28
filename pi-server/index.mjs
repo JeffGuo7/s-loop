@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { getModel } from '@earendil-works/pi-ai'
-import { createAgentSession, createCodingTools, createReadOnlyTools, AuthStorage, InMemoryAuthStorageBackend } from '@earendil-works/pi-coding-agent'
+import { createAgentSession, createCodingTools, createReadOnlyTools, AuthStorage } from '@earendil-works/pi-coding-agent'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const sessions = new Map()
@@ -56,9 +56,8 @@ createServer((req, res) => {
 
       if (!wrapper) {
         // First message: create session like openclaw
-        const backend = new InMemoryAuthStorageBackend()
-        if (apiKey) await backend.setApiKey(provider, apiKey)
-        const authStorage = new AuthStorage(backend)
+const authStorage = AuthStorage.inMemory()
+          if (apiKey) authStorage.runtimeOverrides.set(provider, apiKey)
 
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
