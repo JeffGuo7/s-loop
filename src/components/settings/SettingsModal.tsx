@@ -4,16 +4,34 @@ import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores'
 import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle } from 'lucide-react'
-import type { ProviderConfig } from '../../types'
+import type { ProviderConfig, ProviderInfo } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
-import { OpenCode } from '../../utils'
+import * as Pi from '../../utils/piClient'
 import { ScrollShadow } from "@heroui/react"
 import i18n from '../../i18n'
 
 interface SettingsModalProps {
   onClose: () => void
 }
+
+const BUILT_IN_PROVIDERS: ProviderInfo[] = [
+  { id: 'anthropic', name: 'Anthropic', env: 'ANTHROPIC_API_KEY' },
+  { id: 'openai', name: 'OpenAI', env: 'OPENAI_API_KEY' },
+  { id: 'google', name: 'Google', env: 'GOOGLE_API_KEY' },
+  { id: 'deepseek', name: 'DeepSeek', env: 'DEEPSEEK_API_KEY' },
+  { id: 'groq', name: 'Groq', env: 'GROQ_API_KEY' },
+  { id: 'openrouter', name: 'OpenRouter', env: 'OPENROUTER_API_KEY' },
+  { id: 'xai', name: 'xAI', env: 'XAI_API_KEY' },
+  { id: 'mistral', name: 'Mistral', env: 'MISTRAL_API_KEY' },
+  { id: 'github-copilot', name: 'GitHub Copilot', env: 'GITHUB_TOKEN' },
+  { id: 'huggingface', name: 'HuggingFace', env: 'HUGGINGFACE_API_KEY' },
+  { id: 'fireworks', name: 'Fireworks', env: 'FIREWORKS_API_KEY' },
+  { id: 'together', name: 'Together AI', env: 'TOGETHER_API_KEY' },
+  { id: 'cerebras', name: 'Cerebras', env: 'CEREBRAS_API_KEY' },
+  { id: 'opencode-go', name: 'OpenCode Go', env: 'OPENCODE_GO_API_KEY' },
+  { id: 'opencode', name: 'OpenCode', env: 'OPENCODE_API_KEY' },
+]
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const {
@@ -40,36 +58,33 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [modelSearchQuery, setModelSearchQuery] = useState('')
   const [missingModelWarning, setMissingModelWarning] = useState(false)
+  const [providerModels, setProviderModels] = useState<Record<string, string[]>>({})
 
-  // Load providers from OpenCode on mount
+  // Initialize providers and load models from Pi SDK
   useEffect(() => {
-    if (providerList.length > 0) return
-    fetchProviders()
-  }, [])
+    setProviderList(BUILT_IN_PROVIDERS)
 
-  const fetchProviders = async () => {
-    try {
-      const list = await OpenCode.listProviders()
-      setProviderList(
-        list.map((p) => ({
-          id: p.id,
-          name: p.name,
-          env: Array.isArray(p.env) ? p.env[0] || '' : '',
-          models: p.models || {},
-          source: p.source || '',
-        })),
-      )
-    } catch {
-      // OpenCode might not be running
+    const models: Record<string, string[]> = {}
+    for (const p of BUILT_IN_PROVIDERS) {
+      try {
+        const ms = Pi.listProviderModels(p.id)
+        if (ms && ms.length > 0) {
+          models[p.id] = ms.map((m: any) => m.id || m.name || m)
+        }
+      } catch { /* provider not available */ }
     }
-  }
+    if (Object.keys(models).length > 0) {
+      setProviderModels(models)
+    }
+  }, [setProviderList])
 
   // Sync local configs from store on open
   useEffect(() => {
     setLocalConfigs({ ...providerConfigs })
-    setExpandedProvider(activeProvider || null)
-    setModelSearchQuery('') // Reset model search when switching
-  }, [activeProvider, providerConfigs])
+    const ep = activeProvider || null
+    setExpandedProvider(ep && providerList.some(p => p.id === ep) ? ep : null)
+    setModelSearchQuery('')
+  }, [activeProvider, providerConfigs, providerList])
 
   const handleConfigChange = (id: string, field: string, value: string) => {
     setLocalConfigs((prev) => ({
@@ -79,28 +94,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   }
 
   const handleSave = async () => {
-    // Save locally
     for (const [id, cfg] of Object.entries(localConfigs)) {
       setProviderConfig(id, cfg)
     }
     setActiveProvider(expandedProvider || activeProvider)
 
-    // Sync to OpenCode backend
     setSaving(true)
-    try {
-      for (const [id, cfg] of Object.entries(localConfigs)) {
-        if (cfg.apiKey) {
-          await OpenCode.setProviderApiKey(id, cfg.apiKey)
-        }
-      }
-    } catch {
-      // OpenCode might not be running
-    }
+    // Simulate save delay for UX
+    await new Promise(r => setTimeout(r, 300))
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
 
-    // Check if any provider has API key but no model selected
     const hasMissingModel = Object.entries(localConfigs).some(
       ([_, cfg]) => cfg.apiKey && !cfg.model,
     )
@@ -118,15 +123,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const provider = providerList.find((p) => p.id === expandedProvider)
   const cfg = expandedProvider ? localConfigs[expandedProvider] || { apiKey: '', model: '', baseUrl: '' } : null
-  
-  // Filtered models based on modelSearchQuery
+
+  const modelsForProvider = expandedProvider ? (providerModels[expandedProvider] || []) : []
+
   const filteredModels = useMemo(() => {
-    if (!provider) return []
-    const allModels = Object.keys(provider.models || {})
-    if (!modelSearchQuery) return allModels
+    if (!modelSearchQuery) return modelsForProvider
     const q = modelSearchQuery.toLowerCase()
-    return allModels.filter(m => m.toLowerCase().includes(q))
-  }, [provider, modelSearchQuery])
+    return modelsForProvider.filter(m => m.toLowerCase().includes(q))
+  }, [modelsForProvider, modelSearchQuery])
 
   const [showModelDropdown, setShowModelDropdown] = useState(false)
 
@@ -174,13 +178,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           <div className="px-12 pb-12 pt-6">
             <div className="flex items-center gap-4 px-6 py-4 rounded-[24px] bg-surface/50 border border-border-light backdrop-blur-2xl shadow-[0_4px_16px_rgba(0,0,0,0.02)] ring-1 ring-black/[0.02]">
               <div className="relative">
-                <div className={`w-3 h-3 rounded-full ${providerList.length > 0 ? 'bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.6)]' : 'bg-red-400'}`} />
-                {providerList.length > 0 && <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-30" />}
+                <div className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.6)]" />
+                <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-30" />
               </div>
-              <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${
-                providerList.length > 0 ? 'text-green-600/90' : 'text-red-400/90'
-              }`}>
-                {providerList.length > 0 ? t('settings.kilostatus.online') : t('settings.kilostatus.offline')}
+              <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-green-600/90">
+                {t('settings.kilostatus.online')}
               </span>
             </div>
           </div>
@@ -211,12 +213,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           <div className="flex-1 overflow-hidden">
             {activeTab === 'provider' && (
               <div className="h-full flex flex-col">
-                {/* Single Focused View */}
                 <ScrollShadow className="flex-1">
                   <div className="max-w-4xl mx-auto px-12 py-12 space-y-12">
                     
                     {!expandedProvider ? (
-                      /* Provider Selection Grid - More Spacious */
+                      /* Provider Selection Grid */
                       <div className="space-y-10 animate-fade-in">
                         <div className="flex items-center justify-between">
                           <div className="space-y-1">
@@ -254,14 +255,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                                   )}
                                 </div>
                                 <h5 className="text-[17px] font-bold text-text tracking-tight mb-1">{p.name}</h5>
-                                <p className="text-[11px] text-text-tertiary font-bold uppercase tracking-widest opacity-50">{p.source || 'Cloud API'}</p>
+                                <p className="text-[11px] text-text-tertiary font-bold uppercase tracking-widest opacity-50">{p.id}</p>
                               </button>
                             )
                           })}
                         </div>
                       </div>
                     ) : provider && cfg ? (
-                      /* Focused Provider Configuration - Very Spacious */
+                      /* Focused Provider Configuration */
                       <div className="space-y-12 animate-fade-in-up">
                         <div className="flex items-center justify-between">
                           <button 
@@ -312,77 +313,84 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                             </div>
                           </div>
 
-                          {/* Model Selection - Dropdown Style */}
+                          {/* Model Selection */}
                           <div className="space-y-6">
                             <label className="text-[11px] font-black uppercase tracking-[0.3em] text-text-tertiary ml-2 opacity-50">Model Engine</label>
                             
-                            <div className="relative">
-                              {/* Dropdown Trigger */}
-                              <button
-                                onClick={() => setShowModelDropdown(!showModelDropdown)}
-                                className={`w-full flex items-center justify-between px-8 py-6 rounded-[28px] border transition-all duration-500 ${
-                                  showModelDropdown 
-                                    ? 'bg-white dark:bg-white/10 border-accent/50 ring-[16px] ring-accent-subtle shadow-xl' 
-                                    : 'bg-white/40 dark:bg-white/5 border-border-light hover:border-accent/30 shadow-sm'
-                                }`}
-                              >
-                                <div className="flex items-center gap-4">
-                                  <Sparkles size={20} className={cfg.model ? 'text-accent' : 'text-text-tertiary opacity-40'} />
-                                  <span className={`text-[15px] font-bold tracking-tight ${cfg.model ? 'text-text' : 'text-text-tertiary'}`}>
-                                    {cfg.model || t('settings.provider.chooseModel')}
-                                  </span>
-                                </div>
-                                <RefreshCw size={18} className={`text-text-tertiary transition-transform duration-500 ${showModelDropdown ? 'rotate-180' : ''}`} />
-                              </button>
+                            {modelsForProvider.length > 0 ? (
+                              <div className="relative">
+                                <button
+                                  onClick={() => setShowModelDropdown(!showModelDropdown)}
+                                  className={`w-full flex items-center justify-between px-8 py-6 rounded-[28px] border transition-all duration-500 ${
+                                    showModelDropdown 
+                                      ? 'bg-white dark:bg-white/10 border-accent/50 ring-[16px] ring-accent-subtle shadow-xl' 
+                                      : 'bg-white/40 dark:bg-white/5 border-border-light hover:border-accent/30 shadow-sm'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <Sparkles size={20} className={cfg.model ? 'text-accent' : 'text-text-tertiary opacity-40'} />
+                                    <span className={`text-[15px] font-bold tracking-tight ${cfg.model ? 'text-text' : 'text-text-tertiary'}`}>
+                                      {cfg.model || t('settings.provider.chooseModel')}
+                                    </span>
+                                  </div>
+                                  <RefreshCw size={18} className={`text-text-tertiary transition-transform duration-500 ${showModelDropdown ? 'rotate-180' : ''}`} />
+                                </button>
 
-                              {/* Dropdown Popover */}
-                              {showModelDropdown && (
-                                <>
-                                  <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)} />
-                                  <div className="absolute top-full left-0 right-0 mt-4 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-3xl rounded-[32px] border border-border shadow-[0_24px_80px_rgba(0,0,0,0.2)] overflow-hidden animate-scale-in origin-top">
-                                    <div className="p-6 border-b border-border-light">
-                                      <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-surface-secondary/50 border border-border-light focus-within:border-accent/30 transition-all">
-                                        <Search size={16} className="text-text-quaternary" />
-                                        <input
-                                          autoFocus
-                                          value={modelSearchQuery}
-                                          onChange={(e) => setModelSearchQuery(e.target.value)}
-                                          placeholder={t('settings.provider.filterModels')}
-                                          className="bg-transparent text-[14px] font-bold text-text outline-none w-full"
-                                        />
+                                {showModelDropdown && (
+                                  <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)} />
+                                    <div className="absolute top-full left-0 right-0 mt-4 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-3xl rounded-[32px] border border-border shadow-[0_24px_80px_rgba(0,0,0,0.2)] overflow-hidden animate-scale-in origin-top">
+                                      <div className="p-6 border-b border-border-light">
+                                        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-surface-secondary/50 border border-border-light focus-within:border-accent/30 transition-all">
+                                          <Search size={16} className="text-text-quaternary" />
+                                          <input
+                                            autoFocus
+                                            value={modelSearchQuery}
+                                            onChange={(e) => setModelSearchQuery(e.target.value)}
+                                            placeholder={t('settings.provider.filterModels')}
+                                            className="bg-transparent text-[14px] font-bold text-text outline-none w-full"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="max-h-[320px] overflow-y-auto p-4 custom-scrollbar">
+                                        {filteredModels.length > 0 ? (
+                                          <div className="space-y-1">
+                                            {filteredModels.map((m) => (
+                                              <button
+                                                key={m}
+                                                onClick={() => {
+                                                  handleConfigChange(expandedProvider, 'model', m)
+                                                  setShowModelDropdown(false)
+                                                }}
+                                                className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all duration-300 group ${
+                                                  cfg.model === m 
+                                                    ? 'bg-accent/10 text-accent' 
+                                                    : 'hover:bg-surface-secondary text-text-secondary hover:text-text'
+                                                }`}
+                                              >
+                                                <span className="text-[14px] font-bold tracking-tight">{m}</span>
+                                                {cfg.model === m && <Check size={16} className="text-accent" />}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div className="py-12 text-center">
+                                            <p className="text-[13px] font-bold text-text-tertiary italic opacity-50">No models found</p>
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
-                                    <div className="max-h-[320px] overflow-y-auto p-4 custom-scrollbar">
-                                      {filteredModels.length > 0 ? (
-                                        <div className="space-y-1">
-                                          {filteredModels.map((m) => (
-                                            <button
-                                              key={m}
-                                              onClick={() => {
-                                                handleConfigChange(expandedProvider, 'model', m);
-                                                setShowModelDropdown(false);
-                                              }}
-                                              className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all duration-300 group ${
-                                                cfg.model === m 
-                                                  ? 'bg-accent/10 text-accent' 
-                                                  : 'hover:bg-surface-secondary text-text-secondary hover:text-text'
-                                              }`}
-                                            >
-                                              <span className="text-[14px] font-bold tracking-tight">{m}</span>
-                                              {cfg.model === m && <Check size={16} className="text-accent" />}
-                                            </button>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <div className="py-12 text-center">
-                                          <p className="text-[13px] font-bold text-text-tertiary italic opacity-50">No models found</p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-                            </div>
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <input
+                                value={cfg.model || ''}
+                                onChange={(e) => handleConfigChange(expandedProvider, 'model', e.target.value)}
+                                placeholder="e.g. claude-sonnet-4-20250514"
+                                className="w-full px-8 py-6 rounded-[28px] bg-white/40 dark:bg-white/5 border border-border-light text-[15px] font-mono text-text outline-none focus:bg-white/80 dark:focus:bg-white/10 focus:border-accent/50 focus:ring-[16px] focus:ring-accent-subtle transition-all duration-500 shadow-sm"
+                              />
+                            )}
                             
                             {cfg.apiKey && !cfg.model && (
                               <div className="flex items-center gap-2 ml-4 text-amber-500 text-[12px] font-black uppercase tracking-widest animate-fade-in">
@@ -451,7 +459,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       ))}
                     </div>
 
-                    {/* Language Selector */}
                     <div className="mt-12 pt-12 border-t border-border-light">
                       <div className="flex flex-col mb-8">
                         <span className="text-[11px] font-bold uppercase tracking-[0.3em] text-accent mb-4 opacity-60">{t('settingsLocale.language')}</span>

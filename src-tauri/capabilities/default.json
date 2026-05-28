@@ -7,15 +7,11 @@
     "core:default",
     "opener:default",
     "dialog:default",
+    "sql:default",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-set-title",
-    "core:window:allow-start-dragging",
-    "dialog:allow-confirm",
-    "dialog:allow-ask",
-    "sql:allow-execute",
-    "sql:allow-select",
-    "sql:allow-load"
+    "core:window:allow-start-dragging"
   ]
 }

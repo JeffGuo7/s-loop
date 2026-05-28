@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FolderOpen, Check, ChevronLeft, Files, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores'
-import { OpenCode } from '../../utils'
 import { FileTree } from './FileTree'
 import { AgentBuilder } from '../agent-builder'
 
@@ -21,14 +20,8 @@ export function WorkspacePanel() {
   const [inputValue, setInputValue] = useState('')
   const hiddenInputRef = useRef<HTMLInputElement>(null)
 
-  // Sync persisted workspaceDir to OpenCode on mount
-  useEffect(() => {
-    OpenCode.setProjectDir(workspaceDir)
-  }, [workspaceDir])
-
   const applyDir = useCallback((dir: string) => {
     setWorkspaceDir(dir)
-    OpenCode.setProjectDir(dir)
     setShowInput(false)
     setInputValue('')
   }, [setWorkspaceDir])
@@ -66,7 +59,6 @@ export function WorkspacePanel() {
 
   const handleClear = useCallback(() => {
     setWorkspaceDir(null)
-    OpenCode.setProjectDir(null)
   }, [setWorkspaceDir])
 
   const handleInputSubmit = useCallback(() => {

@@ -8,7 +8,6 @@ import { TelegramPage } from './components/telegram/index'
 import { useAppStore } from './stores'
 import { useTaskScheduler } from './hooks'
 import { WorkspacePanel } from './components/workspace'
-import { OpenCode } from './utils'
 import { useMCPStore } from './stores/mcpStore'
 import { useSkillStore } from './stores/skillStore'
 import { SkillDropZone } from './components/skills'
@@ -30,30 +29,14 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    async function initOpenCodeUrl() {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core')
-        const url = await invoke<string>('get_opencode_url')
-        if (url) {
-          OpenCode.setBaseUrl(url)
-          useMCPStore.getState().refreshAllServers().catch(() => {})
-        }
-      } catch {
-        // Not running inside Tauri — use default URL (Vite dev mode)
-      }
-    }
-    initOpenCodeUrl()
+    // Initialize MCP servers from Rust backend
+    useMCPStore.getState().refreshAllServers().catch(() => {})
 
+    // Scan skills from configured paths
     useSkillStore.getState().refreshSkills().catch(() => {})
-
-    const projectDir = import.meta.env.VITE_KILO_PROJECT_DIR || null
-    if (projectDir) {
-      OpenCode.setProjectDir(projectDir)
-    }
 
     // Initialize SQLite database and migrate localStorage data
     initDatabase().then(async () => {
-      // Migrate from localStorage to DB if needed
       const storedState = localStorage.getItem('snotra-app-storage')
       if (storedState) {
         try {
@@ -85,10 +68,8 @@ function App() {
         } catch { /* migration failed, continue with empty DB */ }
       }
 
-      // Load sessions from DB into store
       await useAppStore.getState().loadFromDb()
 
-      // Load messages for active session if any
       const state = useAppStore.getState()
       if (state.activeSessionId) {
         await state.loadMessages(state.activeSessionId)

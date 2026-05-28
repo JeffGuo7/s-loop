@@ -10,176 +10,96 @@
 | 样式方案 | Tailwind CSS 4 |
 | 状态管理 | Zustand (with persist middleware) |
 | 图标库 | Lucide React |
-| AI 集成 | Kilo CLI (参考 ../kilocode-main/) |
-| 包管理器 | npm (bun 有网络问题) |
+| AI 引擎 | [@earendil-works/pi-agent-core](https://www.npmjs.com/package/@earendil-works/pi-agent-core) + [@earendil-works/pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai) |
+| 包管理器 | npm |
 
-## Kilo 集成架构
+## Pi Agent 集成架构
 
-Snotra 使用 Kilo CLI 作为 AI 引擎。
+Pi Agent SDK 运行在浏览器进程中，直接调用 LLM API — **不需要外部服务进程**。
 
 ```
-Snotra (Tauri + React) ──HTTP + SSE── kilo serve (子进程)
+Snotra (Tauri + React) ──Pi Agent SDK── HTTP ──► Anthropic / OpenAI / DeepSeek / ...
 ```
 
-- `src/utils/kiloClient.ts` — Kilo HTTP 客户端，封装 session/prompt/config/MCP API
-- `ChatView.tsx` → `MessageList` → `MessageItem` → `parts/` — 分层渲染：工具调用、推理过程、文本、步骤
-- SettingsModal 保存 Provider 配置时自动 sync 到 Kilo /config API
+- `src/utils/piClient.ts` — Pi Agent 封装层
+  - `prompt(sessionId, content, options)` → `{ text, error? }`：发送消息，返回结果
+  - `subscribeStream(sessionId, callbacks)`：订阅流式文本增量
+  - `abortSession(sessionId)` / `resetSession(sessionId)`：会话控制
+  - `setApiKeyResolver(resolver)`：动态 API Key 解析
+  - `listProviders()` / `listProviderModels(provider)`：Provider/模型列表
+- `ChatView.tsx` 通过 `Pi.prompt()` 获取最终结果；`Pi.subscribeStream()` 提供实时流式展示
 
-### 开发工作流
-1. 启动 Kilo 服务器（在 kilocode-main/ 下）：
-   ```bash
-   bun run --cwd packages/opencode --conditions=browser src/index.ts serve --port=4096
-   ```
-2. 启动 Snotra：`npm run tauri:dev`
-3. 在 Settings 配置 API Key，保存时自动同步到 Kilo
+### Pi Agent 关键特性
+
+- **浏览器内运行**：不需要 `npx opencode serve` 等外部进程
+- **事件驱动**：`agent.subscribe()` 接收 `message_start` / `message_update` / `message_end` / `agent_end`
+- **状态自管理**：`agent.state.messages` 持有完整对话，`agent.state.streamingMessage` 是当前流式片段
+- **API Key 动态解析**：`getApiKey` 回调每次请求前从 Zustand store 读取
 
 ## 目录结构
 
 ```
 src/
-├── components/          # UI 组件
-│   ├── chat/           # 聊天系统
-│   │   ├── ChatView.tsx         # 聊天主容器
-│   │   ├── MessageList.tsx      # 消息列表
-│   │   ├── MessageItem.tsx      # 单条消息渲染
-│   │   ├── parts/               # 消息部分渲染
-│   │   │   ├── TextPartView.tsx    # 文本
-│   │   │   ├── ToolPartView.tsx    # 工具调用
-│   │   │   ├── ReasoningView.tsx   # 推理过程
-│   │   │   └── StepView.tsx        # 步骤展示
-│   │   └── shared/              # 共享组件
-│   │       ├── Markdown.tsx        # Markdown 渲染
-│   │       ├── Collapsible.tsx     # 折叠面板
-│   │       └── StatusIndicator.tsx # 状态指示器
-│   ├── layout/         # 布局组件 (Sidebar 等)
-│   ├── companion/      # 宠物系统组件
-│   │   ├── PetCompanion.tsx   # 桌面宠物显示
-│   │   └── PetHatchModal.tsx  # 孵化弹窗
-│   ├── settings/       # 设置页面组件
-│   └── tasks/          # 定时任务组件
-│       ├── TaskList.tsx       # 任务列表
-│       ├── CreateTaskModal.tsx # 创建任务弹窗
-│       └── TasksPage.tsx      # 任务页面
+├── components/
+│   ├── chat/           # 聊天系统 (ChatView, ChatInput, MessageList, MessageItem)
+│   │   ├── parts/      # 消息类型渲染 (TextPartView, ToolPartView, ReasoningView, StepView)
+│   │   ├── blocks/     # 消息块 (StackBlock)
+│   │   └── shared/     # 共享组件 (Markdown, Collapsible, StatusIndicator)
+│   ├── layout/         # Sidebar, TitleBar
+│   ├── companion/      # 宠物系统 (PetCompanion, PetHatchModal)
+│   ├── settings/       # 设置页面 (SettingsModal)
+│   ├── tasks/          # 定时任务 (TasksPage, TaskList, CreateTaskModal)
+│   ├── telegram/       # Telegram 集成
+│   ├── mcp/            # MCP 服务器管理
+│   ├── skills/         # Skills 管理
+│   ├── agent-builder/  # Agent 构建器 (AgentBuilder, AgentSwitcher, AssemblyArea, ComponentLibrary)
+│   ├── ui/             # 通用组件 (Button, Card, Input)
+│   └── workspace/      # 工作区 (FileTree, WorkspacePanel)
 ├── stores/             # Zustand 状态管理
-│   ├── appStore.ts     # 应用状态
+│   ├── appStore.ts     # 应用核心 (会话/消息/Provider/UI)
+│   ├── agentStore.ts   # Agent 构建器
 │   ├── petStore.ts     # 宠物状态
-│   └── taskStore.ts    # 任务状态
-├── types/              # TypeScript 类型定义
-│   ├── index.ts        # 通用类型
-│   ├── pet.ts          # 宠物类型
-│   └── task.ts         # 任务类型
-├── styles/             # 全局样式
-├── hooks/              # 自定义 React hooks
-│   └── useAI.ts        # AI 对话 hook
-└── utils/              # 工具函数
-    ├── ai.ts           # AI Provider 实现 (Anthropic/OpenAI)
-    └── pet.ts          # 宠物生成逻辑
-src-tauri/              # Rust 后端代码
+│   ├── taskStore.ts    # 定时任务
+│   ├── mcpStore.ts     # MCP 服务器
+│   ├── skillStore.ts   # Skills 管理
+│   └── telegramStore.ts
+├── hooks/              # React hooks (useTaskScheduler)
+├── utils/              # 工具函数
+│   ├── piClient.ts     # Pi Agent 封装
+│   ├── pet.ts          # 宠物生成逻辑
+│   ├── database.ts     # SQLite 数据库操作
+│   └── index.ts        # 公共导出
+├── types/              # TypeScript 类型 (index, pet, task, mcp, skill, telegram, agent)
+├── i18n/               # 国际化 (en/zh)
+└── styles/             # 全局样式
+src-tauri/              # Rust 后端
+└── src/
+    ├── lib.rs          # Tauri 入口 (MCP + Skills 命令注册)
+    ├── commands.rs     # 文件列表/读取 + SKILL.md 扫描
+    ├── mcp_manager.rs  # MCP 子进程管理 (stdio/SSE)
+    └── skill_installer.rs  # Skill ZIP 安装
 ```
 
 ## 编码规范
 
-### 命名约定
 - 组件文件：PascalCase (如 `ChatView.tsx`)
-- 工具函数/hooks：camelCase (如 `useSession.ts`)
+- 工具函数/hooks：camelCase (如 `useTaskScheduler.ts`)
 - Store 文件：camelCase + Store 后缀 (如 `appStore.ts`)
-- 类型文件：统一在 `types/index.ts` 导出
-
-### 样式规范
-- 使用 Tailwind CSS 原子类
-- CSS 变量定义在 `styles/globals.css`
-- 支持深色模式，使用 `.dark` 类切换
-- 颜色变量命名：`--color-{name}`
-
-### 状态管理
-- 使用 Zustand，配合 persist 中间件持久化
-- Store 集中在 `stores/appStore.ts`
-- 复杂状态可拆分多个 store
-
-### 组件规范
-- 组件使用函数式组件 + hooks
-- 每个组件目录包含 `index.ts` 导出
-- 保持组件职责单一，便于复用
-
-## 功能模块
-
-### 已完成
-- [x] 项目骨架搭建
-- [x] 基础布局 (Sidebar + ChatView)
-- [x] 会话管理 (创建/删除/切换)
-- [x] 主题切换 (深色/浅色)
-- [x] Zustand 状态管理 + 持久化
-- [x] 设置页面 (Provider 配置、API Key、模型选择)
-- [x] AI API 集成 (Anthropic/OpenAI 流式输出)
-- [x] 宠物系统 (孵化、稀有度、属性、可拖拽)
-- [x] 定时任务 (创建、管理、频率设置)
-- [x] Telegram 接入 (配置界面、连接状态、消息发送)
-- [x] MCP/Skills 系统 (MCP服务器管理、Skills管理、设置界面集成)
-
-### 地基工程 (2026-05 已完工)
-
-#### Rust 后端
-- [x] `scan_skill_files` Tauri 命令 — 递归扫描目录查找 SKILL.md，解析 YAML frontmatter
-- [x] `parse_skill_file` Tauri 命令 — 读取并解析单个 SKILL.md 文件
-- [x] 安全处理：最大深度 32、最大文件 1MB、跳过隐藏文件、符号链接循环检测
-
-#### Kilo 通信层 (`src/utils/kiloClient.ts`)
-- [x] `connectMCPServer(name)` / `disconnectMCPServer(name)` — MCP 连接管理
-- [x] `getMCPServers()` — 增强返回格式，支持 Array/Record 双格式解析
-- [x] `getSkills()` — 读取 Kilo 端注册的技能列表
-
-#### MCP Store (`src/stores/mcpStore.ts`)
-- [x] `refreshServer()` 改用真实 Kilo API — 同步配置 → 连接 → 查询真实 tools/resources
-- [x] `syncToKilo()` — 添加/启用服务器时自动同步配置到 Kilo
-- [x] `initializeFromKilo()` — 启动时从 Kilo 拉取已有 MCP 服务器
-- [x] `classifyKiloError()` — 网络/超时/解析错误友好提示
-- [x] `toggleServer()` — 启用时自动连接，禁用时自动断开
-
-#### Skill Store (`src/stores/skillStore.ts`)
-- [x] `refreshSkills()` — 调用 Tauri `scan_skill_files` 扫描 SKILL.md
-- [x] YAML frontmatter 解析 — 提取 name, description, emoji, version
-- [x] `skillMeta` — 存储 emoji/version 供 UI 展示
-- [x] 并发保护 + 错误处理 + Tauri 不可用降级
-
-#### Chat 上下文 (ChatView.tsx)
-- [x] Skill content 结构化注入 — 用 `<skill>` 标签包裹完整指令内容
-- [x] MCP tools 真实工具描述 — 从 MCP Store 读取已连接服务器的 tools
-- [x] 清晰的 `---` 分隔符区分上下文与用户消息
-
-#### UI 更新
-- [x] SkillCard 显示 emoji（从 skillMeta 读取）
-- [x] 扫描按钮 + 加载动画 + 上次扫描时间
-- [x] 扫描错误展示 + 关闭按钮
-- [x] 国际化 (en/zh) 新 key
-
-#### 启动初始化 (App.tsx)
-- [x] 自动调用 `initializeFromKilo()` — 同步 MCP 服务器
-- [x] 自动调用 `refreshSkills()` — 发现 SKILL.md 文件
-
-### 计划中
-- [ ] 宠物动画与交互增强
-- [ ] 定时任务执行引擎
-- [ ] Telegram Bot 完整功能
-
-## 参考项目
-
-位于 `../` 目录：
-- `cc-haha-main/` - Tauri 2，功能最全，宠物系统参考
-- `opencowork-main/` - Electron，浮球功能参考
-- `open-cowork-main/` - Tauri 2，简洁架构参考
+- 样式：Tailwind CSS 原子类 + CSS 变量
+- 状态管理：Zustand + persist 中间件
 
 ## 运行命令
 
 ```bash
 npm run dev        # 前端开发服务器
-npm run tauri dev  # Tauri 完整桌面应用 (自动启 Kilo)
+npm run tauri:dev  # Tauri 完整桌面应用
 npm run build      # 构建前端
-npm run tauri build # 构建桌面应用
+npm run tauri:build # 构建桌面应用
 ```
 
 ## 工作规则
 
-- 启动项目一律用 `npm run tauri:dev`，不要手动额外启 Kilo
-- Tauri 自动通过 `resolve_project_dir()` 找 Snotra 项目目录，在其中运行 `npx kilo serve`
-- `npm run tauri:dev` 是阻塞式进程，会打开桌面窗口 — 不要用 `&` / `Start-Process` 后台化它
+- `npm run tauri:dev` 启动 Tauri + Vite 开发环境
 - Rust 代码位于 `src-tauri/`，编译用 MSVC 工具链 (rustup default stable-msvc)
+- Tauri 自动通过 `resolve_project_dir()` 找 Snotra 项目目录
+- `npm run tauri:dev` 是阻塞式进程，会打开桌面窗口

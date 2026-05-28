@@ -1,6 +1,6 @@
 # Snotra
 
-AI 桌面助手 — Tauri 2 桌面应用，集成 [Kilo CLI](https://github.com/Kilo-Org/kilocode) 作为 AI 引擎，支持 500+ 模型、MCP 工具系统、Skills 技能系统、定时任务、桌面宠物、Telegram 集成。
+AI 桌面助手 — Tauri 2 桌面应用，集成 [Pi Agent SDK](https://github.com/earendil-works/pi-mono) 作为 AI 引擎，支持 500+ 模型、MCP 工具系统、Skills 技能系统、定时任务、桌面宠物、Telegram 集成。
 
 ## 技术栈
 
@@ -11,8 +11,8 @@ AI 桌面助手 — Tauri 2 桌面应用，集成 [Kilo CLI](https://github.com/
 | 样式 | Tailwind CSS 4 + CSS Variables (深色/浅色) |
 | 状态管理 | Zustand + persist 中间件 |
 | 图标 | Lucide React |
-| AI 引擎 | [@kilocode/cli](https://www.npmjs.com/package/@kilocode/cli) |
-| Rust 后端 | tauri, tauri-plugin-opener |
+| AI 引擎 | [@earendil-works/pi-agent-core](https://www.npmjs.com/package/@earendil-works/pi-agent-core) + [@earendil-works/pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai) |
+| Rust 后端 | tauri, tauri-plugin-opener, tauri-plugin-dialog, tauri-plugin-sql |
 
 ## 架构
 
@@ -20,40 +20,41 @@ AI 桌面助手 — Tauri 2 桌面应用，集成 [Kilo CLI](https://github.com/
 ┌──────────────────────────────────────────────────────────┐
 │                    Snotra (Tauri 2)                       │
 │                                                          │
-│  ┌──────────────────────┐       HTTP + SSE               │
-│  │    React Frontend     │◄─────────────────────┐        │
-│  │    Chat / Tasks       │    @tauri-apps/api   │        │
-│  │    Settings / Pet     │                       │        │
-│  └───────────┬──────────┘                       │        │
-│              │                                   │        │
-│  ┌───────────▼──────────┐    npx kilo serve     │        │
-│  │    Rust Backend       │──────────────► ┌─────▼─────┐  │
-│  │    (kilo.rs)          │               │  Kilo CLI  │  │
-│  └───────────────────────┘               │  Agent     │  │
-│                                          │  MCP       │  │
-│                                          │  500+      │  │
-│                                          │  Models    │  │
-│                                          └───────────┘  │
+│  ┌──────────────────────┐   Pi Agent SDK (浏览器内)      │
+│  │    React Frontend     │────────────► 直接 HTTP ──►    │
+│  │    Chat / Tasks       │              Anthropic/OpenAI  │
+│  │    Settings / Pet     │              DeepSeek/Groq     │
+│  └───────────┬──────────┘              + 500 models      │
+│              │                                           │
+│  ┌───────────▼──────────┐                               │
+│  │    Rust Backend       │                               │
+│  │    (MCP Manager)      │                               │
+│  │    (Skill Scanner)    │                               │
+│  │    (SQLite DB)        │                               │
+│  └───────────────────────┘                               │
 └──────────────────────────────────────────────────────────┘
 ```
+
+Pi Agent SDK 运行在浏览器进程中，直接调用 LLM API — **不需要外部服务进程**。
 
 ## 功能
 
 | 功能 | 状态 |
 |------|------|
 | AI 对话 (流式输出) | ✅ |
-| 富消息类型 (文本/思考/工具调用/步骤/思考栈) | ✅ |
+| 富消息类型 (文本/思考/工具调用/步骤) | ✅ |
 | 多会话管理 | ✅ |
 | 深色/浅色主题 | ✅ |
-| Provider 动态配置 (从 Kilo 拉取全部模型) | ✅ |
+| Provider 动态配置 (Anthropic/OpenAI/DeepSeek/... 13+) | ✅ |
+| Agent 构建器 (自定义指令/模型/Skills/MCP/权限) | ✅ |
 | MCP 服务器管理 (新增/启停/状态) | ✅ |
 | Skills 管理系统 (启用/禁用/路径发现) | ✅ |
 | 定时任务调度 (Cron + AI Agent) | ✅ |
 | 桌面宠物 (孵化/拖拽/稀有度/属性/mood) | ✅ |
 | Telegram 集成 (配置/连接/消息收发) | ✅ |
-| Kilo 进程托管 (Tauri 自动启停) | ✅ |
 | Workspace 文件树 | ✅ |
 | 自定义标题栏 (拖拽/双击最大化/窗口控件) | ✅ |
+| SQLite 持久化存储 | ✅ |
 
 ## 快速开始
 
@@ -72,17 +73,12 @@ npm install
 ### 运行
 
 ```bash
-# 方式 1：只启动前端 (Vite dev，需要手动启动 Kilo)
+# 只启动前端 (Vite dev)
 npm run dev
 
-# 方式 2：完整桌面应用 (自动启动 Kilo)
+# 完整桌面应用
 npm run tauri:dev
 ```
-
-首次启动时 Tauri 会自动：
-1. 通过 `npx kilo serve --port=4096` 启动 Kilo 服务
-2. 等待 Kilo 就绪
-3. 前端自动连接
 
 ### 构建
 
@@ -92,24 +88,12 @@ npm run tauri:build
 
 ## 配置
 
-### 环境变量 (可选)
-
-创建 `.env` 文件：
-
-```env
-# 指定 Kilo 工作目录 (默认为用户主目录)
-VITE_KILO_PROJECT_DIR=/path/to/your/project
-
-# 指定 npx 路径 (如果不在 PATH 中)
-NPX_PATH=C:\path\to\npx.cmd
-```
-
 ### API Key 配置
 
 1. 启动应用后点击 Settings
-2. 刷新 Provider 列表
-3. 选择 Provider 并输入 API Key
-4. 选择模型
+2. 选择 Provider (Anthropic / OpenAI / DeepSeek / ...)
+3. 输入 API Key
+4. 选择模型（Pi SDK 内置模型列表或手动输入）
 5. 点击 Save
 
 ## 项目结构
@@ -118,27 +102,32 @@ NPX_PATH=C:\path\to\npx.cmd
 src/
 ├── components/
 │   ├── chat/           # ChatView, ChatInput, MessageList, MessageItem
-│   │   ├── parts/      # TextPartView, ReasoningView, ToolPartView, StepView, ThoughtStackView
-│   │   └── shared/     # Markdown, Collapsible, StatusIndicator, CopyButton, MessageActionBar, StreamingIndicator
-│   ├── layout/         # Sidebar（侧边栏）, TitleBar（自定义标题栏）
+│   │   ├── parts/      # TextPartView, ReasoningView, ToolPartView, StepView
+│   │   ├── blocks/     # StackBlock 等消息块
+│   │   └── shared/     # Markdown, Collapsible, StatusIndicator
+│   ├── layout/         # Sidebar, TitleBar
 │   ├── companion/      # 桌面宠物 (PetCompanion, PetHatchModal)
-│   ├── settings/       # SettingsModal（Provider/MCP/Skills 配置）
-│   ├── tasks/          # 定时任务管理 (TaskList, CreateTaskModal, TasksPage)
-│   ├── telegram/       # Telegram 集成 (TelegramPage, TelegramSettings)
+│   ├── settings/       # SettingsModal (Provider/MCP/Skills 配置)
+│   ├── tasks/          # 定时任务管理
+│   ├── telegram/       # Telegram 集成
 │   ├── mcp/            # MCP 服务器管理 UI
 │   ├── skills/         # Skills 管理 UI
-│   ├── ui/             # 通用组件 (Button, Card, Input, MagicButton)
+│   ├── agent-builder/  # Agent 构建器 (自定义 Agent)
+│   ├── ui/             # 通用组件 (Button, Card, Input)
 │   └── workspace/      # 工作区 (FileTree, WorkspacePanel)
-├── stores/             # Zustand 状态管理 (appStore, petStore, taskStore, mcpStore, skillStore, telegramStore)
-├── hooks/              # React hooks (useAI, useTaskScheduler)
-├── utils/              # 工具函数 (kiloClient, ai, pet)
-├── types/              # TypeScript 类型 (index, pet, task, mcp, skill, telegram)
+├── stores/             # Zustand 状态管理
+├── hooks/              # React hooks
+├── utils/              # 工具函数 (piClient - Pi Agent 封装)
+├── types/              # TypeScript 类型
+├── i18n/               # 国际化 (en/zh)
 └── styles/             # 全局样式 + Tailwind
 
 src-tauri/              # Rust 后端
 ├── src/
-│   ├── lib.rs          # Tauri commands + Kilo 进程管理
-│   └── kilo.rs         # Kilo serve 子进程 spawn/stop
+│   ├── lib.rs          # Tauri 入口 + MCP/Skills 命令注册
+│   ├── commands.rs     # 文件操作 + Skill 扫描
+│   ├── mcp_manager.rs  # MCP 服务器连接管理
+│   └── skill_installer.rs  # Skill ZIP 安装
 └── Cargo.toml
 ```
 
@@ -148,14 +137,14 @@ src-tauri/              # Rust 后端
 
 | 包 | 用途 |
 |---|------|
-| `@kilocode/cli` | Kilo CLI npm 包 |
+| `@earendil-works/pi-agent-core` | Pi Agent 运行时 (状态管理、工具执行、事件流) |
+| `@earendil-works/pi-ai` | Pi AI 统一多 Provider API (500+ 模型) |
 | `react-virtuoso` | 虚拟列表 (大量消息性能优化) |
-| `framer-motion` | 动画引擎 (宠物/UI 过渡) |
-| `dompurify` | HTML 安全过滤 |
+| `framer-motion` | 动画引擎 |
 | `@heroui/react` | UI 组件库 |
-| `marked` | Markdown 解析 |
-| `highlight.js` | 代码高亮 |
+| `shiki` | 代码高亮 |
 | `lucide-react` | 图标库 |
+| `zustand` | 状态管理 |
 
 ### Rust 依赖
 
@@ -163,6 +152,10 @@ src-tauri/              # Rust 后端
 |---|------|
 | `tauri` | 桌面应用框架 |
 | `tauri-plugin-opener` | 打开外部链接 |
+| `tauri-plugin-dialog` | 原生文件对话框 |
+| `tauri-plugin-sql` | SQLite 数据库 |
+| `serde` / `serde_json` | 序列化 |
+| `zip` | ZIP 解压 (Skill 安装) |
 
 ## License
 

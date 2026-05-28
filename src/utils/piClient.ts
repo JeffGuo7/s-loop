@@ -1,188 +1,181 @@
-import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core'
-import { getModel } from '@earendil-works/pi-ai'
-// ---- Types (match existing interface from opencodeClient) ----
+import { Agent, type AgentEvent } from '@earendil-works/pi-agent-core'
+import { getModel, getProviders, getModels } from '@earendil-works/pi-ai'
 
-export interface StreamCallbacks {
-  onPartStart: (sessionID: string, messageID: string, partID: string, type: string, text: string) => void
-  onPartDelta: (sessionID: string, messageID: string, partID: string, delta: string) => void
-  onPartEnd: (sessionID: string, messageID: string, partID: string) => void
-  onMessageEnd: (sessionID: string, messageID: string) => void
+export interface PiStreamCallbacks {
+  onDelta: (pid: string, delta: string) => void
+  onDone: () => void
 }
 
-export interface ModelRef {
-  providerID: string
-  modelID: string
+interface AgentSession {
+  agent: Agent
+  streamCbs: PiStreamCallbacks | null
 }
 
-export interface ToolDefinition {
-  name: string
-  description: string
-  input_schema: Record<string, unknown>
-}
-
-// ---- API key resolution ----
-
+const sessions = new Map<string, AgentSession>()
 let apiKeyResolver: ((provider: string) => string | undefined) | null = null
 
-/** Register a function that resolves API keys by provider name */
-export function setApiKeyResolver(resolver: (provider: string) => string | undefined): void {
+export function setApiKeyResolver(resolver: (provider: string) => string | undefined) {
   apiKeyResolver = resolver
 }
 
-/** Convert Snotra provider name to Pi provider name */
-function mapProvider(provider: string): string {
-  const map: Record<string, string> = {
-    anthropic: 'anthropic',
-    openai: 'openai',
-    google: 'google',
-    deepseek: 'deepseek',
-    groq: 'groq',
-    openrouter: 'openrouter',
-  }
-  return map[provider] || provider
+export function listProviders(): string[] {
+  return getProviders()
 }
 
-// ---- Per-session Agent instances ----
-
-const agents = new Map<string, Agent>()
-
-// ---- Main API ----
-
-export function parseModelRef(modelStr: string): ModelRef | null {
-  if (!modelStr || !modelStr.includes('/')) return null
-  const [providerID, ...rest] = modelStr.split('/')
-  return { providerID: providerID || 'anthropic', modelID: rest.join('/') }
+export function listProviderModels(provider: string) {
+  return getModels(provider as any)
 }
 
-export async function promptAsync(
-  sessionId: string,
-  content: string,
-  model?: ModelRef,
-  _tools?: ToolDefinition[],
-  _callbacks?: StreamCallbacks,
-): Promise<string | null> {
-  // Get or create agent for this session
-  let agent = agents.get(sessionId)
-
-  if (!agent) {
-    const piModel = getModel(
-      (model?.providerID || 'anthropic') as any,
-      (model?.modelID || 'claude-sonnet-4-20250514') as any,
-    )
-
-    agent = new Agent({
-      initialState: {
-        systemPrompt: 'You are a helpful assistant.',
-        model: piModel,
-        tools: [],
-      },
-      sessionId,
-      getApiKey: async (provider) => {
-        if (apiKeyResolver) {
-          return apiKeyResolver(provider)
-        }
-        return undefined
-      },
-    })
-
-    agents.set(sessionId, agent)
-  }
-
-  // Update model if specified
-  if (model) {
-    try {
-      agent.state.model = getModel(model.providerID as any, model.modelID as any)
-    } catch {
-      // keep default
-    }
-  }
-
-  try {
-    // Send the prompt
-    await agent.prompt(content)
-
-    // Extract the last assistant message content
-    if (agent.state.messages.length > 0) {
-      const lastMessages = agent.state.messages.filter(m => m.role === 'assistant')
-      const lastMsg = lastMessages[lastMessages.length - 1]
-      if (lastMsg && (lastMsg as any).content) {
-        return (lastMsg as any).content as string
-      }
-    }
-    return null
-  } catch (err) {
-    console.error('[pi] Agent error:', err)
-    return null
-  }
-}
-
-export async function abortSession(sessionId: string): Promise<void> {
-  const agent = agents.get(sessionId)
-  if (agent) {
-    agent.abort()
-  }
-}
-
-export async function resetSession(sessionId: string): Promise<void> {
-  const agent = agents.get(sessionId)
-  if (agent) {
-    agent.reset()
-  }
-}
-
-export async function removeSession(sessionId: string): Promise<void> {
-  const agent = agents.get(sessionId)
-  if (agent) {
-    agent.abort()
-    agents.delete(sessionId)
-  }
-}
-
-// ---- SSE-style event subscription (compatibility with old Kilo SSE) ----
-
-export interface SSECallbacks {
-  onPartUpdated?: (part: { sessionID: string; messageID: string; id: string; delta?: string }) => void
-  onPartDelta?: (sessionID: string, messageID: string, partID: string, delta: string) => void
-  onMessageStart?: (sessionID: string, messageID: string, parts: any[]) => void
-  onMessageCompleted?: (sessionID: string, messageID: string) => void
-  onMessageUpdated?: (info: { id: string; sessionID: string; role: string }) => void
-  onSessionIdle?: (sessionID: string) => void
-  onError?: (err: Error) => void
-  onConnected?: () => void
-  onDisconnected?: () => void
-}
-
-/** 
- * Compatibility shim: Pi doesn't use SSE subscriptions. 
- * Streaming is handled per-session via callbacksMap inside promptAsync.
- * This returns a no-op cleanup function so the ChatView's useEffect doesn't break.
- */
-export function subscribeToEvents(_callbacks: SSECallbacks): () => void {
-  // Fire onConnected immediately (Pi is always "connected")
-  _callbacks.onConnected?.()
-  return () => {} // no-op cleanup
-}
-
-/** Pi is always available (no external server needed) */
-export async function health(): Promise<boolean> {
-  return true
-}
-
-/** 
- * Create a session handle. 
- * Pi uses Agent instances (created lazily inside promptAsync), 
- * so this returns a virtual session object.
- */
-export async function createSession(title?: string): Promise<{ id: string }> {
+export async function createSession(): Promise<{ id: string }> {
   const id = `pi-session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   return { id }
 }
 
-/** 
- * Set permission mode. 
- * Pi handles permissions via beforeToolCall hook (configured per-session).
- * For now, this is a no-op since Pi's default behavior handles it.
- */
-export async function setPermissionMode(_sessionId: string, _mode: 'ask' | 'allow' | 'deny'): Promise<void> {
-  // Will be implemented when we add Pi Agent beforeToolCall integration
+function nextID(): string {
+  return `pi_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+function extractMessageText(msg: any): string {
+  if (!msg || msg.role !== 'assistant') return ''
+  if (msg.errorMessage) return `Error: ${msg.errorMessage}`
+  const content = Array.isArray(msg.content) ? msg.content : []
+  const textContent = content.find((c: any) => c.type === 'text')
+  if (textContent?.text) return textContent.text
+  if (content.length > 0 && typeof content[0]?.text === 'string') return content[0].text
+  return ''
+}
+
+function buildAgent(
+  sessionId: string,
+  options?: { providerID?: string; modelID?: string; systemPrompt?: string },
+): Agent | null {
+  const provider = options?.providerID || 'anthropic'
+  const modelId = options?.modelID || 'claude-sonnet-4-20250514'
+  const model = getModel(provider as any, modelId as any)
+  if (!model) return null
+
+  const agent = new Agent({
+    initialState: {
+      systemPrompt: options?.systemPrompt || 'You are a helpful assistant.',
+      model,
+      tools: [],
+    },
+    sessionId,
+    getApiKey: async (provider) => apiKeyResolver?.(provider),
+  })
+
+  let pid = ''
+
+  agent.subscribe((event: AgentEvent) => {
+    const cb = sessions.get(sessionId)?.streamCbs
+    if (!cb) return
+
+    switch (event.type) {
+      case 'message_start': {
+        const msg = event.message as any
+        if (msg.role === 'assistant') pid = nextID()
+        break
+      }
+      case 'message_update': {
+        const ev = event.assistantMessageEvent
+        if (ev.type === 'text_delta') {
+          cb.onDelta(pid, ev.delta)
+        }
+        break
+      }
+      case 'agent_end': {
+        cb.onDone()
+        break
+      }
+    }
+  })
+
+  return agent
+}
+
+export function subscribeStream(
+  sessionId: string,
+  callbacks: PiStreamCallbacks,
+): () => void {
+  let session = sessions.get(sessionId)
+  if (!session) {
+    const agent = buildAgent(sessionId)
+    if (!agent) return () => {} // model not found, no-op
+    session = { agent, streamCbs: callbacks }
+    sessions.set(sessionId, session)
+  } else {
+    session.streamCbs = callbacks
+  }
+  return () => {
+    const s = sessions.get(sessionId)
+    if (s) s.streamCbs = null
+  }
+}
+
+export interface PromptResult {
+  text: string
+  error?: string
+}
+
+export async function prompt(
+  sessionId: string,
+  content: string,
+  options?: { systemPrompt?: string; providerID?: string; modelID?: string },
+): Promise<PromptResult> {
+  let session = sessions.get(sessionId)
+
+  if (!session) {
+    const agent = buildAgent(sessionId, options)
+    if (!agent) {
+      return { text: '', error: `Model "${options?.modelID}" not found. Try a supported provider/model combination.` }
+    }
+    session = { agent, streamCbs: null }
+    sessions.set(sessionId, session)
+  } else {
+    if (options?.providerID && options?.modelID) {
+      const m = getModel(options.providerID as any, options.modelID as any)
+      if (m) {
+        session.agent.state.model = m
+      } else {
+        return {
+          text: '',
+          error: `Model "${options.modelID}" not found for provider "${options.providerID}". Check the model name or try a different provider.`,
+        }
+      }
+    }
+    if (options?.systemPrompt) {
+      session.agent.state.systemPrompt = options.systemPrompt
+    }
+  }
+
+  try {
+    await session.agent.prompt(content)
+  } catch (err) {
+    return {
+      text: '',
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+
+  const messages = session.agent.state.messages
+  const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
+  const text = extractMessageText(lastAssistant)
+
+  return { text }
+}
+
+export function abortSession(sessionId: string): void {
+  sessions.get(sessionId)?.agent.abort()
+}
+
+export function resetSession(sessionId: string): void {
+  sessions.get(sessionId)?.agent.reset()
+}
+
+export function removeSession(sessionId: string): void {
+  const s = sessions.get(sessionId)
+  if (s) {
+    s.agent.abort()
+    sessions.delete(sessionId)
+  }
 }

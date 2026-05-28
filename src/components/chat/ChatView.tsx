@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore, useAgentStore } from '../../stores'
 import { useSkillStore } from '../../stores/skillStore'
 import { useMCPStore } from '../../stores/mcpStore'
-import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
+import { Cpu, Sparkles } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import * as Pi from '../../utils/piClient'
@@ -13,16 +13,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
 
-// Register API key resolver for Pi Agent
 Pi.setApiKeyResolver((provider) => {
   const configs = useAppStore.getState().providerConfigs
   const config = configs[provider]
   if (config?.apiKey) return config.apiKey
   return undefined
 })
-
-// Store Pi message IDs that belong to the user, so we don't accidentally treat them as the assistant's streaming response
-const ignoredMessageIDs = new Set<string>()
 
 export function ChatView() {
   const { t } = useTranslation()
@@ -31,10 +27,7 @@ export function ChatView() {
     sessions,
     providerConfigs,
     activeProvider,
-    providerList,
     startStreaming,
-    updateStreamingMessageID,
-    updateStreamingPart,
     appendStreamingDelta,
     finishStreaming,
     commitStreamingMessage,
@@ -43,118 +36,24 @@ export function ChatView() {
   } = useAppStore()
 
   const [error, setError] = useState<string | null>(null)
-  const [serverOnline, setServerOnline] = useState(false)
+  const pidRef = useRef('')
+  const unsubRef = useRef<(() => void) | null>(null)
 
-  // Subscribe to SSE events on mount
-  useEffect(() => {
-    const unsubscribe = Pi.subscribeToEvents({
-      onPartUpdated: (part) => {
-        const kiloSessionId = part.sessionID
-        if (!kiloSessionId || !part.messageID) return
+  const activeSessionIdRef = useRef(activeSessionId)
+  activeSessionIdRef.current = activeSessionId
 
-        if (ignoredMessageIDs.has(part.messageID)) return
-
-        const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
-        if (!localId) return
-
-        const streaming = useAppStore.getState().streamingMessage[localId]
-        if (streaming) {
-          // If we see a message that's already in our store as a user message, ignore it
-          const existingMessages = useAppStore.getState().sessionMessages[localId] || []
-          const isUserMessage = existingMessages.some(m => m.info.id === part.messageID && m.info.role === 'user')
-          
-          if (isUserMessage) {
-            ignoredMessageIDs.add(part.messageID)
-            return
-          }
-
-          // Update messageID from real Pi session ID if still placeholder
-          if (streaming.messageID.startsWith('pending-')) {
-            updateStreamingMessageID(localId, part.messageID)
-          }
-          
-          // Only process parts that belong to the current streaming message
-          if (streaming.messageID === part.messageID || streaming.messageID.startsWith('pending-')) {
-            updateStreamingPart(localId, part.id, part)
-          }
+  const subscribeStream = useCallback((pid: string) => {
+    unsubRef.current?.()
+    unsubRef.current = Pi.subscribeStream(pid, {
+      onDelta: (partPid, delta) => {
+        const sid = activeSessionIdRef.current
+        if (!sid) return
+        if (useAppStore.getState().streamingMessage[sid]) {
+          useAppStore.getState().appendStreamingDelta(sid, partPid, delta)
         }
       },
-      onPartDelta: (kiloSessionId, messageID, partID, delta) => {
-        if (ignoredMessageIDs.has(messageID)) return
-        const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
-        if (!localId) return
-
-        const streaming = useAppStore.getState().streamingMessage[localId]
-        if (streaming) {
-          // If messageID is pending, this is likely the first delta for the assistant
-          if (streaming.messageID.startsWith('pending-')) {
-            updateStreamingMessageID(localId, messageID)
-          }
-          
-          if (streaming.messageID === messageID || streaming.messageID.startsWith('pending-')) {
-            appendStreamingDelta(localId, partID, delta)
-          }
-        }
-      },
-      onMessageUpdated: (info) => {
-        const kiloSessionId = info.sessionID
-        if (!kiloSessionId) return
-
-        if (info.role === 'user') {
-          ignoredMessageIDs.add(info.id)
-          return
-        }
-
-        const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
-        if (!localId) return
-
-        const streaming = useAppStore.getState().streamingMessage[localId]
-        if (streaming) {
-          const shouldAttachInfo =
-            streaming.messageID === info.id || streaming.messageID.startsWith('pending-')
-
-          if (streaming.messageID.startsWith('pending-')) {
-            updateStreamingMessageID(localId, info.id)
-          }
-
-          if (shouldAttachInfo) {
-            useAppStore.setState((state) => ({
-              streamingMessage: {
-                ...state.streamingMessage,
-                [localId]: { ...state.streamingMessage[localId], info },
-              },
-            }))
-          }
-        }
-      },
-      onSessionIdle: (kiloSessionId) => {
-        const localId = useAppStore.getState().sessions.find(s => s.kiloId === kiloSessionId)?.id
-        if (localId) {
-          finishStreaming(localId)
-        }
-      },
-      onError: (err) => {
-        setError(err.message)
-      },
-      onConnected: () => {
-        setServerOnline(true)
-      },
+      onDone: () => { },
     })
-
-    return () => {
-      unsubscribe()
-    }
-  }, [updateStreamingMessageID, updateStreamingPart, appendStreamingDelta, finishStreaming])
-
-  // Health check as fallback
-  useEffect(() => {
-    const check = async () => {
-      const ok = await Pi.health()
-      setServerOnline(ok)
-    }
-    check()
-    const interval = setInterval(check, 30000)
-    return () => clearInterval(interval)
   }, [])
 
   const session = sessions.find((s) => s.id === activeSessionId)
@@ -165,244 +64,137 @@ export function ChatView() {
   const handleSubmit = useCallback(
     async (content: string) => {
       if (!content || !activeSessionId) return
-
       setError(null)
 
       const providerConfig = activeProvider ? providerConfigs[activeProvider] : null
+      if (!providerConfig) { setError(t('chat.errors.noProvider')); return }
+      if (!providerConfig.apiKey) { setError(t('chat.errors.noApiKey')); return }
+
       const model = providerConfig?.model
         ? { providerID: activeProvider!, modelID: providerConfig.model }
         : undefined
+      if (!model) { setError(t('chat.errors.noModel')); return }
 
-      if (!providerConfig) {
-        setError(t('chat.errors.noProvider'))
-        return
-      }
-
-      if (!providerConfig.apiKey) {
-        setError(t('chat.errors.noApiKey'))
-        return
-      }
-
-      if (!model) {
-        setError(t('chat.errors.noModel'))
-        return
-      }
-
-      const userMessageID = Math.random().toString(36).substring(2, 15)
+      // Add user message
+      const uid = Math.random().toString(36).substring(2, 15)
       addMessage(activeSessionId, {
-        info: {
-          id: userMessageID,
-          sessionID: activeSessionId,
-          role: 'user',
-          time: { created: Date.now() },
-        },
-        parts: [{ id: `${userMessageID}-0`, type: 'text' as const, text: content, sessionID: activeSessionId, messageID: userMessageID }],
+        info: { id: uid, sessionID: activeSessionId, role: 'user', time: { created: Date.now() } },
+        parts: [{ id: `${uid}-0`, type: 'text', text: content, sessionID: activeSessionId, messageID: uid }],
       })
 
-      if (session && session.title === 'New Chat') {
-        updateSessionTitle(
-          activeSessionId,
-          content.slice(0, 40) + (content.length > 40 ? '...' : ''),
-        )
+      if (session?.title === 'New Chat') {
+        updateSessionTitle(activeSessionId, content.slice(0, 40) + (content.length > 40 ? '...' : ''))
       }
 
-      let kiloId = session?.kiloId
-      if (!kiloId) {
+      // Create or reuse Pi session
+      let pid = (session as any)?.piId
+      if (!pid) {
         try {
-          const ks = await Pi.createSession(session?.title)
-          kiloId = ks.id
+          const ks = await Pi.createSession()
+          pid = ks.id
+          pidRef.current = pid
           useAppStore.setState((state) => ({
             sessions: state.sessions.map((s) =>
-              s.id === activeSessionId ? { ...s, kiloId } : s,
+              s.id === activeSessionId ? { ...s, piId: pid } : s,
             ),
           }))
         } catch {
           setError(t('chat.errors.sessionFailed'))
           return
         }
+      } else {
+        pidRef.current = pid
       }
 
-      // Send prompt async with streaming callbacks
-      try {
-        // Determine which skills and MCP tools to use
-        const agentStore = useAgentStore.getState()
-        const activeAgent = agentStore.activeAgentId
-          ? agentStore.agents.find((a) => a.id === agentStore.activeAgentId)
-          : null
+      // Subscribe for streaming visual feedback
+      subscribeStream(pid)
 
-        // Get skill list: from agent if bound, otherwise all enabled skills
-        const skillStore = useSkillStore.getState()
-        const enabledSkills = activeAgent && activeAgent.skills.length > 0
-          ? activeAgent.skills
-              .map(name => skillStore.skills.find(s => s.name === name))
-              .filter((s): s is NonNullable<typeof s> => s !== undefined && s.enabled)
-          : skillStore.skills.filter(s => s.enabled)
+      // Build context
+      const agentStore = useAgentStore.getState()
+      const activeAgent = agentStore.activeAgentId
+        ? agentStore.agents.find((a) => a.id === agentStore.activeAgentId) : null
 
-        // Get MCP tools: from agent if bound, otherwise all connected servers' tools
-        const mcpStore = useMCPStore.getState()
-        const connectedMCPTools: { serverName: string; toolName: string }[] = []
-        if (activeAgent && activeAgent.mcpTools.length > 0) {
-          for (const mcpRef of activeAgent.mcpTools) {
-            connectedMCPTools.push({ serverName: mcpRef.serverName, toolName: mcpRef.toolName })
-          }
-        } else {
-          for (const [name, status] of Object.entries(mcpStore.serverStatuses)) {
-            if (status.status === 'connected' && status.tools) {
-              for (const tool of status.tools) {
-                connectedMCPTools.push({ serverName: name, toolName: tool.name })
-              }
-            }
+      const skillStore = useSkillStore.getState()
+      const enabledSkills = activeAgent && activeAgent.skills.length > 0
+        ? activeAgent.skills.map(n => skillStore.skills.find(s => s.name === n)).filter((s): s is NonNullable<typeof s> => s !== undefined && s.enabled)
+        : skillStore.skills.filter(s => s.enabled)
+
+      const mcpStore = useMCPStore.getState()
+      const connectedMCPTools: { serverName: string; toolName: string }[] = []
+      if (activeAgent && activeAgent.mcpTools.length > 0) {
+        for (const mcpRef of activeAgent.mcpTools)
+          connectedMCPTools.push({ serverName: mcpRef.serverName, toolName: mcpRef.toolName })
+      } else {
+        for (const [name, status] of Object.entries(mcpStore.serverStatuses)) {
+          if (status.status === 'connected' && status.tools) {
+            for (const tool of status.tools)
+              connectedMCPTools.push({ serverName: name, toolName: tool.name })
           }
         }
+      }
 
-        let enrichedContent = content
-        const contextBlocks: string[] = []
+      let enrichedContent = content
+      const blocks: string[] = []
 
-        // 1. Inject enabled skills
-        if (enabledSkills.length > 0) {
-          const skillBlocks = enabledSkills.map(skill => {
-            return skill.content
-              ? `<skill name="${skill.name}">\n${skill.description ? `Description: ${skill.description}\n` : ''}${skill.content}\n</skill>`
-              : `<skill name="${skill.name}">\n${skill.description || ''}\n</skill>`
-          })
+      if (enabledSkills.length > 0) {
+        const skillBlocks = enabledSkills.map(s =>
+          s.content
+            ? `<skill name="${s.name}">\n${s.description ? `Description: ${s.description}\n` : ''}${s.content}\n</skill>`
+            : `<skill name="${s.name}">\n${s.description || ''}\n</skill>`
+        )
+        blocks.push('## Active Skills\nThe following skills are activated and their instructions should be followed:\n' + skillBlocks.join('\n\n'))
+      }
 
-          contextBlocks.push(
-            `## Active Skills\n` +
-            `The following skills are activated and their instructions should be followed:\n` +
-            skillBlocks.join('\n\n')
-          )
-        }
+      if (connectedMCPTools.length > 0) {
+        const listings = connectedMCPTools.map(({ serverName, toolName }) => {
+          const st = mcpStore.serverStatuses[serverName]
+          const tool = st?.status === 'connected' ? st.tools?.find(t => t.name === toolName) : undefined
+          return tool ? `- \`${serverName}/${tool.name}\`: ${tool.description || 'No description'}` : `- \`${serverName}/${toolName}\``
+        })
+        blocks.push('## Available MCP Tools\nThe following MCP tools are available for use:\n' + listings.join('\n'))
+      }
 
-        // 2. Inject MCP tool context
-        if (connectedMCPTools.length > 0) {
-          const toolListings = connectedMCPTools.map(({ serverName, toolName }) => {
-            const status = mcpStore.serverStatuses[serverName]
-            if (status && status.status === 'connected' && status.tools) {
-              const tool = status.tools.find(t => t.name === toolName)
-              return tool
-                ? `- \`${serverName}/${tool.name}\`: ${tool.description || 'No description'}`
-                : `- \`${serverName}/${toolName}\``
-            }
-            return `- \`${serverName}/${toolName}\``
-          })
+      if (activeAgent?.instructions) blocks.unshift(`## System Instructions\n${activeAgent.instructions}`)
 
-          contextBlocks.push(
-            `## Available MCP Tools\n` +
-            `The following MCP tools are available for use:\n` +
-            toolListings.join('\n')
-          )
-        }
+      if (blocks.length > 0) {
+        const header = activeAgent ? `[Agent: ${activeAgent.name}]` : '[Global Context]'
+        enrichedContent = `${header}\n---\n${blocks.join('\n\n')}\n---\n\n${content}`
+      }
 
-        // 3. Inject agent instructions
-        if (activeAgent?.instructions) {
-          contextBlocks.unshift(`## System Instructions\n${activeAgent.instructions}`)
-        }
+      const effectiveModel = activeAgent?.model
+        ? { providerID: activeProvider!, modelID: activeAgent.model }
+        : model
 
-        // 4. Inject permission settings
-        if (activeAgent?.permissionMode) {
-          contextBlocks.push(
-            `## Permission Settings\n` +
-            `Tool execution permission mode: ${activeAgent.permissionMode}.\n` +
-            (activeAgent.permissionMode === 'ask'
-              ? 'The AI will ask for permission before executing tools.'
-              : activeAgent.permissionMode === 'allow'
-              ? 'All tool executions are pre-approved.'
-              : 'Tool execution is denied.')
-          )
-        }
+      startStreaming(activeSessionId, 'pending-' + Date.now())
 
-        // 5. Assemble enriched content
-        if (contextBlocks.length > 0) {
-          const header = activeAgent ? `[Agent: ${activeAgent.name}]` : '[Global Context]'
-          enrichedContent = `${header}\n---\n${contextBlocks.join('\n\n')}\n---\n\n${content}`
-        }
+      const result = await Pi.prompt(pid!, enrichedContent, {
+        systemPrompt: activeAgent?.instructions || undefined,
+        providerID: effectiveModel?.providerID,
+        modelID: effectiveModel?.modelID,
+      })
 
-        // 5. MCP tools are described in context text above.
-        // We do NOT pass them as tool schemas to Pi, because Pi can't execute them.
-        // The AI will know about available tools from the context text.
-
-        const effectiveModel = activeAgent?.model
-          ? { providerID: activeProvider!, modelID: activeAgent.model }
-          : model
-
-        // Sync agent config to Pi session
-        if (activeAgent && kiloId) {
-          const syncAgentToPi = async () => {
-            try {
-              await Pi.setPermissionMode(kiloId!, activeAgent.permissionMode)
-            } catch {
-              // Pi might not support this yet
-            }
-          }
-          syncAgentToPi().catch(() => {})
-        }
-
-        // Start streaming session
-        startStreaming(activeSessionId, 'pending-' + Date.now())
-
-        // Send message to Pi Agent and wait for complete result
-        const resultText = await Pi.promptAsync(kiloId!, enrichedContent, effectiveModel)
-
-        if (resultText) {
-          // Create the assistant message with full text
-          const msgId = `pi-msg-${Date.now()}`
-          const completedMessage: KiloMessage = {
-            info: {
-              id: msgId,
-              sessionID: activeSessionId,
-              role: 'assistant' as const,
-              time: { created: Date.now() },
-            },
-            parts: [{
-              id: `pi-part-${Date.now()}`,
-              type: 'text' as const,
-              text: resultText,
-              sessionID: activeSessionId,
-              messageID: msgId,
-            }],
-          }
-
-          // Finalize the streaming message
-          finishStreaming(activeSessionId)
-          commitStreamingMessage(activeSessionId, completedMessage)
-        } else {
-          // No response - just clear streaming
-          finishStreaming(activeSessionId)
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-          setServerOnline(false)
-          setError(t('chat.errors.serverUnreachable'))
-        } else {
-          setError(msg)
-        }
+      if (result.error) {
+        setError(result.error)
         finishStreaming(activeSessionId)
+        return
       }
+
+      const msgID = `pi-msg-${Date.now()}`
+      const completedMessage: KiloMessage = {
+        info: { id: msgID, sessionID: activeSessionId, role: 'assistant', time: { created: Date.now() } },
+        parts: [{ id: `pi-part-${Date.now()}`, type: 'text', text: result.text, sessionID: activeSessionId, messageID: msgID }],
+      }
+
+      finishStreaming(activeSessionId)
+      commitStreamingMessage(activeSessionId, completedMessage)
     },
-    [
-      activeSessionId,
-      activeProvider,
-      providerConfigs,
-      session,
-      t,
-      startStreaming,
-      finishStreaming,
-      commitStreamingMessage,
-      addMessage,
-      updateSessionTitle,
-    ],
+    [activeSessionId, activeProvider, providerConfigs, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream],
   )
 
   const abort = useCallback(() => {
-    if (activeSessionId) {
-      const s = sessions.find((s) => s.id === activeSessionId)
-      if (s?.kiloId) {
-        Pi.abortSession(s.kiloId).catch(() => {})
-      }
-      finishStreaming(activeSessionId)
-    }
-  }, [activeSessionId, sessions, finishStreaming])
+    if (pidRef.current) Pi.abortSession(pidRef.current)
+    if (activeSessionId) finishStreaming(activeSessionId)
+  }, [activeSessionId, finishStreaming])
 
   const streamingMessages = useAppStore((state) => state.streamingMessage)
   const streamingMessage = activeSessionId ? streamingMessages[activeSessionId] : EMPTY_STREAMING
@@ -412,7 +204,6 @@ export function ChatView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-transparent relative selection:bg-accent/10">
         <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 sm:px-8 max-w-4xl mx-auto h-full">
-          {/* Main Visual Group */}
           <div className="mb-4 sm:mb-8 shrink-0">
             <div className="relative group scale-75 sm:scale-90 transition-transform duration-700">
               <div className="absolute inset-0 bg-accent/10 blur-[40px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-125" />
@@ -420,35 +211,18 @@ export function ChatView() {
                 <Cpu size={32} className="sm:hidden text-accent drop-shadow-[0_4px_16px_rgba(var(--color-accent-rgb),0.4)]" />
                 <Cpu size={48} className="hidden sm:block text-accent drop-shadow-[0_8px_24px_rgba(var(--color-accent-rgb),0.5)]" />
               </div>
-              <motion.div 
-                animate={{ y: [0, -8, 0], x: [0, 4, 0] }}
-                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -top-2 -right-2 sm:-top-4 sm:-right-4 w-6 h-6 sm:w-10 sm:h-10 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl"
-              >
+              <motion.div animate={{ y: [0, -8, 0], x: [0, 4, 0] }} transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }} className="absolute -top-2 -right-2 sm:-top-4 sm:-right-4 w-6 h-6 sm:w-10 sm:h-10 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl">
                 <Sparkles size={12} className="sm:hidden" />
                 <Sparkles size={20} className="hidden sm:block" />
               </motion.div>
             </div>
           </div>
-
-          {/* Typography */}
           <div className="space-y-3 sm:space-y-6 mb-6 sm:mb-12 w-full">
             <h2 className="text-3xl sm:text-5xl lg:text-[4.5rem] font-bold tracking-tight text-text leading-tight drop-shadow-sm select-none">
               {t('chat.welcome.title')} <span className="text-accent italic font-serif px-1">{t('chat.welcome.appName')}</span>
             </h2>
             <div className="flex justify-center w-full">
-              <p className="text-sm sm:text-base lg:text-lg text-text-tertiary leading-relaxed max-w-lg sm:max-w-xl font-medium tracking-tight opacity-70 text-center">
-                {t('chat.welcome.description')}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center gap-8 sm:gap-12">
-            <ServerStatus online={serverOnline} />
-            <div className="flex items-center gap-8">
-              <div className="h-px w-12 bg-border-light" />
-              <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-accent/40">{t('chat.welcome.newConversation')}</p>
-              <div className="h-px w-12 bg-border-light" />
+              <p className="text-sm sm:text-base lg:text-lg text-text-tertiary leading-relaxed max-w-lg sm:max-w-xl font-medium tracking-tight opacity-70 text-center">{t('chat.welcome.description')}</p>
             </div>
           </div>
         </div>
@@ -458,29 +232,12 @@ export function ChatView() {
 
   return (
     <div className="flex-1 flex flex-col bg-transparent h-full w-full overflow-hidden">
-      {/* Offline status bar */}
-      {!serverOnline && (
-        <div className="mx-12 mt-8 rounded-[24px] px-6 py-4 text-[14px] font-bold flex items-center gap-4 bg-red-500/10 text-red-500 border border-red-500/20 animate-fade-in shadow-sm z-20 shrink-0">
-          <WifiOff size={18} />
-          <span>{t('chat.status.kiloUnreachable')}</span>
-        </div>
-      )}
-
-      {/* Main content area - Takes all space */}
       <div className="flex-1 min-h-0 relative bg-transparent">
         <AnimatePresence mode="wait">
           {isEmpty ? (
-            <motion.div 
-              key="empty"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              className="h-full flex flex-col items-center justify-center px-16 relative pb-48"
-            >
+            <motion.div key="empty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full flex flex-col items-center justify-center px-16 relative pb-48">
               <div className="text-center relative z-10 w-full flex flex-col items-center">
                 <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">{t('chat.welcome.subtitle')}</p>
-
                 <div className="flex justify-center w-full mb-8">
                   <div className="relative group scale-90">
                     <div className="absolute inset-0 bg-accent opacity-30 blur-[80px] group-hover:opacity-50 transition-opacity duration-700 rounded-full scale-110" />
@@ -490,69 +247,36 @@ export function ChatView() {
                     </div>
                   </div>
                 </div>
-
-                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">
-                  {t('chat.welcome.howCanIHelp')}
-                </h2>
-                <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">
-                  {t('chat.welcome.emptyDesc')}
-                </p>
+                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">{t('chat.welcome.howCanIHelp')}</h2>
+                <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">{t('chat.welcome.emptyDesc')}</p>
               </div>
             </motion.div>
           ) : (
-            <motion.div 
-              key={activeSessionId}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden"
-            >
+            <motion.div key={activeSessionId} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3, ease: 'easeOut' }} className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden">
               <MessageList sessionId={activeSessionId!} />
-              
               {error && (
                 <div className="absolute top-8 left-4 right-4 z-20 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm backdrop-blur-md">
                   <span>{error}</span>
-                  <button
-                    onClick={() => setError(null)}
-                    className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]"
-                  >
-                    {t('chat.errors.dismiss')}
-                  </button>
+                  <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]">{t('chat.errors.dismiss')}</button>
                 </div>
               )}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Input Area - Now absolute within the relative parent to overlay messages correctly */}
         <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
           <div className="bg-linear-to-t from-bg via-bg/95 to-transparent pt-12 pb-2 pointer-events-auto">
             <div className="w-full max-w-(--spacing-chat-max) mx-auto relative px-4">
-              <ChatInput
-                onSubmit={handleSubmit}
-                onAbort={abort}
-                isStreaming={isStreaming}
-                placeholder={t('chat.input.placeholder')}
-              />
-
-              {/* Model & Agent info */}
+              <ChatInput onSubmit={handleSubmit} onAbort={abort} isStreaming={isStreaming} placeholder={t('chat.input.placeholder')} />
               <div className="mt-2 pb-2 text-[10px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
                 <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
                   <Cpu size={12} className="text-accent/60" />
                   <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || t('chat.status.noModel')}</span>
                   <span className="opacity-10 px-1">|</span>
-                  <span className="font-bold uppercase tracking-[0.2em]">{providerList.find((p) => p.id === activeProvider)?.name || activeProvider}</span>
+                  <span className="font-bold uppercase tracking-[0.2em]">{activeProvider}</span>
                   {(() => {
-                    const agent = useAgentStore.getState().activeAgentId
-                      ? useAgentStore.getState().agents.find((a) => a.id === useAgentStore.getState().activeAgentId)
-                      : null
-                    return agent ? (
-                      <>
-                        <span className="opacity-10 px-1">|</span>
-                        <span className="font-bold">{agent.avatar} {agent.name}</span>
-                      </>
-                    ) : null
+                    const agent = useAgentStore.getState().activeAgentId ? useAgentStore.getState().agents.find(a => a.id === useAgentStore.getState().activeAgentId) : null
+                    return agent ? <><span className="opacity-10 px-1">|</span><span className="font-bold">{agent.avatar} {agent.name}</span></> : null
                   })()}
                 </div>
               </div>
@@ -560,22 +284,6 @@ export function ChatView() {
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function ServerStatus({ online }: { online: boolean }) {
-  const { t } = useTranslation()
-  return (
-    <div
-      className={`inline-flex items-center gap-3 px-6 py-3 rounded-full text-[13px] font-bold tracking-widest shadow-sm backdrop-blur-md border ${
-        online
-          ? 'bg-green-500/10 text-green-600 border-green-500/20'
-          : 'bg-red-500/10 text-red-600 border-red-500/20'
-      }`}
-    >
-      {online ? <Wifi size={16} /> : <WifiOff size={16} />}
-      <span className="uppercase tracking-widest">{online ? t('chat.status.kiloConnected') : t('chat.status.kiloOffline')}</span>
     </div>
   )
 }

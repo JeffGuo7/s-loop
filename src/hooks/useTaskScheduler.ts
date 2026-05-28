@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useTaskStore } from '../stores'
-import * as OpenCode from '../utils/opencodeClient'
+import * as Pi from '../utils/piClient'
 
 const POLL_INTERVAL = 10_000 // 10 seconds
 
@@ -20,23 +20,20 @@ export function useTaskScheduler() {
       let output = ''
 
       try {
-        // Create OpenCode session for this task run
-        const session = await OpenCode.createSession(`Task: ${task.name}`)
+        const session = await Pi.createSession()
 
-        await OpenCode.prompt(session.id, task.prompt, {
-          onPartUpdated: (_sessionID, _messageID, _partID, part) => {
-            // Collect text from text parts
+        // Subscribe to Pi events for this task
+        Pi.subscribeToSession(session.id, {
+          onPart: (part) => {
             if (part.type === 'text') {
-              output += part.text
+              output += part.text || ''
             }
           },
           onPartDelta: (_sessionID, _messageID, _partID, delta) => {
             output += delta
           },
-          onMessageUpdated: () => {
-            // Could update metadata here
-          },
-          onComplete: () => {
+          onMessageInfo: () => { /* noop */ },
+          onDone: () => {
             updateExecution(exec.id, {
               status: 'completed',
               endTime: Date.now(),
@@ -48,10 +45,12 @@ export function useTaskScheduler() {
               status: 'failed',
               endTime: Date.now(),
               output,
-              error: err.message,
+              error: err,
             })
           },
-        }, undefined) // No model specified, use default
+        })
+
+        await Pi.prompt(session.id, task.prompt)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         updateExecution(exec.id, {
@@ -61,7 +60,6 @@ export function useTaskScheduler() {
           error: msg,
         })
 
-        // Auto-disable task on connection failure
         if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
           toggleTask(task.id)
         }
@@ -82,9 +80,8 @@ export function useTaskScheduler() {
           if (task.status === 'running') continue
           if (task.nextRun > now) continue
 
-          // Due — execute it
           await runTask(task)
-          break // one per tick to avoid concurrency
+          break
         }
       } finally {
         busy.current = false
