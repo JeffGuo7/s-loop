@@ -7,6 +7,7 @@ import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import * as Pi from '../../utils/piClient'
+import type { KiloMessage } from '../../types'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const EMPTY_MESSAGES: never[] = []
@@ -329,52 +330,36 @@ export function ChatView() {
         }
 
         // Start streaming session
-        const pendingId = 'pending-' + Date.now()
-        startStreaming(activeSessionId, pendingId)
+        startStreaming(activeSessionId, 'pending-' + Date.now())
 
-        // Send message to Pi Agent with streaming callbacks
-        const result = await Pi.promptAsync(kiloId!, enrichedContent, effectiveModel, undefined, {
-          onPartStart: (_sid, mid, _pid, _type, _text) => {
-            // Create a new streaming part if not already started
-            if (!useAppStore.getState().streamingMessage[activeSessionId]) {
-              startStreaming(activeSessionId, mid)
-            }
-          },
-          onPartDelta: (_sid, _mid, pid, delta) => {
-            // Append delta to streaming part
-            if (delta) {
-              appendStreamingDelta(activeSessionId, pid, delta)
-            }
-          },
-          onPartEnd: (_sid, _mid, _pid) => {
-            // Part ended - no special handling needed
-          },
-          onMessageEnd: (_sid, _mid) => {
-            // Complete the streaming message
-            finishStreaming(activeSessionId)
-          },
-        })
+        // Send message to Pi Agent and wait for complete result
+        const resultText = await Pi.promptAsync(kiloId!, enrichedContent, effectiveModel)
 
-        // If we got a complete message back, commit it
-        if (result) {
-          const message: import('../../types').KiloMessage = {
+        if (resultText) {
+          // Create the assistant message with full text
+          const msgId = `pi-msg-${Date.now()}`
+          const completedMessage: KiloMessage = {
             info: {
-              id: `pi-msg-${Date.now()}`,
+              id: msgId,
               sessionID: activeSessionId,
-              role: 'assistant',
+              role: 'assistant' as const,
               time: { created: Date.now() },
             },
-            parts: (result as any).content
-              ? [{
-                  id: `pi-part-${Date.now()}`,
-                  type: 'text' as const,
-                  text: (result as any).content as string,
-                  sessionID: activeSessionId,
-                  messageID: `pi-msg-${Date.now()}`,
-                }]
-              : [],
+            parts: [{
+              id: `pi-part-${Date.now()}`,
+              type: 'text' as const,
+              text: resultText,
+              sessionID: activeSessionId,
+              messageID: msgId,
+            }],
           }
-          commitStreamingMessage(activeSessionId, message)
+
+          // Finalize the streaming message
+          finishStreaming(activeSessionId)
+          commitStreamingMessage(activeSessionId, completedMessage)
+        } else {
+          // No response - just clear streaming
+          finishStreaming(activeSessionId)
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

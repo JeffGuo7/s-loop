@@ -24,18 +24,6 @@ export interface ToolDefinition {
 // ---- Per-session Agent instances ----
 
 const agents = new Map<string, Agent>()
-const callbacksMap = new Map<string, StreamCallbacks>()
-const partCounters = new Map<string, number>()
-
-function nextPartId(sessionId: string, prefix = 'p'): string {
-  const count = (partCounters.get(sessionId) || 0) + 1
-  partCounters.set(sessionId, count)
-  return `${prefix}-${count}-${Date.now()}`
-}
-
-function getOrCreateMessageId(sessionId: string): string {
-  return `msg-${sessionId}-${Date.now()}`
-}
 
 // ---- Main API ----
 
@@ -50,14 +38,10 @@ export async function promptAsync(
   content: string,
   model?: ModelRef,
   _tools?: ToolDefinition[],
-  callbacks?: StreamCallbacks,
-): Promise<AgentMessage | null> {
+  _callbacks?: StreamCallbacks,
+): Promise<string | null> {
+  // Get or create agent for this session
   let agent = agents.get(sessionId)
-  const cbs = callbacks || callbacksMap.get(sessionId)
-  if (!cbs) {
-    console.warn(`[pi] No callbacks for session ${sessionId}, skipping prompt`)
-    return null
-  }
 
   if (!agent) {
     const piModel = getModel(
@@ -77,6 +61,7 @@ export async function promptAsync(
     agents.set(sessionId, agent)
   }
 
+  // Update model if specified
   if (model) {
     try {
       agent.state.model = getModel(model.providerID as any, model.modelID as any)
@@ -85,61 +70,23 @@ export async function promptAsync(
     }
   }
 
-  const messageID = getOrCreateMessageId(sessionId)
+  try {
+    // Send the prompt
+    await agent.prompt(content)
 
-  const unsub = agent.subscribe(async (event) => {
-    switch (event.type) {
-      case 'message_start': {
-        const msg = event.message
-        if (msg.role === 'assistant') {
-          const partId = nextPartId(sessionId)
-          cbs.onPartStart(sessionId, messageID, partId, 'text', '')
-        }
-        break
-      }
-      case 'message_update': {
-        const evt = event as { type: 'message_update'; message: AgentMessage; assistantMessageEvent: { delta?: string } }
-        const delta = evt.assistantMessageEvent?.delta
-        if (delta) {
-          const partId = `text-${messageID}`
-          cbs.onPartDelta(sessionId, messageID, partId, delta)
-        }
-        break
-      }
-      case 'message_end': {
-        const msg = event.message
-        if (msg.role === 'assistant') {
-          const partId = `text-${messageID}`
-          cbs.onPartEnd(sessionId, messageID, partId)
-        }
-        break
-      }
-      case 'tool_execution_start': {
-        const evt = event as { type: 'tool_execution_start'; toolCallId: string; toolName: string; args: any }
-        const partId = nextPartId(sessionId, 'tool')
-        cbs.onPartStart(sessionId, messageID, partId, 'tool', evt.toolName)
-        break
-      }
-      case 'tool_execution_end': {
-        const evt = event as { type: 'tool_execution_end'; toolCallId: string; toolName: string; result: any; isError: boolean }
-        cbs.onPartEnd(sessionId, messageID, evt.toolCallId)
-        break
+    // Extract the last assistant message content
+    if (agent.state.messages.length > 0) {
+      const lastMessages = agent.state.messages.filter(m => m.role === 'assistant')
+      const lastMsg = lastMessages[lastMessages.length - 1]
+      if (lastMsg && (lastMsg as any).content) {
+        return (lastMsg as any).content as string
       }
     }
-  })
-
-  await agent.prompt(content)
-
-  unsub()
-
-  cbs.onMessageEnd(sessionId, messageID)
-
-  // Return the last assistant message if available
-  if (agent.state.messages.length > 0) {
-    const lastMessages = agent.state.messages.filter(m => m.role === 'assistant')
-    return lastMessages[lastMessages.length - 1] || null
+    return null
+  } catch (err) {
+    console.error('[pi] Agent error:', err)
+    return null
   }
-  return null
 }
 
 export async function abortSession(sessionId: string): Promise<void> {
@@ -162,16 +109,6 @@ export async function removeSession(sessionId: string): Promise<void> {
     agent.abort()
     agents.delete(sessionId)
   }
-  callbacksMap.delete(sessionId)
-  partCounters.delete(sessionId)
-}
-
-export function setStreamCallbacks(sessionId: string, callbacks: StreamCallbacks): void {
-  callbacksMap.set(sessionId, callbacks)
-}
-
-export function removeStreamCallbacks(sessionId: string): void {
-  callbacksMap.delete(sessionId)
 }
 
 // ---- SSE-style event subscription (compatibility with old Kilo SSE) ----
