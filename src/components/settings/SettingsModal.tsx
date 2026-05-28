@@ -323,7 +323,21 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
                           {/* Model Selection */}
                           <div className="space-y-6">
-                            <label className="text-[11px] font-black uppercase tracking-[0.3em] text-text-tertiary ml-2 opacity-50">Model Engine</label>
+                            <div className="flex items-center justify-between ml-2">
+                              <label className="text-[11px] font-black uppercase tracking-[0.3em] text-text-tertiary opacity-50">Model Engine</label>
+                              <button
+                                onClick={async () => {
+                                  if (!expandedProvider) return
+                                  const list = await import('../../utils/piClient').then(m => m.fetchModels(expandedProvider))
+                                  if (list.length > 0) {
+                                    setProviderModels(prev => ({ ...prev, [expandedProvider]: list.map(m => m.id) }))
+                                  }
+                                }}
+                                className="text-[10px] font-bold uppercase tracking-widest text-accent/60 hover:text-accent transition-colors px-3 py-1 rounded-lg hover:bg-accent-muted"
+                              >
+                                Fetch Models
+                              </button>
+                            </div>
                             
                             {modelsForProvider.length > 0 ? (
                               <div className="relative">

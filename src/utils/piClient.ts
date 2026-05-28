@@ -36,6 +36,16 @@ export interface PromptResult {
 let _currentAbort: AbortController | null = null
 let _currentCallbacks: PiStreamCallbacks | null = null
 
+export async function fetchModels(provider: string): Promise<Array<{ id: string; name: string }>> {
+  try {
+    const res = await fetch(`${_base}/models?provider=${encodeURIComponent(provider)}`)
+    if (!res.ok) return []
+    return await res.json()
+  } catch {
+    return []
+  }
+}
+
 export async function health(): Promise<boolean> {
   try {
     const res = await fetch(`${_base}/health`)

@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { getModel } from '@earendil-works/pi-ai'
+import { getModel, getModels } from '@earendil-works/pi-ai'
 import { createAgentSession, createCodingTools, createReadOnlyTools, AuthStorage } from '@earendil-works/pi-coding-agent'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
@@ -54,6 +54,20 @@ createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ healthy: true })); return
   }
+  // GET /models?provider=xxx — list models for a provider from Pi SDK
+  if (req.method === 'GET' && url.pathname === '/models') {
+    const provider = url.searchParams.get('provider') || 'anthropic'
+    try {
+      const models = getModels(provider)
+      const list = models.map(m => ({ id: m.id, name: m.name, api: m.api, reasoning: m.reasoning }))
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(list))
+    } catch {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: `Provider "${provider}" not found` }))
+    }
+    return
+  }
   if (req.method === 'POST' && url.pathname === '/session') {
     const id = randomUUID()
     sessions.set(id, null)
@@ -71,7 +85,7 @@ createServer((req, res) => {
   let body = ''
   req.on('data', chunk => body += chunk)
   req.on('end', async () => {
-    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir } = JSON.parse(body)
+    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, tools } = JSON.parse(body)
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
     const emit = (event, data) => { try { res.write(createSSE(event, data)) } catch {} }
@@ -83,24 +97,57 @@ createServer((req, res) => {
 
       if (!wrapper) {
         // First message: create session like openclaw
-const authStorage = AuthStorage.inMemory()
-          if (apiKey) authStorage.runtimeOverrides.set(provider, apiKey)
+        const authStorage = AuthStorage.inMemory()
+        if (apiKey) authStorage.runtimeOverrides.set(provider, apiKey)
 
+        const baseTools = ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write']
+        const customTools = getTools(cwd)
+
+        // Add MCP tools as proxy tools if provided
+        if (tools && Array.isArray(tools)) {
+          for (const t of tools) {
+            const fullName = `${t.serverName}/${t.name}`
+            customTools.push({
+              name: fullName,
+              label: t.name,
+              description: t.description,
+              parameters: t.inputSchema,
+              execute: async (_id, args) => {
+                // Since Node cannot call Rust directly, we emit the start event and return a placeholder.
+                // The frontend/Rust will handle the actual execution if they intercept this event.
+                // However, pi-agent expects a result. We'll return a message indicating it's an external tool.
+                return { content: [{ type: 'text', text: `MCP Tool ${fullName} called with ${JSON.stringify(args)}. Result pending...` }] }
+              }
+            })
+            baseTools.push(fullName)
+          }
+        }
+
+        const coreToolsDesc = `
+## Available Core Tools
+- read: Read contents of a file.
+- write: Create or overwrite a file.
+- edit: Edit an existing file using search/replace blocks.
+- grep: Search for patterns in files.
+- ls: List files in a directory.
+- find: Find files by name.
+- bash: Execute shell commands.
+`;
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
-        const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
+        const fullPrompt = `${sysPrompt}\n\n${coreToolsDesc}${workspaceDir ? `\nWorkspace: ${workspaceDir}` : ''}`
 
         const created = await createAgentSession({
           cwd,
           model: getModel(provider, modelId),
           systemPrompt: fullPrompt,
           thinkingLevel: thinkingLevel || 'medium',
-          tools: ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'],
-          customTools: getTools(cwd),
+          tools: baseTools,
+          customTools,
           authStorage,
         })
 
-          const session = created.session
-          session.setActiveToolsByName(['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'])
+        const session = created.session
+        session.setActiveToolsByName(baseTools)
           console.log('[pi-server] Tools registered:', session.agent.state.tools.map(t => t.name).join(', '), `(${session.agent.state.tools.length})`)
           console.log('[pi-server] Using provider:', provider, 'model:', modelId)
 
