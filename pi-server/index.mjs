@@ -74,10 +74,7 @@ createServer((req, res) => {
               thinkingLevel: model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off',
             },
             sessionId,
-            getApiKey: async (p) => {
-              if (p === provider && apiKey) return apiKey
-              return undefined
-            },
+            getApiKey: async () => apiKey,
           })
 
           let pid = ''

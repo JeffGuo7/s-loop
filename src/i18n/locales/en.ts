@@ -40,14 +40,14 @@ const en = {
       noProvider: 'No API provider configured. Please set up a provider in Settings.',
       noApiKey: 'API key not configured. Please enter your API key in Settings.',
       noModel: 'No model selected. Please select a model in Settings.',
-      sessionFailed: 'Failed to create OpenCode session',
-      serverUnreachable: 'OpenCode server not reachable',
+      sessionFailed: 'Failed to create AI session',
+      serverUnreachable: 'AI server not reachable',
       dismiss: 'Dismiss',
     },
     status: {
-      kiloConnected: 'OpenCode Connected',
-      kiloOffline: 'OpenCode Offline',
-      kiloUnreachable: 'OpenCode server is currently unreachable',
+      kiloConnected: 'AI Server Connected',
+      kiloOffline: 'AI Server Offline',
+      kiloUnreachable: 'AI server is currently unreachable',
       noModel: 'No model',
     },
     parts: {
@@ -118,8 +118,8 @@ const en = {
       customizeLook: 'Customize the look and feel',
     },
     kilostatus: {
-      online: 'OpenCode Online',
-      offline: 'OpenCode Offline',
+      online: 'Pi Server Online',
+      offline: 'Pi Server Offline',
     },
     provider: {
       searchPlaceholder: 'Search providers...',

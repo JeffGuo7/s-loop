@@ -40,14 +40,14 @@ const zh = {
       noProvider: '未配置 API 提供商。请在设置中配置提供商。',
       noApiKey: 'API 密钥未配置。请在设置中输入您的 API 密钥。',
       noModel: '未选择模型。请在设置中选择一个模型。',
-      sessionFailed: '创建 OpenCode 会话失败',
-      serverUnreachable: 'OpenCode 服务器无法访问',
+      sessionFailed: '创建 AI 会话失败',
+      serverUnreachable: 'AI 服务器无法访问',
       dismiss: '关闭',
     },
     status: {
-      kiloConnected: 'OpenCode 已连接',
-      kiloOffline: 'OpenCode 离线',
-      kiloUnreachable: 'OpenCode 服务器当前不可用',
+      kiloConnected: 'AI 服务器已连接',
+      kiloOffline: 'AI 服务器离线',
+      kiloUnreachable: 'AI 服务器当前不可用',
       noModel: '无模型',
     },
     parts: {
@@ -117,8 +117,8 @@ const zh = {
       customizeLook: '自定义外观和感觉',
     },
     kilostatus: {
-      online: 'OpenCode 在线',
-      offline: 'OpenCode 离线',
+      online: 'AI 服务在线',
+      offline: 'AI 服务离线',
     },
     provider: {
       searchPlaceholder: '搜索提供商...',

@@ -201,6 +201,7 @@ export function ChatView() {
         modelID: effectiveModel?.modelID,
         thinkingLevel: 'medium',
         tools: mcpToolDefs,
+        apiKey: providerConfig?.apiKey,
       })
 
       if (result.error) {

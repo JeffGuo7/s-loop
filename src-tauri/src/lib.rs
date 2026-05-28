@@ -5,7 +5,7 @@ mod skill_installer;
 
 use crate::mcp_manager::MCPManager;
 use crate::pi_server::{PiServerProcess, PiServerState};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 const PI_SERVER_PORT: u16 = 4096;
 
@@ -40,17 +40,14 @@ fn resolve_project_dir() -> String {
     }
     let cwd = std::env::current_dir().unwrap_or_default();
     let cwd_str = cwd.to_string_lossy();
-    // If CWD ends with src-tauri, go up one level to project root
     if cwd_str.ends_with("src-tauri") || cwd_str.ends_with("src-tauri\\") || cwd_str.ends_with("src-tauri/") {
         if let Some(parent) = cwd.parent() {
             return parent.to_string_lossy().into_owned();
         }
     }
-    // Check if pi-server exists in CWD
     if std::path::Path::new(&cwd).join("pi-server").join("index.mjs").exists() {
         return cwd_str.into_owned();
     }
-    // Fallback: try parent (cargo workspace layout)
     if let Some(parent) = cwd.parent() {
         let candidate = parent.join("pi-server").join("index.mjs");
         if candidate.exists() {
@@ -149,10 +146,9 @@ fn mcp_get_status(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let server_state = PiServerState(Mutex::new(None));
-    let server_state_for_setup = PiServerState(Mutex::new(None));
+    let server_state_arc = Arc::new(Mutex::new(None::<PiServerProcess>));
+    let server_state = PiServerState(server_state_arc.clone());
     let project_dir = resolve_project_dir();
-    let project_dir_clone = project_dir.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -160,17 +156,14 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .manage(server_state)
         .invoke_handler(tauri::generate_handler![
-            // Pi server management
             start_server,
             stop_server,
             server_status,
-            // File & skill commands
             commands::list_directory,
             commands::read_text_file,
             commands::scan_skill_files,
             commands::parse_skill_file,
             skill_installer::extract_skill_zip,
-            // MCP commands
             mcp_connect,
             mcp_disconnect,
             mcp_refresh_tools,
@@ -181,9 +174,9 @@ pub fn run() {
         ])
         .manage(Mutex::new(MCPManager::new()))
         .setup(move |_app| {
-            let project_dir_inner = project_dir_clone;
+            let state = PiServerState(server_state_arc);
             tauri::async_runtime::spawn(async move {
-                match do_start_server(&server_state_for_setup, &project_dir_inner) {
+                match do_start_server(&state, &project_dir) {
                     Ok(url) => eprintln!("[snotra] pi-server started at {url}"),
                     Err(e) => eprintln!("[snotra] pi-server start failed: {e}"),
                 }

@@ -1,13 +1,13 @@
 use std::io::BufRead;
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub struct PiServerProcess {
     child: Child,
     pub url: String,
 }
 
-pub struct PiServerState(pub Mutex<Option<PiServerProcess>>);
+pub struct PiServerState(pub Arc<Mutex<Option<PiServerProcess>>>);
 
 impl PiServerProcess {
     pub fn start(project_dir: &str, port: u16) -> Result<Self, String> {
