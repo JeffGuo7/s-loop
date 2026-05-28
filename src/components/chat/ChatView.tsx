@@ -45,13 +45,42 @@ export function ChatView() {
   const subscribeStream = useCallback((pid: string) => {
     unsubRef.current?.()
     unsubRef.current = Pi.subscribeStream(pid, {
-      onDelta: (partPid, delta) => {
+      onText: (partPid, delta) => {
         const sid = activeSessionIdRef.current
         if (!sid) return
         if (useAppStore.getState().streamingMessage[sid]) {
           useAppStore.getState().appendStreamingDelta(sid, partPid, delta)
         }
       },
+      onThinking: (delta) => {
+        const sid = activeSessionIdRef.current
+        if (!sid) return
+        const sm = useAppStore.getState().streamingMessage[sid]
+        if (!sm) return
+        const parts = [...sm.parts]
+        const last = parts[parts.length - 1]
+        if (last?.type === 'reasoning') {
+          useAppStore.getState().appendStreamingDelta(sid, last.id, delta)
+        } else {
+          const rid = `thinking_${Date.now()}`
+          useAppStore.getState().updateStreamingPart(sid, rid, {
+            id: rid, type: 'reasoning', text: delta,
+            sessionID: sid, messageID: sm.messageID,
+          } as any)
+        }
+      },
+      onToolCall: (id, name, args) => {
+        const sid = activeSessionIdRef.current
+        if (!sid) return
+        const sm = useAppStore.getState().streamingMessage[sid]
+        if (!sm) return
+        useAppStore.getState().updateStreamingPart(sid, id, {
+          id, type: 'tool', name, args, callID: id,
+          tool: name, state: { status: 'completed' as const },
+          sessionID: sid, messageID: sm.messageID,
+        } as any)
+      },
+      onToolResult: () => {},
       onDone: () => { },
     })
   }, [])

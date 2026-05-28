@@ -2,7 +2,10 @@ import { Agent, type AgentEvent } from '@earendil-works/pi-agent-core'
 import { getModel, getProviders, getModels } from '@earendil-works/pi-ai'
 
 export interface PiStreamCallbacks {
-  onDelta: (pid: string, delta: string) => void
+  onText: (pid: string, delta: string) => void
+  onThinking: (delta: string) => void
+  onToolCall: (id: string, name: string, args: any) => void
+  onToolResult: (id: string, name: string, result: any) => void
   onDone: () => void
 }
 
@@ -79,8 +82,18 @@ function buildAgent(
       case 'message_update': {
         const ev = event.assistantMessageEvent
         if (ev.type === 'text_delta') {
-          cb.onDelta(pid, ev.delta)
+          cb.onText(pid, ev.delta)
+        } else if (ev.type === 'thinking_delta') {
+          cb.onThinking(ev.delta)
+        } else if (ev.type === 'toolcall_start') {
+          cb.onToolCall(ev.id, ev.toolName, {})
+        } else if (ev.type === 'toolcall_end') {
+          cb.onToolCall(ev.toolCall.id, ev.toolCall.name, ev.toolCall.arguments)
         }
+        break
+      }
+      case 'tool_execution_end': {
+        cb.onToolResult(event.toolCallId, event.toolName, event.result)
         break
       }
       case 'agent_end': {
