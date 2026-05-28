@@ -1,5 +1,54 @@
 import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core'
 import { getModel } from '@earendil-works/pi-ai'
+import { proxyRequest } from './aiProxyClient'
+
+// ---- Global fetch override: route AI API calls through Tauri Rust proxy to avoid CORS ----
+
+const AI_API_HOSTS = [
+  'opencode.ai',
+  'anthropic.com',
+  'openai.com',
+  'googleapis.com',
+  'deepseek.com',
+  'groq.com',
+  'openrouter.com',
+]
+
+function shouldProxy(url: string): boolean {
+  return AI_API_HOSTS.some((host) => url.includes(host))
+}
+
+const originalFetch = window.fetch.bind(window)
+
+window.fetch = async (input, init) => {
+  const url = typeof input === 'string' ? input : input.url
+
+  if (shouldProxy(url)) {
+    const headers: Record<string, string> = {}
+    if (init?.headers) {
+      const h = init.headers instanceof Headers ? init.headers : new Headers(init.headers)
+      h.forEach((value, key) => {
+        headers[key] = value
+      })
+    }
+
+    const body = typeof init?.body === 'string' ? init.body : init?.body ? JSON.stringify(init.body) : ''
+
+    const response = await proxyRequest({
+      url,
+      method: init?.method?.toString() || 'POST',
+      headers,
+      body,
+    })
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: new Headers(response.headers),
+    })
+  }
+
+  return originalFetch(input, init)
+}
 
 // ---- Types (match existing interface from opencodeClient) ----
 

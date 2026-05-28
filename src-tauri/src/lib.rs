@@ -1,3 +1,4 @@
+mod ai_proxy;
 mod commands;
 mod mcp_manager;
 mod opencode;
@@ -150,6 +151,7 @@ pub fn run() {
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             greet,
+            ai_proxy::ai_proxy,
             start_opencode,
             stop_opencode,
             opencode_status,
