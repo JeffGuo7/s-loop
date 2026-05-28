@@ -1,39 +1,5 @@
 import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core'
 import { getModel } from '@earendil-works/pi-ai'
-import { proxyRequest } from './aiProxyClient'
-
-// ---- Install AI fetch proxy handler ----
-// The HTML preload script overrides window.fetch and calls __aiFetchHandler
-// for AI API calls. We install the real handler here.
-;(function installFetchHandler() {
-  if (typeof window === 'undefined' || !window.__aiFetchHandler) return
-
-  window.__aiFetchHandler = async (url: string, request: {
-    method: string
-    headers: Record<string, string>
-    body: string
-  }) => {
-    try {
-      const response = await proxyRequest({
-        url,
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-      })
-
-      return new Response(response.body, {
-        status: response.status,
-        headers: new Headers(response.headers),
-      })
-    } catch (err) {
-      return new Response(JSON.stringify({ error: String(err) }), {
-        status: 500,
-        headers: new Headers({ 'Content-Type': 'application/json' }),
-      })
-    }
-  }
-})()
-
 // ---- Types (match existing interface from opencodeClient) ----
 
 export interface StreamCallbacks {

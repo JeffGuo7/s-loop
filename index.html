@@ -10,20 +10,17 @@
   <body>
     <div id="root"></div>
     <script>
-      // Preload: override fetch BEFORE any ESM modules load
-      // Pi SDK captures fetch at module evaluation time, so we must
-      // install the override at the classic-script stage.
+      // Preload: override fetch BEFORE any ESM modules load.
+      // Uses __TAURI_INTERNALS__.invoke (available in Tauri webview)
+      // to route AI API calls through the Rust HTTP proxy (no CORS).
       ;(function() {
-        const __origFetch = window.fetch.bind(window)
-        
-        // Placeholder — piClient.ts will install the real handler later
-        window.__aiFetchHandler = null
-        
+        var __origFetch = window.fetch.bind(window)
+        var __invoke = window.__TAURI_INTERNALS__?.invoke
+
         window.fetch = function(input, init) {
-          const url = (typeof input === 'string' ? input : input?.url) || ''
+          var url = (typeof input === 'string' ? input : input?.url) || ''
           
-          // Check if this is an AI provider API call that needs CORS bypass
-          const isAiApiCall = 
+          var isAiApiCall = 
             url.includes('opencode.ai') ||
             url.includes('anthropic.com') ||
             url.includes('openai.com') ||
@@ -37,18 +34,32 @@
             url.includes('together.xyz') ||
             url.includes('api.cloudflare.com')
           
-          if (isAiApiCall && window.__aiFetchHandler) {
-            const headers = init?.headers 
+          if (isAiApiCall && __invoke) {
+            var headers = init?.headers 
               ? Object.fromEntries(new Headers(init.headers).entries())
               : {}
-            const body = typeof init?.body === 'string' 
+            var body = typeof init?.body === 'string' 
               ? init.body 
               : init?.body ? JSON.stringify(init.body) : ''
             
-            return window.__aiFetchHandler(url, {
-              method: init?.method?.toString() || 'POST',
-              headers,
-              body,
+            // Route through Rust proxy via Tauri invoke
+            return __invoke('ai_proxy', {
+              request: {
+                url: url,
+                method: init?.method?.toString() || 'POST',
+                headers: headers,
+                body: body,
+              }
+            }).then(function(response) {
+              return new Response(response.body, {
+                status: response.status,
+                headers: new Headers(response.headers)
+              })
+            }).catch(function(err) {
+              return new Response(JSON.stringify({ error: String(err) }), {
+                status: 500,
+                headers: new Headers({ 'Content-Type': 'application/json' })
+              })
             })
           }
           
