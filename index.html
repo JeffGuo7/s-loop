@@ -9,6 +9,53 @@
 
   <body>
     <div id="root"></div>
+    <script>
+      // Preload: override fetch BEFORE any ESM modules load
+      // Pi SDK captures fetch at module evaluation time, so we must
+      // install the override at the classic-script stage.
+      ;(function() {
+        const __origFetch = window.fetch.bind(window)
+        
+        // Placeholder — piClient.ts will install the real handler later
+        window.__aiFetchHandler = null
+        
+        window.fetch = function(input, init) {
+          const url = (typeof input === 'string' ? input : input?.url) || ''
+          
+          // Check if this is an AI provider API call that needs CORS bypass
+          const isAiApiCall = 
+            url.includes('opencode.ai') ||
+            url.includes('anthropic.com') ||
+            url.includes('openai.com') ||
+            url.includes('googleapis.com') ||
+            url.includes('deepseek.com') ||
+            url.includes('api.groq.com') ||
+            url.includes('openrouter.ai') ||
+            url.includes('mistral.ai') ||
+            url.includes('xai') ||
+            url.includes('cerebras') ||
+            url.includes('together.xyz') ||
+            url.includes('api.cloudflare.com')
+          
+          if (isAiApiCall && window.__aiFetchHandler) {
+            const headers = init?.headers 
+              ? Object.fromEntries(new Headers(init.headers as any).entries())
+              : {}
+            const body = typeof init?.body === 'string' 
+              ? init.body 
+              : init?.body ? JSON.stringify(init.body) : ''
+            
+            return window.__aiFetchHandler(url, {
+              method: init?.method?.toString() || 'POST',
+              headers,
+              body,
+            })
+          }
+          
+          return __origFetch(input, init)
+        }
+      })()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

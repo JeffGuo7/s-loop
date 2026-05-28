@@ -2,53 +2,37 @@ import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core'
 import { getModel } from '@earendil-works/pi-ai'
 import { proxyRequest } from './aiProxyClient'
 
-// ---- Global fetch override: route AI API calls through Tauri Rust proxy to avoid CORS ----
+// ---- Install AI fetch proxy handler ----
+// The HTML preload script overrides window.fetch and calls __aiFetchHandler
+// for AI API calls. We install the real handler here.
+;(function installFetchHandler() {
+  if (typeof window === 'undefined' || !window.__aiFetchHandler) return
 
-const AI_API_HOSTS = [
-  'opencode.ai',
-  'anthropic.com',
-  'openai.com',
-  'googleapis.com',
-  'deepseek.com',
-  'groq.com',
-  'openrouter.com',
-]
+  window.__aiFetchHandler = async (url: string, request: {
+    method: string
+    headers: Record<string, string>
+    body: string
+  }) => {
+    try {
+      const response = await proxyRequest({
+        url,
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+      })
 
-function shouldProxy(url: string): boolean {
-  return AI_API_HOSTS.some((host) => url.includes(host))
-}
-
-const originalFetch = window.fetch.bind(window)
-
-window.fetch = async (input, init) => {
-  const url = typeof input === 'string' ? input : input.url
-
-  if (shouldProxy(url)) {
-    const headers: Record<string, string> = {}
-    if (init?.headers) {
-      const h = init.headers instanceof Headers ? init.headers : new Headers(init.headers)
-      h.forEach((value, key) => {
-        headers[key] = value
+      return new Response(response.body, {
+        status: response.status,
+        headers: new Headers(response.headers),
+      })
+    } catch (err) {
+      return new Response(JSON.stringify({ error: String(err) }), {
+        status: 500,
+        headers: new Headers({ 'Content-Type': 'application/json' }),
       })
     }
-
-    const body = typeof init?.body === 'string' ? init.body : init?.body ? JSON.stringify(init.body) : ''
-
-    const response = await proxyRequest({
-      url,
-      method: init?.method?.toString() || 'POST',
-      headers,
-      body,
-    })
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: new Headers(response.headers),
-    })
   }
-
-  return originalFetch(input, init)
-}
+})()
 
 // ---- Types (match existing interface from opencodeClient) ----
 

@@ -12,6 +12,7 @@
     "core:window:allow-close",
     "core:window:allow-set-title",
     "core:window:allow-start-dragging",
-    "sql:default"
+    "sql:allow-execute",
+    "sql:allow-select"
   ]
 }
