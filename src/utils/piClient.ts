@@ -159,12 +159,11 @@ export async function prompt(
                   cb?.onThinking(data.delta)
                   break
                 case 'tool_call':
-                  cb?.onToolCall(data.id, data.name, data.args)
-                  break
-                case 'tool_call_end':
+                case 'tool_execution_start':
                   cb?.onToolCall(data.id, data.name, data.args)
                   break
                 case 'tool_result':
+                case 'tool_execution_end':
                   cb?.onToolResult(data.id, data.name, data.result)
                   break
                 case 'result':

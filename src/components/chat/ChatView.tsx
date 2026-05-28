@@ -68,13 +68,27 @@ export function ChatView() {
         if (!sid) return
         const sm = useAppStore.getState().streamingMessage[sid]
         if (!sm) return
+        // Create tool part with running status (will be updated on tool result)
+        const existing = sm.parts.find(p => p.id === id && p.type === 'tool')
+        if (!existing) {
+          useAppStore.getState().updateStreamingPart(sid, id, {
+            id, type: 'tool', name, args, callID: id,
+            tool: name, state: { status: 'running' as const },
+            sessionID: sid, messageID: sm.messageID,
+          } as any)
+        }
+      },
+      onToolResult: (id, name, result) => {
+        const sid = activeSessionIdRef.current
+        if (!sid) return
+        const sm = useAppStore.getState().streamingMessage[sid]
+        if (!sm) return
         useAppStore.getState().updateStreamingPart(sid, id, {
-          id, type: 'tool', name, args, callID: id,
-          tool: name, state: { status: 'completed' as const },
+          id, type: 'tool', name, tool: name, callID: id,
+          state: { status: 'completed' as const, output: JSON.stringify((result as any)?.content?.[0]?.text || result) },
           sessionID: sid, messageID: sm.messageID,
         } as any)
       },
-      onToolResult: () => {},
       onDone: () => { },
     })
   }, [])
@@ -212,9 +226,23 @@ export function ChatView() {
       }
 
       const msgID = `pi-msg-${Date.now()}`
+      const sm = useAppStore.getState().streamingMessage[activeSessionId]
+      const accumulatedParts = sm?.parts || []
+      const textPart = accumulatedParts.find(p => p.type === 'text')
+      if (textPart && 'text' in textPart) {
+        (textPart as any).text = result.text
+      }
+      if (!textPart && result.text) {
+        accumulatedParts.push({
+          id: `pi-text-${Date.now()}`,
+          type: 'text', text: result.text,
+          sessionID: activeSessionId, messageID: msgID,
+        } as any)
+      }
+
       const completedMessage: KiloMessage = {
         info: { id: msgID, sessionID: activeSessionId, role: 'assistant', time: { created: Date.now() } },
-        parts: [{ id: `pi-part-${Date.now()}`, type: 'text', text: result.text, sessionID: activeSessionId, messageID: msgID }],
+        parts: accumulatedParts,
       }
 
       commitStreamingMessage(activeSessionId, completedMessage)
