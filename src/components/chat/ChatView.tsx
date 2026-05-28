@@ -64,19 +64,16 @@ export function ChatView() {
         }
       },
       onToolCall: (id, name, args) => {
+        console.log('[Snotra] Tool call:', name, id)
         const sid = activeSessionIdRef.current
         if (!sid) return
         const sm = useAppStore.getState().streamingMessage[sid]
         if (!sm) return
-        // Create tool part with running status (will be updated on tool result)
-        const existing = sm.parts.find(p => p.id === id && p.type === 'tool')
-        if (!existing) {
-          useAppStore.getState().updateStreamingPart(sid, id, {
-            id, type: 'tool', name, args, callID: id,
-            tool: name, state: { status: 'running' as const },
-            sessionID: sid, messageID: sm.messageID,
-          } as any)
-        }
+        useAppStore.getState().updateStreamingPart(sid, id, {
+          id, type: 'tool', name, args, callID: id,
+          tool: name, state: { status: 'running' as const },
+          sessionID: sid, messageID: sm.messageID,
+        } as any)
       },
       onToolResult: (id, name, result) => {
         const sid = activeSessionIdRef.current

@@ -7,58 +7,63 @@ import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-codin
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const sessions = new Map()
 
-function createSSE(event, data) {
-  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+function parseToolCall(text) {
+  const regex = /<tool name="([^"]+)">(.+?)<\/tool>/s
+  const match = text.match(regex)
+  if (!match) return null
+  try {
+    const data = JSON.parse(match[2].trim())
+    return { name: match[1], data }
+  } catch {
+    console.log('[pi-server] Tool parse failed:', text.slice(0, 200))
+    return null
+  }
 }
 
-const webSearchTool = {
-  name: 'web_search',
-  label: 'Web Search',
-  description: 'Search the web. Returns a list of search results with titles, URLs, and snippets.',
-  parameters: Type.Object({
-    query: Type.String({ description: 'The search query' }),
-  }),
-  execute: async (_toolCallId, params) => {
+const toolsCache = new Map()
+
+function getTools(workspaceDir) {
+  const dir = workspaceDir || process.cwd()
+  if (!toolsCache.has(dir)) {
+    const allT = [...createCodingTools(dir), ...createReadOnlyTools(dir)]
+    const seen = new Set()
+    toolsCache.set(dir, allT.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true }))
+  }
+  return toolsCache.get(dir)
+}
+
+async function executeToolByName(name, args, workspaceDir) {
+  const tools = getTools(workspaceDir)
+  const tool = tools.find(t => t.name === name)
+  if (!tool) return { error: `Tool "${name}" not found` }
+
+  // Special case: web_search is not in pi-coding-agent tools
+  if (name === 'web_search') {
     try {
-      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(params.query)}`, {
+      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(args.query || args)}`, {
         headers: { 'User-Agent': 'Mozilla/5.0' },
       })
       const html = await res.text()
-
-      // Parse search results from DuckDuckGo HTML
       const results = []
-      const resultRegex = /<a rel="nofollow" class="result__a" href="([^"]+)".*?>(.*?)<\/a>.*?<a class="result__snippet"[^>]*>(.*?)<\/a>/gs
-      let match
-      while ((match = resultRegex.exec(html)) !== null && results.length < 8) {
-        results.push({
-          title: match[2].replace(/<[^>]+>/g, ''),
-          url: match[1],
-          snippet: match[3].replace(/<[^>]+>/g, ''),
-        })
+      const titleRegex = /class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)</g
+      const snippetRegex = /class="[^"]*result__snippet[^"]*"[^>]*>([^<]*)</g
+      let t, s
+      while ((t = titleRegex.exec(html)) !== null && results.length < 8) {
+        s = snippetRegex.exec(html)
+        results.push({ title: t[2], url: t[1], snippet: s ? s[1] : '' })
       }
-
-      // Fallback if regex fails
-      if (results.length === 0) {
-        const snippetRegex = /class="[^"]*result__snippet[^"]*"[^>]*>([^<]*)</g
-        const titleRegex = /class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)</g
-        let t, s
-        while ((t = titleRegex.exec(html)) !== null && results.length < 8) {
-          s = snippetRegex.exec(html)
-          results.push({ title: t[2], url: t[1], snippet: s ? s[1] : '' })
-        }
-      }
-
-      return {
-        content: [{ type: 'text', text: JSON.stringify(results.length > 0 ? results : { message: 'No results found', html: html.slice(0, 2000) }) }],
-        details: { count: results.length },
-      }
+      return { result: results.length > 0 ? results : { message: 'No results' } }
     } catch (err) {
-      return {
-        content: [{ type: 'text', text: `Search failed: ${err.message}` }],
-        details: {},
-      }
+      return { error: `Search failed: ${err.message}` }
     }
-  },
+  }
+
+  try {
+    const result = await tool.execute(`${name}_${Date.now()}`, args)
+    return { result: result?.content?.[0]?.text || JSON.stringify(result) }
+  } catch (err) {
+    return { error: err.message }
+  }
 }
 
 createServer((req, res) => {
@@ -78,7 +83,7 @@ createServer((req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/session') {
     const id = randomUUID()
-    sessions.set(id, { agent: null, emit: null })
+    sessions.set(id, { agent: null, emit: null, workspaceDir: null })
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ id }))
     return
@@ -112,40 +117,25 @@ createServer((req, res) => {
           emit('done', {}); res.end(); return
         }
 
-        if (!session.agent) {
-          const wsPrompt = systemPrompt || 'You are a helpful assistant.'
-          const fullPrompt = workspaceDir
-            ? `${wsPrompt}\n\nYour workspace directory is: ${workspaceDir}\nYou have tools to read/search files, run commands, edit files, and search the web.`
-            : `${wsPrompt}\n\nYou have tools to search the web and run commands.`
+        session.workspaceDir = workspaceDir || session.workspaceDir
 
-          const codingDir = workspaceDir || process.cwd()
-          const allTools = [
-            ...createCodingTools(codingDir),
-            ...createReadOnlyTools(codingDir),
-            webSearchTool,
-          ]
-          // Deduplicate by name
-          const seen = new Set()
-          const tools = allTools.filter(t => {
-            if (seen.has(t.name)) return false
-            seen.add(t.name)
-            return true
-          })
+        // Build system prompt with tool description (prompt-based tools, not native API tools)
+        const wsPrompt = systemPrompt || 'You are a helpful assistant.'
+        const fullPrompt = `${wsPrompt}\n\n${buildToolPrompt(session.workspaceDir)}`
+
+        if (!session.agent) {
+          const effectiveThinking = model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off'
 
           const agent = new Agent({
             initialState: {
               systemPrompt: fullPrompt,
               model,
-              tools,
-              thinkingLevel: model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off',
+              tools: [], // No native tools - use prompt-based
+              thinkingLevel: effectiveThinking,
             },
             sessionId,
             getApiKey: async () => apiKey,
-            beforeToolCall: async ({ toolCall }) => {
-              emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments })
-              return undefined
-            },
-            toolExecution: 'sequential',
+            toolExecution: 'parallel',
           })
 
           let pid = ''
@@ -159,16 +149,6 @@ createServer((req, res) => {
                 const ev = event.assistantMessageEvent
                 if (ev.type === 'text_delta') { e('text_delta', { delta: ev.delta, pid }) }
                 else if (ev.type === 'thinking_delta') { e('thinking_delta', { delta: ev.delta }) }
-                else if (ev.type === 'toolcall_start') { e('tool_call', { id: ev.id, name: ev.toolName, args: {} }) }
-                else if (ev.type === 'toolcall_end') { e('tool_call_end', { id: ev.toolCall.id, name: ev.toolCall.name, args: ev.toolCall.arguments }) }
-                break
-              }
-              case 'tool_execution_start': {
-                e('tool_execution_start', { id: event.toolCallId, name: event.toolName, args: event.args })
-                break
-              }
-              case 'tool_execution_end': {
-                e('tool_execution_end', { id: event.toolCallId, name: event.toolName, result: event.result, isError: event.isError })
                 break
               }
             }
@@ -179,18 +159,52 @@ createServer((req, res) => {
           if (providerID && modelID && getModel(providerID, modelID)) {
             session.agent.state.model = getModel(providerID, modelID)
           }
+          session.agent.state.systemPrompt = fullPrompt
           if (model?.reasoning && thinkingLevel) session.agent.state.thinkingLevel = thinkingLevel
         }
 
         session.emit = emit
 
-        await session.agent.prompt(content)
+        // Prompt with tool loop
+        let currentPrompt = content
+        let maxTurns = 10
+        let allText = ''
 
-        const messages = session.agent.state.messages
-        const last = [...messages].reverse().find(m => m.role === 'assistant')
-        const text = last?.content?.find?.(c => c.type === 'text')?.text || (last?.errorMessage ? `Error: ${last.errorMessage}` : '')
+        while (maxTurns-- > 0) {
+          await session.agent.prompt(currentPrompt)
 
-        emit('result', { text: text || '' })
+          const messages = session.agent.state.messages
+          const last = [...messages].reverse().find(m => m.role === 'assistant')
+          const textContent = last?.content?.find?.(c => c.type === 'text')
+          const responseText = textContent?.text || ''
+
+          allText = responseText
+
+          // Check for tool calls in the response
+          const toolCall = parseToolCall(responseText)
+          if (toolCall) {
+            emit('tool_call', { id: toolCall.name, name: toolCall.name, args: toolCall.data })
+
+            const result = await executeToolByName(toolCall.name, toolCall.data, session.workspaceDir)
+
+            emit('tool_execution_end', {
+              id: toolCall.name,
+              name: toolCall.name,
+              result: result,
+              isError: !!result.error,
+            })
+
+            // Build tool result message for next turn
+            const resultText = result.error ? `Error: ${result.error}` : JSON.stringify(result.result)
+            currentPrompt = `<tool_result name="${toolCall.name}">${resultText}</tool_result>`
+            continue
+          }
+
+          // No tool call found, exit loop
+          break
+        }
+
+        emit('result', { text: allText || (last?.errorMessage ? `Error: ${last.errorMessage}` : '') })
         emit('done', {})
       } catch (err) {
         try { emit('error', { message: err.message || String(err) }); emit('done', {}) } catch {}
