@@ -13,13 +13,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
 
-Pi.setApiKeyResolver((provider) => {
-  const configs = useAppStore.getState().providerConfigs
-  const config = configs[provider]
-  if (config?.apiKey) return config.apiKey
-  return undefined
-})
-
 export function ChatView() {
   const { t } = useTranslation()
   const {
@@ -196,10 +189,18 @@ export function ChatView() {
 
       startStreaming(activeSessionId, 'pending-' + Date.now())
 
+      const mcpToolDefs: Pi.McpToolDef[] = connectedMCPTools.map(({ serverName, toolName }) => {
+        const st = mcpStore.serverStatuses[serverName]
+        const tool = st?.status === 'connected' ? st.tools?.find(t => t.name === toolName) : undefined
+        return tool ? { serverName, name: tool.name, description: tool.description || '', inputSchema: tool.inputSchema || {} } : null
+      }).filter((t): t is Pi.McpToolDef => t !== null)
+
       const result = await Pi.prompt(pid!, enrichedContent, {
         systemPrompt: activeAgent?.instructions || undefined,
         providerID: effectiveModel?.providerID,
         modelID: effectiveModel?.modelID,
+        thinkingLevel: 'medium',
+        tools: mcpToolDefs,
       })
 
       if (result.error) {

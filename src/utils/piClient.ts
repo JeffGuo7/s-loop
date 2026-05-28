@@ -1,128 +1,31 @@
-import { Agent, type AgentEvent } from '@earendil-works/pi-agent-core'
-import { getModel, getProviders, getModels } from '@earendil-works/pi-ai'
+import type { MessagePart } from '../types'
+
+const DEFAULT_BASE = 'http://127.0.0.1:4096'
+let _base = DEFAULT_BASE
+
+export function setBaseUrl(url: string) {
+  _base = url.replace(/\/s+$/, '')
+}
+
+export function getBaseUrl() {
+  return _base
+}
 
 export interface PiStreamCallbacks {
   onText: (pid: string, delta: string) => void
   onThinking: (delta: string) => void
   onToolCall: (id: string, name: string, args: any) => void
   onToolResult: (id: string, name: string, result: any) => void
+  onResult: (text: string) => void
   onDone: () => void
+  onError: (msg: string) => void
 }
 
-interface AgentSession {
-  agent: Agent
-  streamCbs: PiStreamCallbacks | null
-}
-
-const sessions = new Map<string, AgentSession>()
-let apiKeyResolver: ((provider: string) => string | undefined) | null = null
-
-export function setApiKeyResolver(resolver: (provider: string) => string | undefined) {
-  apiKeyResolver = resolver
-}
-
-export function listProviders(): string[] {
-  return getProviders()
-}
-
-export function listProviderModels(provider: string) {
-  return getModels(provider as any)
-}
-
-export async function createSession(): Promise<{ id: string }> {
-  const id = `pi-session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  return { id }
-}
-
-function nextID(): string {
-  return `pi_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-}
-
-function extractMessageText(msg: any): string {
-  if (!msg || msg.role !== 'assistant') return ''
-  if (msg.errorMessage) return `Error: ${msg.errorMessage}`
-  const content = Array.isArray(msg.content) ? msg.content : []
-  const textContent = content.find((c: any) => c.type === 'text')
-  if (textContent?.text) return textContent.text
-  if (content.length > 0 && typeof content[0]?.text === 'string') return content[0].text
-  return ''
-}
-
-function buildAgent(
-  sessionId: string,
-  options?: { providerID?: string; modelID?: string; systemPrompt?: string },
-): Agent | null {
-  const provider = options?.providerID || 'anthropic'
-  const modelId = options?.modelID || 'claude-sonnet-4-20250514'
-  const model = getModel(provider as any, modelId as any)
-  if (!model) return null
-
-  const agent = new Agent({
-    initialState: {
-      systemPrompt: options?.systemPrompt || 'You are a helpful assistant.',
-      model,
-      tools: [],
-    },
-    sessionId,
-    getApiKey: async (provider) => apiKeyResolver?.(provider),
-  })
-
-  let pid = ''
-
-  agent.subscribe((event: AgentEvent) => {
-    const cb = sessions.get(sessionId)?.streamCbs
-    if (!cb) return
-
-    switch (event.type) {
-      case 'message_start': {
-        const msg = event.message as any
-        if (msg.role === 'assistant') pid = nextID()
-        break
-      }
-      case 'message_update': {
-        const ev = event.assistantMessageEvent
-        if (ev.type === 'text_delta') {
-          cb.onText(pid, ev.delta)
-        } else if (ev.type === 'thinking_delta') {
-          cb.onThinking(ev.delta)
-        } else if (ev.type === 'toolcall_start') {
-          cb.onToolCall(ev.id, ev.toolName, {})
-        } else if (ev.type === 'toolcall_end') {
-          cb.onToolCall(ev.toolCall.id, ev.toolCall.name, ev.toolCall.arguments)
-        }
-        break
-      }
-      case 'tool_execution_end': {
-        cb.onToolResult(event.toolCallId, event.toolName, event.result)
-        break
-      }
-      case 'agent_end': {
-        cb.onDone()
-        break
-      }
-    }
-  })
-
-  return agent
-}
-
-export function subscribeStream(
-  sessionId: string,
-  callbacks: PiStreamCallbacks,
-): () => void {
-  let session = sessions.get(sessionId)
-  if (!session) {
-    const agent = buildAgent(sessionId)
-    if (!agent) return () => {} // model not found, no-op
-    session = { agent, streamCbs: callbacks }
-    sessions.set(sessionId, session)
-  } else {
-    session.streamCbs = callbacks
-  }
-  return () => {
-    const s = sessions.get(sessionId)
-    if (s) s.streamCbs = null
-  }
+export interface McpToolDef {
+  serverName: string
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
 }
 
 export interface PromptResult {
@@ -130,65 +33,158 @@ export interface PromptResult {
   error?: string
 }
 
+let _currentAbort: AbortController | null = null
+let _currentCallbacks: PiStreamCallbacks | null = null
+
+export async function health(): Promise<boolean> {
+  try {
+    const res = await fetch(`${_base}/health`)
+    const data = await res.json()
+    return data.healthy === true
+  } catch {
+    return false
+  }
+}
+
+export async function createSession(): Promise<{ id: string }> {
+  const res = await fetch(`${_base}/session`, { method: 'POST' })
+  return res.json()
+}
+
+function parseSSELine(line: string): { event: string; data: any } | null {
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.startsWith(':')) return null
+  const eventMatch = trimmed.match(/^event: (.+)$/)
+  const dataMatch = trimmed.match(/^data: (.+)$/)
+  if (eventMatch) return null // return on data line
+  if (dataMatch) return null
+  return null
+}
+
+export function subscribeStream(
+  _sessionId: string,
+  callbacks: PiStreamCallbacks,
+): () => void {
+  _currentCallbacks = callbacks
+  return () => {
+    _currentCallbacks = null
+  }
+}
+
 export async function prompt(
   sessionId: string,
   content: string,
-  options?: { systemPrompt?: string; providerID?: string; modelID?: string },
+  options?: {
+    systemPrompt?: string
+    providerID?: string
+    modelID?: string
+    thinkingLevel?: string
+    tools?: McpToolDef[]
+    apiKey?: string
+  },
 ): Promise<PromptResult> {
-  let session = sessions.get(sessionId)
+  const controller = new AbortController()
+  _currentAbort = controller
 
-  if (!session) {
-    const agent = buildAgent(sessionId, options)
-    if (!agent) {
-      return { text: '', error: `Model "${options?.modelID}" not found. Try a supported provider/model combination.` }
+  try {
+    const body: Record<string, any> = { content }
+    if (options?.providerID) body.providerID = options.providerID
+    if (options?.modelID) body.modelID = options.modelID
+    if (options?.systemPrompt) body.systemPrompt = options.systemPrompt
+    if (options?.thinkingLevel) body.thinkingLevel = options.thinkingLevel
+    if (options?.apiKey) body.apiKey = options.apiKey
+    if (options?.tools && options.tools.length > 0) body.tools = options.tools
+
+    const res = await fetch(`${_base}/session/${sessionId}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      return { text: '', error: `Server ${res.status}: ${text}` }
     }
-    session = { agent, streamCbs: null }
-    sessions.set(sessionId, session)
-  } else {
-    if (options?.providerID && options?.modelID) {
-      const m = getModel(options.providerID as any, options.modelID as any)
-      if (m) {
-        session.agent.state.model = m
-      } else {
-        return {
-          text: '',
-          error: `Model "${options.modelID}" not found for provider "${options.providerID}". Check the model name or try a different provider.`,
+
+    const reader = res.body?.getReader()
+    if (!reader) return { text: '', error: 'No response body' }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let resultText = ''
+
+    const cb = _currentCallbacks
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // Parse SSE events
+      let lineEnd = buffer.indexOf('\n')
+      while (lineEnd !== -1) {
+        const line = buffer.slice(0, lineEnd)
+        buffer = buffer.slice(lineEnd + 1)
+        lineEnd = buffer.indexOf('\n')
+
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith(':')) continue
+
+        if (trimmed.startsWith('event: ')) {
+          const eventType = trimmed.slice(7)
+          // Read next line for data
+          const nextEnd = buffer.indexOf('\n')
+          const dataLine = nextEnd === -1 ? buffer.trim() : buffer.slice(0, nextEnd).trim()
+          if (dataLine.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(dataLine.slice(6))
+              switch (eventType) {
+                case 'text_delta':
+                  cb?.onText(data.pid || '', data.delta)
+                  break
+                case 'thinking_delta':
+                  cb?.onThinking(data.delta)
+                  break
+                case 'tool_call':
+                  cb?.onToolCall(data.id, data.name, data.args)
+                  break
+                case 'tool_call_end':
+                  cb?.onToolCall(data.id, data.name, data.args)
+                  break
+                case 'tool_result':
+                  cb?.onToolResult(data.id, data.name, data.result)
+                  break
+                case 'result':
+                  resultText = data.text || ''
+                  cb?.onResult(resultText)
+                  break
+                case 'error':
+                  resultText = `Error: ${data.message}`
+                  cb?.onError(data.message)
+                  break
+              }
+              if (eventType === 'done') return { text: resultText }
+            } catch { /* skip invalid JSON */ }
+          }
+          // Consume the data line
+          if (nextEnd !== -1) buffer = buffer.slice(nextEnd + 1)
         }
       }
     }
-    if (options?.systemPrompt) {
-      session.agent.state.systemPrompt = options.systemPrompt
-    }
-  }
 
-  try {
-    await session.agent.prompt(content)
+    return { text: resultText }
   } catch (err) {
-    return {
-      text: '',
-      error: err instanceof Error ? err.message : String(err),
-    }
+    if ((err as any)?.name === 'AbortError') return { text: '' }
+    return { text: '', error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    _currentAbort = null
+    _currentCallbacks = null
   }
-
-  const messages = session.agent.state.messages
-  const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
-  const text = extractMessageText(lastAssistant)
-
-  return { text }
 }
 
-export function abortSession(sessionId: string): void {
-  sessions.get(sessionId)?.agent.abort()
-}
-
-export function resetSession(sessionId: string): void {
-  sessions.get(sessionId)?.agent.reset()
-}
-
-export function removeSession(sessionId: string): void {
-  const s = sessions.get(sessionId)
-  if (s) {
-    s.agent.abort()
-    sessions.delete(sessionId)
-  }
+export function abortSession(_sessionId?: string): void {
+  _currentAbort?.abort()
+  _currentAbort = null
 }

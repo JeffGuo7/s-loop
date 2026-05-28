@@ -7,7 +7,6 @@ import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, 
 import type { ProviderConfig, ProviderInfo } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
-import * as Pi from '../../utils/piClient'
 import { ScrollShadow } from "@heroui/react"
 import i18n from '../../i18n'
 
@@ -60,22 +59,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [missingModelWarning, setMissingModelWarning] = useState(false)
   const [providerModels, setProviderModels] = useState<Record<string, string[]>>({})
 
-  // Initialize providers and load models from Pi SDK
+  // Set provider list
   useEffect(() => {
     setProviderList(BUILT_IN_PROVIDERS)
-
-    const models: Record<string, string[]> = {}
-    for (const p of BUILT_IN_PROVIDERS) {
-      try {
-        const ms = Pi.listProviderModels(p.id)
-        if (ms && ms.length > 0) {
-          models[p.id] = ms.map((m: any) => m.id || m.name || m)
-        }
-      } catch { /* provider not available */ }
-    }
-    if (Object.keys(models).length > 0) {
-      setProviderModels(models)
-    }
   }, [setProviderList])
 
   // Sync local configs from store on open
