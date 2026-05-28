@@ -39,7 +39,7 @@
           
           if (isAiApiCall && window.__aiFetchHandler) {
             const headers = init?.headers 
-              ? Object.fromEntries(new Headers(init.headers as any).entries())
+              ? Object.fromEntries(new Headers(init.headers).entries())
               : {}
             const body = typeof init?.body === 'string' 
               ? init.body 
