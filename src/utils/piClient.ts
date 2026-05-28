@@ -16,9 +16,9 @@ export interface PiStreamCallbacks {
   onThinking: (delta: string) => void
   onToolCall: (id: string, name: string, args: any) => void
   onToolResult: (id: string, name: string, result: any) => void
-  onResult: (text: string) => void
   onDone: () => void
-  onError: (msg: string) => void
+  onResult?: (text: string) => void
+  onError?: (msg: string) => void
 }
 
 export interface McpToolDef {
