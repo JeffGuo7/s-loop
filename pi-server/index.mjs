@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { getModel, getModels } from '@earendil-works/pi-ai'
+import { getModel } from '@earendil-works/pi-ai'
 import { createAgentSession, createCodingTools, createReadOnlyTools, AuthStorage } from '@earendil-works/pi-coding-agent'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
@@ -54,50 +54,6 @@ createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ healthy: true })); return
   }
-  // GET /models?provider=xxx&apiKey=xxx&baseUrl=xxx — list models from provider API
-  if (req.method === 'GET' && url.pathname === '/models') {
-    const provider = url.searchParams.get('provider') || 'anthropic'
-    const apiKey = url.searchParams.get('apiKey') || ''
-    const baseUrl = url.searchParams.get('baseUrl') || ''
-    const tryApi = !!apiKey && !!baseUrl
-    let list = []
-
-    // Try fetching from provider's API first (works for OpenAI-compatible providers)
-    if (tryApi) {
-      try {
-        const apiUrl = baseUrl.replace(/\/+$/, '') + '/models'
-        const res2 = await fetch(apiUrl, {
-          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(10000),
-        })
-        if (res2.ok) {
-          const json = await res2.json()
-          list = (json.data || []).map(m => ({
-            id: m.id || m.name || m,
-            name: m.id || m.name || m,
-          }))
-        }
-      } catch (err) {
-        // API fetch failed, fall through to Pi SDK
-      }
-    }
-
-    // Fall back to Pi SDK's model registry
-    if (list.length === 0) {
-      try {
-        const models = getModels(provider)
-        list = models
-          .filter(m => m.id && !m.id.endsWith('-free') && !m.id.includes('free'))
-          .map(m => ({ id: m.id, name: m.name || m.id }))
-      } catch {
-        // Provider not in Pi registry either
-      }
-    }
-
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(list))
-    return
-  }
   if (req.method === 'POST' && url.pathname === '/session') {
     const id = randomUUID()
     sessions.set(id, null)
@@ -115,7 +71,7 @@ createServer((req, res) => {
   let body = ''
   req.on('data', chunk => body += chunk)
   req.on('end', async () => {
-    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, tools } = JSON.parse(body)
+    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir } = JSON.parse(body)
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
     const emit = (event, data) => { try { res.write(createSSE(event, data)) } catch {} }
@@ -127,57 +83,24 @@ createServer((req, res) => {
 
       if (!wrapper) {
         // First message: create session like openclaw
-        const authStorage = AuthStorage.inMemory()
-        if (apiKey) authStorage.runtimeOverrides.set(provider, apiKey)
+const authStorage = AuthStorage.inMemory()
+          if (apiKey) authStorage.runtimeOverrides.set(provider, apiKey)
 
-        const baseTools = ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write']
-        const customTools = getTools(cwd)
-
-        // Add MCP tools as proxy tools if provided
-        if (tools && Array.isArray(tools)) {
-          for (const t of tools) {
-            const fullName = `${t.serverName}/${t.name}`
-            customTools.push({
-              name: fullName,
-              label: t.name,
-              description: t.description,
-              parameters: t.inputSchema,
-              execute: async (_id, args) => {
-                // Since Node cannot call Rust directly, we emit the start event and return a placeholder.
-                // The frontend/Rust will handle the actual execution if they intercept this event.
-                // However, pi-agent expects a result. We'll return a message indicating it's an external tool.
-                return { content: [{ type: 'text', text: `MCP Tool ${fullName} called with ${JSON.stringify(args)}. Result pending...` }] }
-              }
-            })
-            baseTools.push(fullName)
-          }
-        }
-
-        const coreToolsDesc = `
-## Available Core Tools
-- read: Read contents of a file.
-- write: Create or overwrite a file.
-- edit: Edit an existing file using search/replace blocks.
-- grep: Search for patterns in files.
-- ls: List files in a directory.
-- find: Find files by name.
-- bash: Execute shell commands.
-`;
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
-        const fullPrompt = `${sysPrompt}\n\n${coreToolsDesc}${workspaceDir ? `\nWorkspace: ${workspaceDir}` : ''}`
+        const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
 
         const created = await createAgentSession({
           cwd,
           model: getModel(provider, modelId),
           systemPrompt: fullPrompt,
           thinkingLevel: thinkingLevel || 'medium',
-          tools: baseTools,
-          customTools,
+          tools: ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'],
+          customTools: getTools(cwd),
           authStorage,
         })
 
-        const session = created.session
-        session.setActiveToolsByName(baseTools)
+          const session = created.session
+          session.setActiveToolsByName(['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'])
           console.log('[pi-server] Tools registered:', session.agent.state.tools.map(t => t.name).join(', '), `(${session.agent.state.tools.length})`)
           console.log('[pi-server] Using provider:', provider, 'model:', modelId)
 
@@ -213,7 +136,13 @@ createServer((req, res) => {
       }
 
       wrapper.emit = emit
-      await wrapper.session.agent.prompt(content)
+
+      // Timeout to prevent hanging (5 minutes max)
+      const promptPromise = wrapper.session.agent.prompt(content)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Agent prompt timed out (300s)')), 300_000)
+      )
+      await Promise.race([promptPromise, timeoutPromise])
 
       const msgs = wrapper.session.agent.state.messages
       const last = [...msgs].reverse().find(m => m.role === 'assistant')
