@@ -35,11 +35,29 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
 }
 
 fn resolve_project_dir() -> String {
-    std::env::var("SNOTRA_PROJECT_DIR").unwrap_or_else(|_| {
-        std::env::current_dir()
-            .map(|d| d.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| ".".into())
-    })
+    if let Some(dir) = std::env::var("SNOTRA_PROJECT_DIR").ok() {
+        return dir;
+    }
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let cwd_str = cwd.to_string_lossy();
+    // If CWD ends with src-tauri, go up one level to project root
+    if cwd_str.ends_with("src-tauri") || cwd_str.ends_with("src-tauri\\") || cwd_str.ends_with("src-tauri/") {
+        if let Some(parent) = cwd.parent() {
+            return parent.to_string_lossy().into_owned();
+        }
+    }
+    // Check if pi-server exists in CWD
+    if std::path::Path::new(&cwd).join("pi-server").join("index.mjs").exists() {
+        return cwd_str.into_owned();
+    }
+    // Fallback: try parent (cargo workspace layout)
+    if let Some(parent) = cwd.parent() {
+        let candidate = parent.join("pi-server").join("index.mjs");
+        if candidate.exists() {
+            return parent.to_string_lossy().into_owned();
+        }
+    }
+    cwd_str.into_owned()
 }
 
 #[tauri::command]
