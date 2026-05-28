@@ -18,7 +18,7 @@ interface AppState {
     info?: MessageInfo
   }>
 
-  // Provider â€” now dynamic (any OpenCode provider ID)
+  // Provider â€?now dynamic (any OpenCode provider ID)
   activeProvider: string
   providerConfigs: Record<string, ProviderConfig>
   providerList: ProviderInfo[]
@@ -454,7 +454,18 @@ export const useAppStore = create<AppState>()(
         companion: state.companion,
         workspaceDir: state.workspaceDir,
       }),
-      version: 3,
+      version: 4,
+      migrate: (persistedState, version) => {
+        if (version < 4) {
+          return {
+            ...(persistedState as any),
+            sessions: [],
+            sessionMessages: {},
+            streamingMessage: {},
+          }
+        }
+        return persistedState as any
+      },
     },
   ),
 )

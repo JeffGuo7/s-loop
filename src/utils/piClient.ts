@@ -162,3 +162,52 @@ export function setStreamCallbacks(sessionId: string, callbacks: StreamCallbacks
 export function removeStreamCallbacks(sessionId: string): void {
   callbacksMap.delete(sessionId)
 }
+
+// ---- SSE-style event subscription (compatibility with old Kilo SSE) ----
+
+export interface SSECallbacks {
+  onPartUpdated?: (part: { sessionID: string; messageID: string; id: string; delta?: string }) => void
+  onPartDelta?: (sessionID: string, messageID: string, partID: string, delta: string) => void
+  onMessageStart?: (sessionID: string, messageID: string, parts: any[]) => void
+  onMessageCompleted?: (sessionID: string, messageID: string) => void
+  onMessageUpdated?: (info: { id: string; sessionID: string; role: string }) => void
+  onSessionIdle?: (sessionID: string) => void
+  onError?: (err: Error) => void
+  onConnected?: () => void
+  onDisconnected?: () => void
+}
+
+/** 
+ * Compatibility shim: Pi doesn't use SSE subscriptions. 
+ * Streaming is handled per-session via callbacksMap inside promptAsync.
+ * This returns a no-op cleanup function so the ChatView's useEffect doesn't break.
+ */
+export function subscribeToEvents(_callbacks: SSECallbacks): () => void {
+  // Fire onConnected immediately (Pi is always "connected")
+  _callbacks.onConnected?.()
+  return () => {} // no-op cleanup
+}
+
+/** Pi is always available (no external server needed) */
+export async function health(): Promise<boolean> {
+  return true
+}
+
+/** 
+ * Create a session handle. 
+ * Pi uses Agent instances (created lazily inside promptAsync), 
+ * so this returns a virtual session object.
+ */
+export async function createSession(title?: string): Promise<{ id: string }> {
+  const id = `pi-session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  return { id }
+}
+
+/** 
+ * Set permission mode. 
+ * Pi handles permissions via beforeToolCall hook (configured per-session).
+ * For now, this is a no-op since Pi's default behavior handles it.
+ */
+export async function setPermissionMode(_sessionId: string, _mode: 'ask' | 'allow' | 'deny'): Promise<void> {
+  // Will be implemented when we add Pi Agent beforeToolCall integration
+}
