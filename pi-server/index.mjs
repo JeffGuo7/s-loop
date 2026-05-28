@@ -1,69 +1,32 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { Agent } from '@earendil-works/pi-agent-core'
-import { getModel, Type } from '@earendil-works/pi-ai'
+import { getModel } from '@earendil-works/pi-ai'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const sessions = new Map()
 
-function parseToolCall(text) {
-  const regex = /<tool name="([^"]+)">(.+?)<\/tool>/s
-  const match = text.match(regex)
-  if (!match) return null
-  try {
-    const data = JSON.parse(match[2].trim())
-    return { name: match[1], data }
-  } catch {
-    console.log('[pi-server] Tool parse failed:', text.slice(0, 200))
-    return null
-  }
+function createSSE(event, data) {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
+// Cache tools per workspace directory (tool factories are expensive)
 const toolsCache = new Map()
-
-function getTools(workspaceDir) {
-  const dir = workspaceDir || process.cwd()
-  if (!toolsCache.has(dir)) {
-    const allT = [...createCodingTools(dir), ...createReadOnlyTools(dir)]
+function getTools(dir) {
+  const key = dir || process.cwd()
+  if (!toolsCache.has(key)) {
+    const allTools = [...createCodingTools(key), ...createReadOnlyTools(key)]
     const seen = new Set()
-    toolsCache.set(dir, allT.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true }))
+    const tools = allTools.filter(t => {
+      if (seen.has(t.name)) return false
+      seen.add(t.name)
+      return true
+    })
+    toolsCache.set(key, tools)
+    console.log(`[pi-server] Loaded ${tools.length} tools for ${key}:`, tools.map(t => t.name).join(', '))
   }
-  return toolsCache.get(dir)
-}
-
-async function executeToolByName(name, args, workspaceDir) {
-  const tools = getTools(workspaceDir)
-  const tool = tools.find(t => t.name === name)
-  if (!tool) return { error: `Tool "${name}" not found` }
-
-  // Special case: web_search is not in pi-coding-agent tools
-  if (name === 'web_search') {
-    try {
-      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(args.query || args)}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-      })
-      const html = await res.text()
-      const results = []
-      const titleRegex = /class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)</g
-      const snippetRegex = /class="[^"]*result__snippet[^"]*"[^>]*>([^<]*)</g
-      let t, s
-      while ((t = titleRegex.exec(html)) !== null && results.length < 8) {
-        s = snippetRegex.exec(html)
-        results.push({ title: t[2], url: t[1], snippet: s ? s[1] : '' })
-      }
-      return { result: results.length > 0 ? results : { message: 'No results' } }
-    } catch (err) {
-      return { error: `Search failed: ${err.message}` }
-    }
-  }
-
-  try {
-    const result = await tool.execute(`${name}_${Date.now()}`, args)
-    return { result: result?.content?.[0]?.text || JSON.stringify(result) }
-  } catch (err) {
-    return { error: err.message }
-  }
+  return toolsCache.get(key)
 }
 
 createServer((req, res) => {
@@ -83,7 +46,7 @@ createServer((req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/session') {
     const id = randomUUID()
-    sessions.set(id, { agent: null, emit: null, workspaceDir: null })
+    sessions.set(id, { agent: null, emit: null })
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ id }))
     return
@@ -117,24 +80,34 @@ createServer((req, res) => {
           emit('done', {}); res.end(); return
         }
 
-        session.workspaceDir = workspaceDir || session.workspaceDir
+        // Build system prompt with workspace context
+        const basePrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
+        const fullPrompt = workspaceDir
+          ? `${basePrompt}\n\nWorkspace directory: ${workspaceDir}`
+          : basePrompt
 
-        // Build system prompt with tool description (prompt-based tools, not native API tools)
-        const wsPrompt = systemPrompt || 'You are a helpful assistant.'
-        const fullPrompt = `${wsPrompt}\n\n${buildToolPrompt(session.workspaceDir)}`
+        // Native tools from pi-coding-agent (openclaw uses the same approach)
+        const tools = getTools(workspaceDir || process.cwd())
+
+        // For models that support reasoning, check if it interferes with tool calling.
+        // Some models (like DeepSeek) can't do reasoning + tool calling simultaneously.
+        // We'll try reasoning first; if tools don't work, user can set thinkingLevel: 'off'.
+        const effectiveThinking = model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off'
 
         if (!session.agent) {
-          const effectiveThinking = model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off'
-
           const agent = new Agent({
             initialState: {
               systemPrompt: fullPrompt,
               model,
-              tools: [], // No native tools - use prompt-based
+              tools,
               thinkingLevel: effectiveThinking,
             },
             sessionId,
             getApiKey: async () => apiKey,
+            beforeToolCall: async ({ toolCall }) => {
+              emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments || {} })
+              return undefined
+            },
             toolExecution: 'parallel',
           })
 
@@ -151,60 +124,40 @@ createServer((req, res) => {
                 else if (ev.type === 'thinking_delta') { e('thinking_delta', { delta: ev.delta }) }
                 break
               }
+              case 'tool_execution_start': {
+                e('tool_execution_start', { id: event.toolCallId, name: event.toolName, args: event.args })
+                break
+              }
+              case 'tool_execution_end': {
+                e('tool_execution_end', { id: event.toolCallId, name: event.toolName, result: event.result, isError: event.isError })
+                break
+              }
             }
           })
 
           session.agent = agent
         } else {
-          if (providerID && modelID && getModel(providerID, modelID)) {
-            session.agent.state.model = getModel(providerID, modelID)
+          if (providerID && modelID) {
+            const m = getModel(providerID, modelID)
+            if (m) session.agent.state.model = m
           }
           session.agent.state.systemPrompt = fullPrompt
-          if (model?.reasoning && thinkingLevel) session.agent.state.thinkingLevel = thinkingLevel
+          if (model?.reasoning) {
+            session.agent.state.thinkingLevel = effectiveThinking
+          }
+          // Refresh tools on each turn (in case workspace changed)
+          session.agent.state.tools = tools
         }
 
         session.emit = emit
 
-        // Prompt with tool loop
-        let currentPrompt = content
-        let maxTurns = 10
-        let allText = ''
+        await session.agent.prompt(content)
 
-        while (maxTurns-- > 0) {
-          await session.agent.prompt(currentPrompt)
+        const messages = session.agent.state.messages
+        const last = [...messages].reverse().find(m => m.role === 'assistant')
+        const text = last?.content?.find?.(c => c.type === 'text')?.text || (last?.errorMessage ? `Error: ${last.errorMessage}` : '')
 
-          const messages = session.agent.state.messages
-          const last = [...messages].reverse().find(m => m.role === 'assistant')
-          const textContent = last?.content?.find?.(c => c.type === 'text')
-          const responseText = textContent?.text || ''
-
-          allText = responseText
-
-          // Check for tool calls in the response
-          const toolCall = parseToolCall(responseText)
-          if (toolCall) {
-            emit('tool_call', { id: toolCall.name, name: toolCall.name, args: toolCall.data })
-
-            const result = await executeToolByName(toolCall.name, toolCall.data, session.workspaceDir)
-
-            emit('tool_execution_end', {
-              id: toolCall.name,
-              name: toolCall.name,
-              result: result,
-              isError: !!result.error,
-            })
-
-            // Build tool result message for next turn
-            const resultText = result.error ? `Error: ${result.error}` : JSON.stringify(result.result)
-            currentPrompt = `<tool_result name="${toolCall.name}">${resultText}</tool_result>`
-            continue
-          }
-
-          // No tool call found, exit loop
-          break
-        }
-
-        emit('result', { text: allText || (last?.errorMessage ? `Error: ${last.errorMessage}` : '') })
+        emit('result', { text: text || '' })
         emit('done', {})
       } catch (err) {
         try { emit('error', { message: err.message || String(err) }); emit('done', {}) } catch {}

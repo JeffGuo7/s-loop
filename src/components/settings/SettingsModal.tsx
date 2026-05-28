@@ -28,8 +28,8 @@ const BUILT_IN_PROVIDERS: ProviderInfo[] = [
   { id: 'fireworks', name: 'Fireworks', env: 'FIREWORKS_API_KEY' },
   { id: 'together', name: 'Together AI', env: 'TOGETHER_API_KEY' },
   { id: 'cerebras', name: 'Cerebras', env: 'CEREBRAS_API_KEY' },
-  { id: 'opencode-go', name: 'OpenCode Go', env: 'OPENCODE_GO_API_KEY' },
-  { id: 'opencode', name: 'OpenCode', env: 'OPENCODE_API_KEY' },
+  { id: 'opencode', name: 'Pi / OpenCode (Anthropic)', env: 'OPENCODE_API_KEY' },
+  { id: 'opencode-go', name: 'OpenCode Go (OpenAI)', env: 'OPENCODE_GO_API_KEY' },
 ]
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
