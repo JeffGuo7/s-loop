@@ -201,19 +201,13 @@ export function ChatView() {
 
       startStreaming(activeSessionId, 'pending-' + Date.now())
 
-      const mcpToolDefs: Pi.McpToolDef[] = connectedMCPTools.map(({ serverName, toolName }) => {
-        const st = mcpStore.serverStatuses[serverName]
-        const tool = st?.status === 'connected' ? st.tools?.find(t => t.name === toolName) : undefined
-        return tool ? { serverName, name: tool.name, description: tool.description || '', inputSchema: tool.inputSchema || {} } : null
-      }).filter((t): t is Pi.McpToolDef => t !== null)
-
       const result = await Pi.prompt(pid!, enrichedContent, {
         systemPrompt: activeAgent?.instructions || undefined,
         providerID: effectiveModel?.providerID,
         modelID: effectiveModel?.modelID,
         thinkingLevel: 'medium',
         apiKey: providerConfig?.apiKey,
-        workspaceDir: workspaceDir,
+        workspaceDir: workspaceDir ?? undefined,
       })
 
       if (result.error) {
