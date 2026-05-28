@@ -6,13 +6,13 @@ import { useMCPStore } from '../../stores/mcpStore'
 import { Cpu, Sparkles, Wifi, WifiOff } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
-import * as OpenCode from '../../utils/opencodeClient'
+import * as Pi from '../../utils/piClient'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
 
-// Store OpenCode message IDs that belong to the user, so we don't accidentally treat them as the assistant's streaming response
+// Store Pi message IDs that belong to the user, so we don't accidentally treat them as the assistant's streaming response
 const ignoredMessageIDs = new Set<string>()
 
 export function ChatView() {
@@ -38,7 +38,7 @@ export function ChatView() {
 
   // Subscribe to SSE events on mount
   useEffect(() => {
-    const unsubscribe = OpenCode.subscribeToEvents({
+    const unsubscribe = Pi.subscribeToEvents({
       onPartUpdated: (part) => {
         const kiloSessionId = part.sessionID
         if (!kiloSessionId || !part.messageID) return
@@ -59,7 +59,7 @@ export function ChatView() {
             return
           }
 
-          // Update messageID from real OpenCode session ID if still placeholder
+          // Update messageID from real Pi session ID if still placeholder
           if (streaming.messageID.startsWith('pending-')) {
             updateStreamingMessageID(localId, part.messageID)
           }
@@ -140,7 +140,7 @@ export function ChatView() {
   // Health check as fallback
   useEffect(() => {
     const check = async () => {
-      const ok = await OpenCode.health()
+      const ok = await Pi.health()
       setServerOnline(ok)
     }
     check()
@@ -200,7 +200,7 @@ export function ChatView() {
       let kiloId = session?.kiloId
       if (!kiloId) {
         try {
-          const ks = await OpenCode.createSession(session?.title)
+          const ks = await Pi.createSession(session?.title)
           kiloId = ks.id
           useAppStore.setState((state) => ({
             sessions: state.sessions.map((s) =>
@@ -313,26 +313,26 @@ export function ChatView() {
         }
 
         // 5. MCP tools are described in context text above.
-        // We do NOT pass them as tool schemas to OpenCode, because OpenCode can't execute them.
+        // We do NOT pass them as tool schemas to Pi, because Pi can't execute them.
         // The AI will know about available tools from the context text.
 
         const effectiveModel = activeAgent?.model
           ? { providerID: activeProvider!, modelID: activeAgent.model }
           : model
 
-        // Sync agent config to OpenCode session
+        // Sync agent config to Pi session
         if (activeAgent && kiloId) {
-          const syncAgentToOpenCode = async () => {
+          const syncAgentToPi = async () => {
             try {
-              await OpenCode.setPermissionMode(kiloId!, activeAgent.permissionMode)
+              await Pi.setPermissionMode(kiloId!, activeAgent.permissionMode)
             } catch {
-              // OpenCode might not support this yet
+              // Pi might not support this yet
             }
           }
-          syncAgentToOpenCode().catch(() => {})
+          syncAgentToPi().catch(() => {})
         }
 
-        const completedMessage = await OpenCode.promptAsync(kiloId!, enrichedContent, effectiveModel)
+        const completedMessage = await Pi.promptAsync(kiloId!, enrichedContent, effectiveModel)
         if (completedMessage?.info?.role === 'assistant') {
           commitStreamingMessage(activeSessionId, completedMessage)
         }
@@ -365,7 +365,7 @@ export function ChatView() {
     if (activeSessionId) {
       const s = sessions.find((s) => s.id === activeSessionId)
       if (s?.kiloId) {
-        OpenCode.abortSession(s.kiloId).catch(() => {})
+        Pi.abortSession(s.kiloId).catch(() => {})
       }
       finishStreaming(activeSessionId)
     }
