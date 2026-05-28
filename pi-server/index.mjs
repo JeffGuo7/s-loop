@@ -13,7 +13,31 @@ function createSSE(event, data) {
 function getTools(dir) {
   const all = [...createCodingTools(dir), ...createReadOnlyTools(dir)]
   const seen = new Set()
-  return all.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true })
+  const tools = all.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true })
+
+  // Add custom web_search tool
+  if (!seen.has('web_search')) {
+    tools.push({
+      name: 'web_search',
+      label: 'Web Search',
+      description: 'Search the web for current information. Use this when the user asks about news, weather, or anything requiring real-time data.',
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'The search query' } }, required: ['query'] },
+      execute: async (_id, params) => {
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(params.query)}`
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+        const html = await res.text()
+        const resultRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>.*?<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]*)</gs
+        const results = []
+        let m
+        while ((m = resultRegex.exec(html)) !== null && results.length < 5) {
+          results.push({ title: m[2].replace(/<[^>]+>/g, '').trim(), url: m[1], snippet: m[3].replace(/<[^>]+>/g, '').trim() })
+        }
+        return { content: [{ type: 'text', text: results.length > 0 ? JSON.stringify(results, null, 2) : 'No results found' }], details: {} }
+      },
+    })
+  }
+
+  return tools
 }
 
 process.on('uncaughtException', (err) => console.error('[pi-server] UNCAUGHT:', err))
