@@ -54,18 +54,48 @@ createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ healthy: true })); return
   }
-  // GET /models?provider=xxx — list models for a provider from Pi SDK
+  // GET /models?provider=xxx&apiKey=xxx&baseUrl=xxx — list models from provider API
   if (req.method === 'GET' && url.pathname === '/models') {
     const provider = url.searchParams.get('provider') || 'anthropic'
-    try {
-      const models = getModels(provider)
-      const list = models.map(m => ({ id: m.id, name: m.name, api: m.api, reasoning: m.reasoning }))
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(list))
-    } catch {
-      res.writeHead(500, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: `Provider "${provider}" not found` }))
+    const apiKey = url.searchParams.get('apiKey') || ''
+    const baseUrl = url.searchParams.get('baseUrl') || ''
+    const tryApi = !!apiKey && !!baseUrl
+    let list = []
+
+    // Try fetching from provider's API first (works for OpenAI-compatible providers)
+    if (tryApi) {
+      try {
+        const apiUrl = baseUrl.replace(/\/+$/, '') + '/models'
+        const res2 = await fetch(apiUrl, {
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(10000),
+        })
+        if (res2.ok) {
+          const json = await res2.json()
+          list = (json.data || []).map(m => ({
+            id: m.id || m.name || m,
+            name: m.id || m.name || m,
+          }))
+        }
+      } catch (err) {
+        // API fetch failed, fall through to Pi SDK
+      }
     }
+
+    // Fall back to Pi SDK's model registry
+    if (list.length === 0) {
+      try {
+        const models = getModels(provider)
+        list = models
+          .filter(m => m.id && !m.id.endsWith('-free') && !m.id.includes('free'))
+          .map(m => ({ id: m.id, name: m.name || m.id }))
+      } catch {
+        // Provider not in Pi registry either
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(list))
     return
   }
   if (req.method === 'POST' && url.pathname === '/session') {

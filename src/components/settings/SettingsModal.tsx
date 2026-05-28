@@ -328,7 +328,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                               <button
                                 onClick={async () => {
                                   if (!expandedProvider) return
-                                  const list = await import('../../utils/piClient').then(m => m.fetchModels(expandedProvider))
+                                  const cfg = localConfigs[expandedProvider]
+                                  const list = await import('../../utils/piClient').then(m =>
+                                    m.fetchModels(expandedProvider, cfg?.apiKey, cfg?.baseUrl))
                                   if (list.length > 0) {
                                     setProviderModels(prev => ({ ...prev, [expandedProvider]: list.map(m => m.id) }))
                                   }
