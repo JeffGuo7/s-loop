@@ -15,35 +15,33 @@ interface SettingsModalProps {
 }
 
 const BUILT_IN_PROVIDERS: ProviderInfo[] = [
-  // Pi SDK supported providers
-  { id: 'opencode', name: 'OpenCode (Anthropic)', env: 'OPENCODE_API_KEY' },
-  { id: 'opencode-go', name: 'OpenCode Go (OpenAI)', env: 'OPENCODE_GO_API_KEY' },
-  { id: 'anthropic', name: 'Anthropic', env: 'ANTHROPIC_API_KEY' },
-  { id: 'openai', name: 'OpenAI', env: 'OPENAI_API_KEY' },
-  { id: 'gemini', name: 'Google Gemini', env: 'GEMINI_API_KEY' },
-  { id: 'deepseek', name: 'DeepSeek', env: 'DEEPSEEK_API_KEY' },
-  { id: 'groq', name: 'Groq', env: 'GROQ_API_KEY' },
-  { id: 'openrouter', name: 'OpenRouter', env: 'OPENROUTER_API_KEY' },
-  { id: 'mistral', name: 'Mistral', env: 'MISTRAL_API_KEY' },
-  { id: 'xai', name: 'xAI (Grok)', env: 'XAI_API_KEY' },
-  { id: 'github-copilot', name: 'GitHub Copilot', env: 'GITHUB_TOKEN' },
-  { id: 'huggingface', name: 'HuggingFace', env: 'HUGGINGFACE_API_KEY' },
-  { id: 'fireworks', name: 'Fireworks AI', env: 'FIREWORKS_API_KEY' },
-  { id: 'together', name: 'Together AI', env: 'TOGETHER_API_KEY' },
-  { id: 'cerebras', name: 'Cerebras', env: 'CEREBRAS_API_KEY' },
-  { id: 'zai', name: 'Z AI', env: 'ZAI_API_KEY' },
-  { id: 'perplexity', name: 'Perplexity', env: 'PERPLEXITY_API_KEY' },
-  { id: 'minimax', name: 'MiniMax', env: 'MINIMAX_API_KEY' },
-  { id: 'moonshotai', name: 'Moonshot AI', env: 'MOONSHOT_API_KEY' },
-  { id: 'nvidia', name: 'NVIDIA AI', env: 'NVIDIA_API_KEY' },
-  { id: 'hyperbolic', name: 'Hyperbolic', env: 'HYPERBOLIC_API_KEY' },
-  { id: 'jina', name: 'Jina AI', env: 'JINA_API_KEY' },
-  { id: 'voyageai', name: 'Voyage AI', env: 'VOYAGEAI_API_KEY' },
-  { id: 'kimi-coding', name: 'Kimi (Moonshot)', env: 'KIMI_API_KEY' },
-  { id: 'ollama', name: 'Ollama (Local)', env: 'OLLAMA_API_KEY' },
-  { id: 'lmstudio', name: 'LM Studio (Local)', env: 'LMSTUDIO_API_KEY' },
-  // Custom provider — user sets their own base URL
-  { id: 'custom', name: 'Custom Provider', env: '' },
+  { id: 'opencode', name: 'OpenCode (Anthropic)', env: 'OPENCODE_API_KEY', source: 'https://api.opencode.ai/v1' },
+  { id: 'opencode-go', name: 'OpenCode Go (OpenAI)', env: 'OPENCODE_GO_API_KEY', source: 'https://opencode.ai/zen/go/v1' },
+  { id: 'anthropic', name: 'Anthropic', env: 'ANTHROPIC_API_KEY', source: 'https://api.anthropic.com' },
+  { id: 'openai', name: 'OpenAI', env: 'OPENAI_API_KEY', source: 'https://api.openai.com/v1' },
+  { id: 'gemini', name: 'Google Gemini', env: 'GEMINI_API_KEY', source: 'https://generativelanguage.googleapis.com' },
+  { id: 'deepseek', name: 'DeepSeek', env: 'DEEPSEEK_API_KEY', source: 'https://api.deepseek.com' },
+  { id: 'groq', name: 'Groq', env: 'GROQ_API_KEY', source: 'https://api.groq.com/openai/v1' },
+  { id: 'openrouter', name: 'OpenRouter', env: 'OPENROUTER_API_KEY', source: 'https://openrouter.ai/api/v1' },
+  { id: 'mistral', name: 'Mistral', env: 'MISTRAL_API_KEY', source: 'https://api.mistral.ai/v1' },
+  { id: 'xai', name: 'xAI (Grok)', env: 'XAI_API_KEY', source: 'https://api.x.ai/v1' },
+  { id: 'github-copilot', name: 'GitHub Copilot', env: 'GITHUB_TOKEN', source: 'https://api.githubcopilot.com' },
+  { id: 'huggingface', name: 'HuggingFace', env: 'HUGGINGFACE_API_KEY', source: 'https://api-inference.huggingface.co' },
+  { id: 'fireworks', name: 'Fireworks AI', env: 'FIREWORKS_API_KEY', source: 'https://api.fireworks.ai/inference/v1' },
+  { id: 'together', name: 'Together AI', env: 'TOGETHER_API_KEY', source: 'https://api.together.xyz/v1' },
+  { id: 'cerebras', name: 'Cerebras', env: 'CEREBRAS_API_KEY', source: 'https://api.cerebras.ai/v1' },
+  { id: 'zai', name: 'Z AI', env: 'ZAI_API_KEY', source: 'https://api.z.ai/v1' },
+  { id: 'perplexity', name: 'Perplexity', env: 'PERPLEXITY_API_KEY', source: 'https://api.perplexity.ai' },
+  { id: 'minimax', name: 'MiniMax', env: 'MINIMAX_API_KEY', source: 'https://api.minimax.chat/v1' },
+  { id: 'moonshotai', name: 'Moonshot AI', env: 'MOONSHOT_API_KEY', source: 'https://api.moonshot.cn/v1' },
+  { id: 'nvidia', name: 'NVIDIA AI', env: 'NVIDIA_API_KEY', source: 'https://integrate.api.nvidia.com/v1' },
+  { id: 'hyperbolic', name: 'Hyperbolic', env: 'HYPERBOLIC_API_KEY', source: 'https://api.hyperbolic.xyz/v1' },
+  { id: 'jina', name: 'Jina AI', env: 'JINA_API_KEY', source: 'https://api.jina.ai/v1' },
+  { id: 'voyageai', name: 'Voyage AI', env: 'VOYAGEAI_API_KEY', source: 'https://api.voyageai.com/v1' },
+  { id: 'kimi-coding', name: 'Kimi (Moonshot)', env: 'KIMI_API_KEY', source: 'https://api.moonshot.cn/v1' },
+  { id: 'ollama', name: 'Ollama (Local)', env: 'OLLAMA_API_KEY', source: 'http://localhost:11434/v1' },
+  { id: 'lmstudio', name: 'LM Studio (Local)', env: 'LMSTUDIO_API_KEY', source: 'http://localhost:1234/v1' },
+  { id: 'custom', name: 'Custom Provider', env: '', source: '' },
 ]
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
@@ -85,6 +83,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setExpandedProvider(ep && providerList.some(p => p.id === ep) ? ep : null)
     setModelSearchQuery('')
   }, [activeProvider, providerConfigs, providerList])
+
+  // Auto-fill default base URL when expanding a provider
+  useEffect(() => {
+    if (!expandedProvider) return
+    const info = providerList.find(p => p.id === expandedProvider)
+    const cfg = localConfigs[expandedProvider]
+    if (info?.source && (!cfg || !cfg.baseUrl)) {
+      handleConfigChange(expandedProvider, 'baseUrl', info.source)
+    }
+  }, [expandedProvider])
 
   const handleConfigChange = (id: string, field: string, value: string) => {
     setLocalConfigs((prev) => ({
