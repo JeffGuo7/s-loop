@@ -21,6 +21,28 @@ export interface ToolDefinition {
   input_schema: Record<string, unknown>
 }
 
+// ---- API key resolution ----
+
+let apiKeyResolver: ((provider: string) => string | undefined) | null = null
+
+/** Register a function that resolves API keys by provider name */
+export function setApiKeyResolver(resolver: (provider: string) => string | undefined): void {
+  apiKeyResolver = resolver
+}
+
+/** Convert Snotra provider name to Pi provider name */
+function mapProvider(provider: string): string {
+  const map: Record<string, string> = {
+    anthropic: 'anthropic',
+    openai: 'openai',
+    google: 'google',
+    deepseek: 'deepseek',
+    groq: 'groq',
+    openrouter: 'openrouter',
+  }
+  return map[provider] || provider
+}
+
 // ---- Per-session Agent instances ----
 
 const agents = new Map<string, Agent>()
@@ -56,6 +78,12 @@ export async function promptAsync(
         tools: [],
       },
       sessionId,
+      getApiKey: async (provider) => {
+        if (apiKeyResolver) {
+          return apiKeyResolver(provider)
+        }
+        return undefined
+      },
     })
 
     agents.set(sessionId, agent)

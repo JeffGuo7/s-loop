@@ -13,6 +13,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
 
+// Register API key resolver for Pi Agent
+Pi.setApiKeyResolver((provider) => {
+  const configs = useAppStore.getState().providerConfigs
+  const config = configs[provider]
+  if (config?.apiKey) return config.apiKey
+  return undefined
+})
+
 // Store Pi message IDs that belong to the user, so we don't accidentally treat them as the assistant's streaming response
 const ignoredMessageIDs = new Set<string>()
 
