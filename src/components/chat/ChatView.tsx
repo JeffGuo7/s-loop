@@ -217,7 +217,6 @@ export function ChatView() {
         parts: [{ id: `pi-part-${Date.now()}`, type: 'text', text: result.text, sessionID: activeSessionId, messageID: msgID }],
       }
 
-      finishStreaming(activeSessionId)
       commitStreamingMessage(activeSessionId, completedMessage)
     },
     [activeSessionId, activeProvider, providerConfigs, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream],
