@@ -74,6 +74,7 @@ createServer((req, res) => {
         })
 
         const session = created.session
+        session.setActiveToolsByName(['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'])
         wrapper = { session, emit: null }
         sessions.set(sessionId, wrapper)
 
