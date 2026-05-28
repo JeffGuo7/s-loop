@@ -16,6 +16,9 @@ function getTools(dir) {
   return all.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true })
 }
 
+process.on('uncaughtException', (err) => console.error('[pi-server] UNCAUGHT:', err))
+process.on('unhandledRejection', (err) => console.error('[pi-server] UNHANDLED:', err))
+
 createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -72,17 +75,15 @@ const authStorage = AuthStorage.inMemory()
           authStorage,
         })
 
-        const session = created.session
-        session.setActiveToolsByName(['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'])
-        console.log('[pi-server] Tools registered:', session.agent.state.tools.map(t => t.name).join(', '), `(${session.agent.state.tools.length})`)
-        console.log('[pi-server] Using provider:', provider, 'model:', modelId)
+          const session = created.session
+          session.setActiveToolsByName(['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write'])
+          console.log('[pi-server] Tools registered:', session.agent.state.tools.map(t => t.name).join(', '), `(${session.agent.state.tools.length})`)
+          console.log('[pi-server] Using provider:', provider, 'model:', modelId)
 
-        // Log what's being sent to the API
-        const origStreamFn = session.agent.streamFn
-        session.agent.streamFn = (m, ctx, opts) => {
-          console.log('[pi-server] Sending request: tools=' + (ctx.tools?.length || 0), 'msgs=' + ctx.messages?.length)
-          return origStreamFn.call(session.agent, m, ctx, opts)
-        }
+          // Log API responses to diagnose tool continuation issue
+          session.agent.onResponse = (response, _model) => {
+            console.log('[pi-server] API response status:', response.status)
+          }
 
         wrapper = { session, emit: null }
         sessions.set(sessionId, wrapper)
