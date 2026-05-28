@@ -46,6 +46,15 @@ export async function health(): Promise<boolean> {
   }
 }
 
+export async function waitForServer(timeoutMs = 30000): Promise<boolean> {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    if (await health()) return true
+    await new Promise(r => setTimeout(r, 1000))
+  }
+  return false
+}
+
 export async function createSession(): Promise<{ id: string }> {
   const res = await fetch(`${_base}/session`, { method: 'POST' })
   return res.json()
