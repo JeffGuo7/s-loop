@@ -18,7 +18,7 @@ impl PiServerProcess {
         let node_path = std::env::var("PI_NODE_PATH").unwrap_or_else(|_| "node".into());
 
         let mut cmd = Command::new(&node_path);
-        cmd.args([&format!("{}/pi-server/index.mjs", project_dir)]);
+        cmd.args([&format!("{}/src-tauri/pi-server/index.mjs", project_dir)]);
         cmd.env("PI_SERVER_PORT", port.to_string());
         cmd.current_dir(project_dir);
 

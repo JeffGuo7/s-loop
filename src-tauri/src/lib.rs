@@ -45,11 +45,11 @@ fn resolve_project_dir() -> String {
             return parent.to_string_lossy().into_owned();
         }
     }
-    if std::path::Path::new(&cwd).join("pi-server").join("index.mjs").exists() {
+    if std::path::Path::new(&cwd).join("src-tauri").join("pi-server").join("index.mjs").exists() {
         return cwd_str.into_owned();
     }
     if let Some(parent) = cwd.parent() {
-        let candidate = parent.join("pi-server").join("index.mjs");
+        let candidate = parent.join("src-tauri").join("pi-server").join("index.mjs");
         if candidate.exists() {
             return parent.to_string_lossy().into_owned();
         }
