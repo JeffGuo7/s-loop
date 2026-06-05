@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAppStore, useAgentStore } from '../../stores'
+import { useAppStore, useAgentStore, useWebSearchStore } from '../../stores'
 import { useSkillStore } from '../../stores/skillStore'
 import { useMCPStore } from '../../stores/mcpStore'
 import { Cpu, Sparkles } from 'lucide-react'
@@ -208,6 +208,7 @@ export function ChatView() {
         thinkingLevel: 'medium',
         apiKey: providerConfig?.apiKey,
         workspaceDir: workspaceDir ?? undefined,
+        webSearchConfig: useWebSearchStore.getState().getActiveConfig(),
       })
 
       if (result.error) {

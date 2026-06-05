@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, getModels } from '@earendil-works/pi-ai'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
+import { webSearch, fetchUrl } from './searchProviders.mjs'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const sessions = new Map()
@@ -11,30 +12,42 @@ function createSSE(event, data) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
-function getTools(dir) {
+function getTools(dir, webSearchConfig) {
   const all = [...createCodingTools(dir), ...createReadOnlyTools(dir)]
   const seen = new Set()
   const tools = all.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true })
   if (!seen.has('web_search')) {
+    const providerName = webSearchConfig?.provider || 'bing'
     tools.push({
       name: 'web_search', label: 'Web Search',
-      description: 'Search the web for current information.',
+      description: `Search the web for current information (provider: ${providerName}). Returns title, URL, and description for each result. After getting results, use web_fetch to read full content from interesting URLs.`,
       parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] },
       execute: async (_id, params) => {
-        try {
-          const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(params.query)}`
-          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) })
-          const html = await res.text()
-          const results = []
-          const r = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>.*?<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]*)</gs
-          let m
-          while ((m = r.exec(html)) !== null && results.length < 5) {
-            results.push({ title: m[2].replace(/<[^>]+>/g, '').trim(), url: m[1], snippet: m[3].replace(/<[^>]+>/g, '').trim() })
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }], details: {} }
-        } catch (e) {
-          return { content: [{ type: 'text', text: `Search failed: ${e.message}` }], details: {} }
+        const result = await webSearch(params.query, webSearchConfig)
+        if (result.error) {
+          return { content: [{ type: 'text', text: `Search failed: ${result.error}` }], details: {} }
         }
+        if (!result.results.length) {
+          return { content: [{ type: 'text', text: 'No results found.' }], details: {} }
+        }
+        const text = result.results.map(r =>
+          `[${r.position}] ${r.title}\n   URL: ${r.url}\n   ${r.description}`
+        ).join('\n\n')
+        return { content: [{ type: 'text', text }], details: {} }
+      },
+    })
+  }
+  if (!seen.has('web_fetch')) {
+    tools.push({
+      name: 'web_fetch', label: 'Web Fetch',
+      description: 'Fetch the full content of a web page. Use this to read articles, documentation, or any web page content. Provide a URL to get its readable text content.',
+      parameters: { type: 'object', properties: { url: { type: 'string', description: 'The URL to fetch and read' } }, required: ['url'] },
+      execute: async (_id, params) => {
+        const result = await fetchUrl(params.url)
+        if (result.error) {
+          return { content: [{ type: 'text', text: `Fetch failed: ${result.error}` }], details: {} }
+        }
+        return { content: [{ type: 'text', text: result.content }], details: {} }
       },
     })
   }
@@ -81,7 +94,7 @@ createServer((req, res) => {
   let body = ''
   req.on('data', chunk => body += chunk)
   req.on('end', async () => {
-    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir } = JSON.parse(body)
+    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, webSearchConfig } = JSON.parse(body)
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
     const emit = (event, data) => { try { res.write(createSSE(event, data)) } catch {} }
@@ -99,7 +112,7 @@ createServer((req, res) => {
 
       if (!wrapper) {
         const cwd = workspaceDir || process.cwd()
-        const tools = getTools(cwd)
+        const tools = getTools(cwd, webSearchConfig)
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
 
@@ -140,7 +153,7 @@ createServer((req, res) => {
         console.log('[pi-server] Tools:', tools.length, '| Provider:', provider, '| Model:', modelId)
       } else {
         if (model) wrapper.agent.state.model = model
-        wrapper.agent.state.tools = getTools(workspaceDir || process.cwd())
+        wrapper.agent.state.tools = getTools(workspaceDir || process.cwd(), webSearchConfig)
       }
 
       wrapper.emit = emit

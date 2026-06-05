@@ -104,6 +104,12 @@ export async function prompt(
     tools?: McpToolDef[]
     apiKey?: string
     workspaceDir?: string
+    webSearchConfig?: {
+      provider?: string
+      apiKey?: string
+      apiUrl?: string
+      limit?: number
+    }
   },
 ): Promise<PromptResult> {
   const controller = new AbortController()
@@ -118,6 +124,7 @@ export async function prompt(
     if (options?.apiKey) body.apiKey = options.apiKey
     if (options?.tools && options.tools.length > 0) body.tools = options.tools
     if (options?.workspaceDir) body.workspaceDir = options.workspaceDir
+    if (options?.webSearchConfig) body.webSearchConfig = options.webSearchConfig
 
     const res = await fetch(`${_base}/session/${sessionId}/message`, {
       method: 'POST',

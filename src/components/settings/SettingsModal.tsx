@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores'
-import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle } from 'lucide-react'
+import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle, Globe } from 'lucide-react'
 import type { ProviderConfig, ProviderInfo } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
+import { WebSearchSettings } from '../websearch'
 import { ScrollShadow } from "@heroui/react"
 import i18n from '../../i18n'
 
@@ -160,6 +161,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               { id: 'provider', icon: Cpu, label: t('settings.tabs.aiProviders') },
               { id: 'mcp', icon: Server, label: t('settings.tabs.mcpServers') },
               { id: 'skills', icon: Sparkles, label: t('settings.tabs.skills') },
+              { id: 'websearch', icon: Globe, label: t('settings.tabs.webSearch') },
               { id: 'appearance', icon: theme === 'light' ? Sun : Moon, label: t('settings.tabs.appearance') },
             ].map((item) => (
               <button
@@ -205,6 +207,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 {activeTab === 'provider' && t('settings.sections.aiModelProviders')}
                 {activeTab === 'mcp' && t('settings.sections.mcpServers')}
                 {activeTab === 'skills' && t('settings.sections.skills')}
+                {activeTab === 'websearch' && t('settings.sections.webSearch')}
                 {activeTab === 'appearance' && t('settings.sections.appearance')}
               </h3>
               <p className="text-[14px] text-text-tertiary font-medium mt-1 tracking-tight opacity-70">{t('settings.descriptions.manageSettings', { tab: activeTab })}</p>
@@ -521,6 +524,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             {activeTab === 'skills' && (
               <ScrollShadow className="h-full px-16 py-12">
                 <SkillSettings />
+              </ScrollShadow>
+            )}
+            {activeTab === 'websearch' && (
+              <ScrollShadow className="h-full px-16 py-12">
+                <WebSearchSettings />
               </ScrollShadow>
             )}
           </div>
