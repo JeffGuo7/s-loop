@@ -32,6 +32,9 @@ CLAUDE.md
 .env.*
 !.env.example
 
+# Config files with API keys
+config.json
+
 # Kilo CLI runtime
 .kilo/
 .trae/
