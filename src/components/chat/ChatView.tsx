@@ -224,10 +224,16 @@ export function ChatView() {
       if (textPart && 'text' in textPart) {
         (textPart as any).text = result.text
       }
-      if (!textPart && result.text) {
+      // If no text part was created during streaming, ensure one exists
+      // (happens when model only emits thinking_delta but no text_delta)
+      if (!accumulatedParts.find(p => p.type === 'text')) {
+        // Use result text first, then fallback to last reasoning text
+        const fallbackText = result.text
+          || accumulatedParts.filter(p => p.type === 'reasoning').pop()?.text
+          || ''
         accumulatedParts.push({
           id: `pi-text-${Date.now()}`,
-          type: 'text', text: result.text,
+          type: 'text', text: fallbackText,
           sessionID: activeSessionId, messageID: msgID,
         } as any)
       }

@@ -3,13 +3,19 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 pub struct PiServerProcess {
-    child: Child,
+    child: Option<Child>,
     pub url: String,
 }
 
 pub struct PiServerState(pub Arc<Mutex<Option<PiServerProcess>>>);
 
 impl PiServerProcess {
+    /// Create a marker for an orphaned pi-server (not started by this instance).
+    /// Drop will NOT kill orphaned processes.
+    pub fn orphan(url: String) -> Self {
+        Self { child: None, url }
+    }
+
     pub fn start(project_dir: &str, port: u16) -> Result<Self, String> {
         if !std::path::Path::new(project_dir).exists() {
             return Err(format!("Project directory not found: {}", project_dir));
@@ -34,8 +40,11 @@ impl PiServerProcess {
         let mut child = cmd.spawn().map_err(|e| format!("Failed to start pi-server: {e}"))?;
 
         let stdout = child.stdout.take().ok_or("No stdout")?;
+        let stderr = child.stderr.take().ok_or("No stderr")?;
         let reader = std::io::BufReader::new(stdout);
+        let err_reader = std::io::BufReader::new(stderr);
         let mut url = String::new();
+        let mut errors = String::new();
 
         for line in reader.lines() {
             let Ok(line) = line else { continue };
@@ -54,16 +63,38 @@ impl PiServerProcess {
 
         if url.is_empty() {
             let _ = child.kill();
-            return Err("pi-server started but no listening URL detected".into());
+            let _ = child.wait();
+            // Drain stderr for diagnostics
+            for line in err_reader.lines() {
+                if let Ok(line) = line {
+                    errors.push_str(&line);
+                    errors.push('\n');
+                }
+            }
+            let details = if !errors.is_empty() {
+                format!(": {}", errors.trim())
+            } else {
+                " (port may not have been released yet)".into()
+            };
+            return Err(format!("pi-server started but no listening URL detected{}", details));
         }
 
-        Ok(Self { child, url })
+        // Spawn a background thread to drain stderr so the pipe doesn't fill up
+        std::thread::spawn(move || {
+            for _line in err_reader.lines() {
+                // discarded — just draining to prevent pipe deadlock
+            }
+        });
+
+        Ok(Self { child: Some(child), url })
     }
 }
 
 impl Drop for PiServerProcess {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
 }

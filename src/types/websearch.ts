@@ -1,4 +1,4 @@
-export type WebSearchProviderId = 'bing' | 'brave' | 'searxng' | 'tavily'
+export type WebSearchProviderId = 'bing' | 'brave' | 'searxng' | 'tavily' | 'exa'
 
 export interface WebSearchProviderConfig {
   id: WebSearchProviderId
@@ -53,6 +53,15 @@ export const WEB_SEARCH_PROVIDERS: WebSearchProviderConfig[] = [
     id: 'tavily',
     name: 'Tavily',
     description: 'Free tier: 1,000 queries/month. Get API key at https://tavily.com',
+    needsConfig: true,
+    requiredFields: ['apiKey'],
+    enabled: false,
+    apiKey: '',
+  },
+  {
+    id: 'exa',
+    name: 'Exa Search',
+    description: 'AI-native search engine. Free tier 1,000 queries/month. Get key at https://exa.ai',
     needsConfig: true,
     requiredFields: ['apiKey'],
     enabled: false,

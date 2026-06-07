@@ -199,7 +199,10 @@ export async function prompt(
             } catch { /* skip invalid JSON */ }
           }
           // Consume the data line
-          if (nextEnd !== -1) buffer = buffer.slice(nextEnd + 1)
+          if (nextEnd !== -1) {
+            buffer = buffer.slice(nextEnd + 1)
+            lineEnd = buffer.indexOf('\n')
+          }
         }
       }
     }

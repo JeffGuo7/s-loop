@@ -20,7 +20,7 @@ function getTools(dir, webSearchConfig) {
     const providerName = webSearchConfig?.provider || 'bing'
     tools.push({
       name: 'web_search', label: 'Web Search',
-      description: `Search the web for current information (provider: ${providerName}). Returns title, URL, and description for each result. After getting results, use web_fetch to read full content from interesting URLs.`,
+      description: `Search the web for current information (provider: ${providerName}). Returns results with real source URLs, titles, and snippets. Use web_fetch to read full page content from any interesting URL.`,
       parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] },
       execute: async (_id, params) => {
         const result = await webSearch(params.query, webSearchConfig)
@@ -164,7 +164,25 @@ createServer((req, res) => {
 
       const msgs = wrapper.agent.state.messages
       const last = [...msgs].reverse().find(m => m.role === 'assistant')
-      const text = last?.content?.find?.(c => c.type === 'text')?.text || (last?.errorMessage ? `Error: ${last.errorMessage}` : '')
+
+      // Debug: log content types for diagnostics
+      if (last?.content) {
+        const types = last.content.map(c => c.type).join(', ')
+        console.log('[pi-server] Message content types:', types)
+      }
+
+      // Robust text extraction — supports both plain text and extended thinking modes
+      let text = ''
+      if (last?.content) {
+        text = last.content.find(c => c.type === 'text')?.text || ''
+        if (!text) text = last.content.find(c => c.type === 'thinking')?.text || ''
+        if (!text) {
+          for (const c of last.content) {
+            if (typeof c.text === 'string' && c.text) { text = c.text; break }
+          }
+        }
+      }
+      if (!text && last?.errorMessage) text = `Error: ${last.errorMessage}`
 
       emit('result', { text: text || '' })
       emit('done', {})

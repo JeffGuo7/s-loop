@@ -2,6 +2,8 @@
 // Default: Bing (zero-config, works in China)
 // Optional: Brave, SearxNG, Tavily
 
+import * as cheerio from 'cheerio'
+
 const SEARCH_TIMEOUT = 15_000
 const FETCH_TIMEOUT = 20_000
 
@@ -19,44 +21,109 @@ class SearchResult {
 // ─── Bing (default, zero-config, works in China) ────────
 
 /**
- * Bing search — scrapes cn.bing.com HTML search results.
+ * Bing search — uses cheerio CSS selectors to parse cn.bing.com.
  * No API key required. Accessible in China.
+ *
+ * Bing has known issues with long Chinese queries containing time words
+ * (明天/今天/昨天). This function auto-retries with a cleaned query
+ * if the initial results don't seem relevant.
  */
 async function searchBing(query, limit = 5) {
+  // Try the original query first, then fallback to a cleaned version
+  const candidates = [...new Set([query, cleanChineseQuery(query)])]
+  const seenUrls = new Set()
+  let bestResults = []
+  let foundRelevant = false
+
+  for (const q of candidates) {
+    if (foundRelevant) break
+    const results = await searchBingRaw(q, limit)
+    if (!results.length) continue
+
+    const keywords = extractKeywords(query)
+    const relevant = keywords.length === 0 || results.some(r => {
+      const title = r.title.toLowerCase()
+      const matchCount = keywords.filter(kw => title.includes(kw)).length
+      return matchCount >= 2 || matchCount === keywords.length
+    })
+
+    if (relevant) { bestResults = results; foundRelevant = true; break }
+    if (bestResults.length === 0) bestResults = results
+  }
+
+  return bestResults.filter(r => {
+    if (seenUrls.has(r.url)) return false
+    seenUrls.add(r.url)
+    return true
+  }).slice(0, limit)
+}
+
+/** Raw Bing fetch + cheerio parse */
+async function searchBingRaw(query, limit) {
   const url = `https://cn.bing.com/search?q=${encodeURIComponent(query)}&count=${limit}`
   const res = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml',
-      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.9',
     },
     signal: AbortSignal.timeout(SEARCH_TIMEOUT),
   })
 
   const html = await res.text()
+  const $ = cheerio.load(html)
   const results = []
 
-  // Bing uses <li class="b_algo"> for each result
-  const liRegex = /<li[^>]*class="[^"]*b_algo[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
-  let liMatch
-  while ((liMatch = liRegex.exec(html)) !== null && results.length < limit) {
-    const item = liMatch[1]
+  const els = $('#b_results .b_algo').length
+    ? $('#b_results .b_algo')
+    : $('.b_algo').length ? $('.b_algo') : $('li.b_algo')
 
-    const linkMatch = item.match(/<h2[^>]*>.*?<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i)
-    if (!linkMatch) continue
-
-    const url = linkMatch[1]
-    const title = linkMatch[2].replace(/<[^>]+>/g, '').trim()
-    if (!url || !title || url.startsWith('#') || url.includes('javascript:')) continue
-
-    const snippetMatch = item.match(/<p[^>]*class="[^"]*b_lineclamp[^"]*"[^>]*>([\s\S]*?)<\/p>/i)
-      || item.match(/<div[^>]*class="b_caption"[^>]*>.*?<p[^>]*>([\s\S]*?)<\/p>/i)
-    const description = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : ''
-
-    results.push(new SearchResult({ title, url, description, position: results.length + 1 }))
-  }
+  els.each((_, el) => {
+    if (results.length >= limit) return false
+    const $a = $(el).find('h2 a').first()
+    const rawUrl = $a.attr('href') || ''
+    const title = $a.text().trim()
+    if (!title || !rawUrl || rawUrl.startsWith('#') || rawUrl.includes('javascript:')) return
+    const decodedUrl = decodeBingUrl(rawUrl)
+    const desc = $(el).find('.b_caption p, .b_lineclamp1, .b_lineclamp2, .b_lineclamp3, .b_caption div').first().text().trim()
+    results.push(new SearchResult({ title, url: decodedUrl, description: desc, position: results.length + 1 }))
+  })
 
   return results
+}
+
+/**
+ * Clean a Chinese query: strip time words that confuse Bing, add "天气预报" for weather queries.
+ * "昆山明天天气" → "昆山 天气预报"
+ */
+function cleanChineseQuery(query) {
+  let cleaned = query
+    .replace(/今天|明天|昨天|后天|昨日|今日|明日/gi, '')
+    .replace(/的|了|吗|呢|吧|呀|啊|哦|嗯/gi, '')
+    .trim()
+  // Ensure space between city name and 天气
+  cleaned = cleaned.replace(/([^\s])天气/g, '$1 天气')
+  if (cleaned.length < 2) cleaned = query.replace(/今天|明天|昨天|后天/g, '').trim()
+  return cleaned || query
+}
+
+/** Extract non-stopword keywords from query for relevance check */
+function extractKeywords(query) {
+  const stop = new Set('的 了 吗 呢 吧 在 是 有 和 与 或 这 那 哪 什么 怎么 如何 为什么 a an the is are to for of in on at by'.split(' '))
+  return query.toLowerCase().split(/[\s,，、]+/).filter(w => w.length >= 2 && !stop.has(w))
+}
+
+/** Decode Bing redirect URL (ck/a?...&u=...) → real URL */
+function decodeBingUrl(bingUrl) {
+  if (!bingUrl.includes('bing.com/ck/') && !bingUrl.includes('/ck/a?')) return bingUrl
+  try {
+    const u = new URL(bingUrl, 'https://www.bing.com').searchParams.get('u')
+    if (!u) return bingUrl
+    const b64 = u.startsWith('a1') ? u.slice(2) : u
+    const decoded = atob(b64)
+    if (decoded.startsWith('http')) return decoded
+    return bingUrl
+  } catch { return bingUrl }
 }
 
 // ─── Brave Search ───────────────────────────────────────
@@ -152,6 +219,77 @@ async function searchTavily(query, apiKey, limit = 5) {
     description: r.content || '',
     position: i + 1,
   }))
+}
+
+// ─── Exa (via MCP protocol) ─────────────────────────────
+
+/**
+ * Exa AI-native search via MCP protocol (like Kilocode/OpenCode uses).
+ * Requires API key from https://exa.ai (free tier: 1000 queries/month).
+ * Far more reliable than Bing HTML scraping for Chinese search queries.
+ */
+async function searchExa(query, apiKey, limit = 5) {
+  if (!apiKey) {
+    throw new Error('Exa Search requires an API key. Get one at https://exa.ai')
+  }
+
+  const response = await fetch(`https://mcp.exa.ai/mcp?exaApiKey=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'web_search_exa',
+        arguments: {
+          query,
+          type: 'auto',
+          numResults: Math.min(limit, 10),
+          livecrawl: 'fallback',
+          contextMaxCharacters: 3000,
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(SEARCH_TIMEOUT),
+  })
+
+  const text = await response.text()
+  const results = []
+
+  // Parse SSE response from Exa
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data: ')) continue
+    try {
+      const data = JSON.parse(line.slice(6))
+      const content = data?.result?.content
+      if (!Array.isArray(content)) continue
+
+      const fullText = content.find(c => c.type === 'text')?.text || ''
+      if (!fullText) continue
+
+      // Exa returns formatted results with [number] format
+      const blocks = fullText.split(/(?=\[\d+\])/).filter(Boolean)
+      for (const block of blocks) {
+        const titleMatch = block.match(/^\[\d+\]\s*(.+?)(?:\n|$)/)
+        const urlMatch = block.match(/https?:\/\/[^\s\n]+/)
+        const title = titleMatch ? titleMatch[1].trim() : ''
+        const url = urlMatch ? urlMatch[0].trim() : ''
+        // Everything after the URL line is the content
+        const contentLines = block.split('\n').filter(l => !l.includes(url))
+        const description = contentLines.join('\n').trim()
+
+        if (title && url) {
+          results.push(new SearchResult({ title, url, description, position: results.length + 1 }))
+        }
+      }
+    } catch { /* skip unparseable lines */ }
+  }
+
+  return results.slice(0, limit)
 }
 
 // ─── Web Fetch (read URL content) ───────────────────────
@@ -256,6 +394,13 @@ const PROVIDERS = {
     requiredFields: ['apiKey'],
     search: searchTavily,
   },
+  exa: {
+    name: 'Exa Search',
+    description: 'AI-native search via MCP. Free tier: 1,000 queries/month. Requires API key.',
+    needsConfig: true,
+    requiredFields: ['apiKey'],
+    search: searchExa,
+  },
 }
 
 function listProviders() {
@@ -306,6 +451,9 @@ async function webSearch(query, config = {}) {
         break
       case 'tavily':
         results = await searchTavily(query, config.apiKey, limit)
+        break
+      case 'exa':
+        results = await searchExa(query, config.apiKey, limit)
         break
       default:
         results = await searchBing(query, limit)

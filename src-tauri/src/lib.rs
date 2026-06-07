@@ -9,12 +9,56 @@ use std::sync::{Arc, Mutex};
 
 const PI_SERVER_PORT: u16 = 4096;
 
-fn check_existing_server(port: u16) -> Option<String> {
-    if std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
-        Some(format!("http://127.0.0.1:{port}"))
-    } else {
-        None
+/// Check if a pi-server is alive and healthy on the given port.
+/// Performs an actual HTTP health check, not just TCP.
+fn check_server_healthy(port: u16) -> bool {
+    use std::io::{Read, Write};
+    let mut stream = match std::net::TcpStream::connect(format!("127.0.0.1:{port}")) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let request = format!(
+        "GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
+    );
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
     }
+    let mut response = String::new();
+    if stream.read_to_string(&mut response).is_err() {
+        return false;
+    }
+    response.contains("200 OK") || response.contains("healthy")
+}
+
+/// Kill any process listening on the given port (Windows only).
+#[cfg(windows)]
+fn kill_process_on_port(port: u16) {
+    use std::process::Command;
+    let output = Command::new("netstat")
+        .args(["-ano"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok());
+    let Some(stdout) = output else { return };
+    for line in stdout.lines() {
+        if line.contains(&format!(":{port}")) && line.contains("LISTENING") {
+            let pid = line.split_whitespace().last().unwrap_or("");
+            if let Ok(pid) = pid.parse::<u32>() {
+                let _ = Command::new("taskkill")
+                    .args(["/F", "/PID", &pid.to_string()])
+                    .output();
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn kill_process_on_port(_port: u16) {
+    // Non-Windows: use lsof + kill
+    let _ = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("lsof -ti :{_port} | xargs kill -9 2>/dev/null"))
+        .output();
 }
 
 fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, String> {
@@ -23,15 +67,40 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
         return Err("pi-server is already running".into());
     }
 
-    if let Some(url) = check_existing_server(PI_SERVER_PORT) {
-        eprintln!("[snotra] Found existing pi-server at {url}");
-        return Ok(url);
+    // Kill any process on our port to guarantee a fresh start
+    if std::net::TcpStream::connect(format!("127.0.0.1:{PI_SERVER_PORT}")).is_ok() {
+        eprintln!("[snotra] Killing old process on port {PI_SERVER_PORT}...");
+        kill_process_on_port(PI_SERVER_PORT);
+        // Wait up to 3 seconds for the port to be fully released
+        for _ in 0..6 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if std::net::TcpStream::connect(format!("127.0.0.1:{PI_SERVER_PORT}")).is_err() {
+                break;
+            }
+            eprintln!("[snotra] Port still occupied, waiting...");
+        }
     }
 
-    let proc = PiServerProcess::start(project_dir, PI_SERVER_PORT)?;
-    let url = proc.url.clone();
-    *guard = Some(proc);
-    Ok(url)
+    // Retry up to 3 times — port cleanup may take a moment on Windows
+    let mut last_err = String::new();
+    for attempt in 0..3 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+        }
+        match PiServerProcess::start(project_dir, PI_SERVER_PORT) {
+            Ok(proc) => {
+                let url = proc.url.clone();
+                *guard = Some(proc);
+                return Ok(url);
+            }
+            Err(e) => {
+                eprintln!("[snotra] Start attempt {} failed: {}", attempt + 1, e);
+                last_err = e;
+            }
+        }
+    }
+
+    Err(format!("pi-server failed to start after 3 attempts: {}", last_err))
 }
 
 fn resolve_project_dir() -> String {
