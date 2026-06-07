@@ -1,153 +1,111 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { ScheduledTask, TaskExecution, TaskFrequency, TaskStatus } from '../types/task';
+import { create } from 'zustand'
+import { getBaseUrl } from '../utils/piClient'
+import type { ScheduledTask, TaskSchedule } from '../types/task'
 
 interface TaskState {
-  tasks: ScheduledTask[];
-  executions: TaskExecution[];
-
-  // Actions
-  createTask: (task: Omit<ScheduledTask, 'id' | 'createdAt' | 'lastRun' | 'status' | 'nextRun'>) => ScheduledTask;
-  updateTask: (id: string, updates: Partial<ScheduledTask>) => void;
-  deleteTask: (id: string) => void;
-  toggleTask: (id: string) => void;
-
-  // Execution
-  startExecution: (taskId: string) => TaskExecution;
-  updateExecution: (id: string, updates: Partial<TaskExecution>) => void;
+  tasks: ScheduledTask[]
+  loading: boolean
+  error: string | null
+  refresh: () => Promise<void>
+  createTask: (data: CreateTaskInput) => Promise<ScheduledTask | null>
+  removeTask: (id: string) => Promise<void>
+  toggleTask: (id: string) => Promise<void>
+  triggerRun: (id: string) => Promise<void>
+  fetchOutput: (id: string) => Promise<{ timestamp: string; content: string }[]>
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 15);
-
-// Calculate next run time based on frequency
-function calculateNextRun(frequency: TaskFrequency, scheduledTime: string): number {
-  const now = Date.now();
-  const scheduled = new Date(scheduledTime).getTime();
-
-  if (frequency === 'once') {
-    return scheduled;
-  }
-
-  // For recurring tasks, find next occurrence
-  if (scheduled <= now) {
-    switch (frequency) {
-      case 'daily':
-        return scheduled + 24 * 60 * 60 * 1000;
-      case 'weekly':
-        return scheduled + 7 * 24 * 60 * 60 * 1000;
-      case 'monthly':
-        const nextMonth = new Date(scheduled);
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        return nextMonth.getTime();
-      default:
-        return scheduled;
-    }
-  }
-
-  return scheduled;
+export interface CreateTaskInput {
+  name: string
+  prompt: string
+  schedule: TaskSchedule
+  skills?: string[]
+  contextFrom?: string[]
+  model?: string
+  provider?: string
+  deliver?: 'chat' | 'silent'
+  enabled?: boolean
 }
 
-export const useTaskStore = create<TaskState>()(
-  persist(
-    (set) => ({
-      tasks: [],
-      executions: [],
+const BASE = () => getBaseUrl()
 
-      createTask: (taskData) => {
-        const id = generateId();
-        const now = Date.now();
-        const nextRun = calculateNextRun(taskData.frequency, taskData.scheduledTime);
+export const useTaskStore = create<TaskState>()((set, get) => ({
+  tasks: [],
+  loading: false,
+  error: null,
 
-        const newTask: ScheduledTask = {
-          id,
-          ...taskData,
-          createdAt: now,
-          lastRun: null,
-          status: 'pending',
-          nextRun,
-        };
-
-        set((state) => ({
-          tasks: [...state.tasks, newTask],
-        }));
-
-        return newTask;
-      },
-
-      updateTask: (id, updates) => {
-        set((state) => ({
-          tasks: state.tasks.map((task) =>
-            task.id === id ? { ...task, ...updates } : task
-          ),
-        }));
-      },
-
-      deleteTask: (id) => {
-        set((state) => ({
-          tasks: state.tasks.filter((task) => task.id !== id),
-          executions: state.executions.filter((exec) => exec.taskId !== id),
-        }));
-      },
-
-      toggleTask: (id) => {
-        set((state) => ({
-          tasks: state.tasks.map((task) =>
-            task.id === id ? { ...task, enabled: !task.enabled } : task
-          ),
-        }));
-      },
-
-      startExecution: (taskId) => {
-        const execId = generateId();
-        const now = Date.now();
-
-        const execution: TaskExecution = {
-          id: execId,
-          taskId,
-          startTime: now,
-          endTime: null,
-          status: 'running',
-          output: '',
-        };
-
-        set((state) => ({
-          executions: [...state.executions, execution],
-          tasks: state.tasks.map((task) =>
-            task.id === taskId ? { ...task, status: 'running' } : task
-          ),
-        }));
-
-        return execution;
-      },
-
-      updateExecution: (id, updates) => {
-        set((state) => ({
-          executions: state.executions.map((exec) =>
-            exec.id === id ? { ...exec, ...updates } : exec
-          ),
-          tasks: state.tasks.map((task) => {
-            const exec = state.executions.find((e) => e.id === id);
-            if (exec && task.id === exec.taskId && updates.status) {
-              return {
-                ...task,
-                status: updates.status as TaskStatus,
-                lastRun: updates.endTime || Date.now(),
-                nextRun: task.frequency !== 'once'
-                  ? calculateNextRun(task.frequency, task.scheduledTime)
-                  : task.nextRun,
-              };
-            }
-            return task;
-          }),
-        }));
-      },
-    }),
-    {
-      name: 'snotra-task-storage',
-      partialize: (state) => ({
-        tasks: state.tasks,
-        executions: state.executions.slice(-50), // Keep last 50 executions
-      }),
+  refresh: async () => {
+    set({ loading: true, error: null })
+    try {
+      const res = await fetch(`${BASE()}/tasks`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      set({ tasks: await res.json(), loading: false })
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err), loading: false })
     }
-  )
-);
+  },
+
+  createTask: async (data) => {
+    try {
+      const res = await fetch(`${BASE()}/tasks/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const task = await res.json()
+      set((s) => ({ tasks: [...s.tasks, task] }))
+      return task
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) })
+      return null
+    }
+  },
+
+  removeTask: async (id) => {
+    try {
+      await fetch(`${BASE()}/tasks/${id}`, { method: 'DELETE' })
+      set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }))
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) })
+    }
+  },
+
+  toggleTask: async (id) => {
+    const task = get().tasks.find((t) => t.id === id)
+    if (!task) return
+    try {
+      await fetch(`${BASE()}/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !task.enabled }),
+      })
+      set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, enabled: !t.enabled } : t)) }))
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) })
+    }
+  },
+
+  triggerRun: async (id) => {
+    try {
+      // Pass the active API key so pi-server can run the task
+      const appStore = await import('./appStore')
+      const state = appStore.useAppStore.getState()
+      const apiKey = state.providerConfigs[state.activeProvider]?.apiKey || ''
+      await fetch(`${BASE()}/tasks/run/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey }),
+      })
+      setTimeout(() => get().refresh(), 2000)
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) })
+    }
+  },
+
+  fetchOutput: async (id: string) => {
+    try {
+      const res = await fetch(`${BASE()}/tasks/${id}/output`)
+      return res.ok ? await res.json() : []
+    } catch { return [] }
+  },
+}))

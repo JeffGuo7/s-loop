@@ -4,6 +4,7 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, getModels } from '@earendil-works/pi-ai'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 import { webSearch, fetchUrl } from './searchProviders.mjs'
+import { init as initTasks, loadTasks, getTask, createTask, updateTask, removeTask, getTaskOutputs, runTask, startTicker } from './task-scheduler.mjs'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const sessions = new Map()
@@ -57,6 +58,33 @@ function getTools(dir, webSearchConfig) {
 process.on('uncaughtException', (err) => console.error('[pi-server] UNCAUGHT:', err))
 process.on('unhandledRejection', (err) => console.error('[pi-server] UNHANDLED:', err))
 
+// ── Cron prompt helper (shared by ticker and HTTP handler) ──
+const createCronPrompt = async (content, options) => {
+  try {
+    const model = getModel(options.providerID, options.modelID)
+    if (!model) return { text: '', error: 'Model not found' }
+    const agent = new Agent({
+      initialState: {
+        systemPrompt: options.systemPrompt || 'You are a helpful assistant.',
+        model,
+        thinkingLevel: 'off',
+      },
+      sessionId: options.sessionId || 'cron-' + Date.now(),
+      getApiKey: async () => options.apiKey || process.env.PI_API_KEY || '',
+      toolExecution: 'parallel',
+    })
+    await agent.prompt(content)
+    const msgs = agent.state.messages
+    const last = [...msgs].reverse().find(m => m.role === 'assistant')
+    const text = last?.content?.find?.(c => c.type === 'text')?.text || last?.content?.find?.(c => c.type === 'thinking')?.text || ''
+    return { text: text || '' }
+  } catch (err) {
+    return { text: '', error: err.message }
+  }
+}
+
+// ── Server ───────────────────────────────────────────────
+
 createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -64,6 +92,104 @@ createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+
+  // ── Task endpoints ──
+  if (req.method === 'GET' && url.pathname === '/tasks') {
+    const tasks = loadTasks()
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(tasks))
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/tasks/create') {
+    let body = ''
+    req.on('data', c => body += c)
+    req.on('end', () => {
+      try {
+        const task = createTask(JSON.parse(body))
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(task))
+      } catch (e) {
+        res.writeHead(400)
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    })
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/tasks/tick') {
+    const due = getDueTasks()
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ due: due.length }))
+    return
+  }
+
+  const taskRunMatch = url.pathname.match(/^\/tasks\/run\/(.+)$/)
+  if (req.method === 'POST' && taskRunMatch) {
+    const taskId = taskRunMatch[1]
+    let body = ''
+    req.on('data', c => body += c)
+    req.on('end', async () => {
+      try {
+        const task = getTask(taskId)
+        if (!task) { res.writeHead(404); res.end('Task not found'); return }
+
+        const params = body ? JSON.parse(body) : {}
+        const result = await runTask(task, {
+          projectDir: params.projectDir || process.cwd(),
+          apiKey: task.apiKey || params.apiKey || '',
+          defaultProvider: params.defaultProvider || 'anthropic',
+          defaultModel: params.defaultModel || 'claude-sonnet-4-20250514',
+          prompt: createCronPrompt,
+          makeSession: true,
+        })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch (e) {
+        res.writeHead(500)
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    })
+    return
+  }
+
+  if (req.method === 'DELETE' && url.pathname.startsWith('/tasks/')) {
+    const taskId = url.pathname.slice(7)
+    removeTask(taskId)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true }))
+    return
+  }
+
+  if (req.method === 'PUT' && url.pathname.startsWith('/tasks/')) {
+    const taskId = url.pathname.slice(7)
+    let body = ''
+    req.on('data', c => body += c)
+    req.on('end', () => {
+      try {
+        const updates = JSON.parse(body)
+        const task = updateTask(taskId, updates)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(task || { error: 'Not found' }))
+      } catch (e) {
+        res.writeHead(400)
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    })
+    return
+  }
+
+  // GET /tasks/:id/output — execution history
+  const taskOutputMatch = url.pathname.match(/^\/tasks\/([^/]+)\/output$/)
+  if (req.method === 'GET' && taskOutputMatch) {
+    const taskId = taskOutputMatch[1]
+    const outputs = getTaskOutputs(taskId)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(outputs))
+    return
+  }
+
+  // ── Existing endpoints ──
 
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -194,4 +320,15 @@ createServer((req, res) => {
   })
 }).listen(PORT, '127.0.0.1', () => {
   console.log(`[pi-server] listening on http://127.0.0.1:${PORT}`)
+
+  // Initialize and start task scheduler
+  const snotraDir = process.env.SNOTRA_PROJECT_DIR || process.cwd()
+  initTasks(snotraDir)
+  startTicker({
+    projectDir: snotraDir,
+    apiKey: process.env.PI_API_KEY || '',
+    defaultProvider: 'anthropic',
+    defaultModel: 'claude-sonnet-4-20250514',
+    prompt: createCronPrompt,
+  })
 })

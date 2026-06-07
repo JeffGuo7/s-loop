@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '../../stores';
-import { Plus, Clock, Trash2, Play, Pause, RefreshCw } from 'lucide-react';
+import { Plus, Clock, Trash2, Play, Pause, RefreshCw, Zap, FileText } from 'lucide-react';
+import { useState } from 'react';
 import { MagicButton } from '../ui';
 import type { ScheduledTask } from '../../types/task';
 
@@ -10,9 +11,12 @@ interface TaskListProps {
 
 export function TaskList({ onCreateTask }: TaskListProps) {
   const { t } = useTranslation();
-  const { tasks, toggleTask, deleteTask } = useTaskStore();
+  const { tasks, toggleTask, removeTask, triggerRun, fetchOutput } = useTaskStore();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [outputCache, setOutputCache] = useState<Record<string, { timestamp: string; content: string }[]>>({});
 
-  const formatNextRun = (timestamp: number) => {
+  const formatNextRun = (timestamp: number | null) => {
+    if (!timestamp) return t('tasks.completed');
     const date = new Date(timestamp);
     const now = new Date();
     const diff = timestamp - now.getTime();
@@ -25,22 +29,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
     return date.toLocaleString();
   };
 
-  const getFrequencyLabel = (task: ScheduledTask) => {
-    switch (task.frequency) {
-      case 'once':
-        return t('tasks.once');
-      case 'daily':
-        return t('tasks.daily');
-      case 'weekly':
-        return t('tasks.weekly');
-      case 'monthly':
-        return t('tasks.monthly');
-      default:
-        return task.frequency;
-    }
-  };
-
-  const getStatusColor = (status: ScheduledTask['status']) => {
+  const getStatusColor = (status: ScheduledTask['lastStatus']) => {
     switch (status) {
       case 'running':
         return 'text-accent';
@@ -117,13 +106,13 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 <div className="relative flex items-center justify-center shrink-0 ml-4">
                   <div className={`
                     w-4 h-4 rounded-full relative z-10
-                    ${task.status === 'running' ? 'bg-accent animate-pulse shadow-[0_0_16px_var(--color-accent)]' : ''}
-                    ${task.status === 'completed' ? 'bg-green-500 shadow-[0_0_16px_rgba(34,197,94,0.7)]' : ''}
-                    ${task.status === 'failed' ? 'bg-red-500 shadow-[0_0_16px_rgba(200,48,48,0.7)]' : ''}
-                    ${task.status === 'pending' ? 'bg-text-tertiary opacity-40' : ''}
-                    ${task.status === 'cancelled' ? 'bg-text-quaternary opacity-30' : ''}
+                    ${task.lastStatus === 'running' ? 'bg-accent animate-pulse shadow-[0_0_16px_var(--color-accent)]' : ''}
+                    ${task.lastStatus === 'completed' ? 'bg-green-500 shadow-[0_0_16px_rgba(34,197,94,0.7)]' : ''}
+                    ${task.lastStatus === 'failed' ? 'bg-red-500 shadow-[0_0_16px_rgba(200,48,48,0.7)]' : ''}
+                    ${task.lastStatus === 'pending' ? 'bg-text-tertiary opacity-40' : ''}
+                    ${task.lastStatus === 'cancelled' ? 'bg-text-quaternary opacity-30' : ''}
                   `} />
-                  {task.status === 'running' && (
+                  {task.lastStatus === 'running' && (
                     <div className="absolute inset-0 bg-accent/40 rounded-full animate-ping scale-150" />
                   )}
                 </div>
@@ -133,21 +122,21 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                   <div className="flex items-center gap-6">
                     <h3 className="font-bold text-2xl text-text truncate tracking-tighter">{task.name}</h3>
                     <span className="shrink-0 text-[11px] font-bold uppercase tracking-[0.2em] px-5 py-1.5 rounded-full bg-accent-subtle text-accent border border-accent/15 shadow-sm">
-                      {getFrequencyLabel(task)}
+                      {task.schedule.display}
                     </span>
                   </div>
                   <p className="text-[14px] text-text-tertiary truncate mt-2 leading-relaxed font-bold opacity-70">
-                    {task.description || task.prompt.slice(0, 100)}
+                    {task.prompt.slice(0, 100)}
                   </p>
                 </div>
 
                 {/* Status & Time */}
                 <div className="text-right shrink-0 hidden lg:block px-6">
-                  <p className={`text-[13px] font-bold uppercase tracking-[0.3em] ${getStatusColor(task.status)}`}>
-                    {t(`tasks.${task.status}`)}
+                  <p className={`text-[13px] font-bold uppercase tracking-[0.3em] ${getStatusColor(task.lastStatus)}`}>
+                    {t(`tasks.${task.lastStatus}`)}
                   </p>
                   <p className="text-[12px] text-text-quaternary mt-2 whitespace-nowrap font-bold opacity-50">
-                    {formatNextRun(task.nextRun)}
+                    {formatNextRun(task.nextRunAt)}
                   </p>
                 </div>
 
@@ -166,7 +155,14 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                     {task.enabled ? <Pause size={20} /> : <Play size={20} />}
                   </button>
                   <button
-                    onClick={() => deleteTask(task.id)}
+                    onClick={() => triggerRun(task.id)}
+                    className="p-4 rounded-[16px] hover:bg-green-500/10 text-text-quaternary hover:text-green-500 transition-all duration-500 opacity-0 group-hover:opacity-100 scale-90 hover:scale-100"
+                    title="Run now"
+                  >
+                    <Zap size={20} />
+                  </button>
+                  <button
+                    onClick={() => removeTask(task.id)}
                     className="p-4 rounded-[16px] hover:bg-red-500/10 text-text-quaternary hover:text-red-500 transition-all duration-700 opacity-0 group-hover:opacity-100 scale-90 hover:scale-100"
                   >
                     <Trash2 size={20} />
