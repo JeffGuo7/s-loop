@@ -12,7 +12,8 @@ const zh = {
     expandTitle: '展开侧边栏',
     untitled: '未命名对话',
     dailyTasks: '每日任务',
-    telegramHub: 'Telegram 中心',
+    platformHub: '平台中心',
+    pet: '宠物',
     sleep: '休眠',
     wakePet: '唤醒宠物',
     hatch: '孵化',
@@ -208,6 +209,29 @@ const zh = {
     buttons: {
       stop: '停止',
       startHub: '启动中心',
+    },
+  },
+  platforms: {
+    title: '平台中心',
+    subtitle: '通知枢纽',
+    tabs: {
+      platforms: '平台',
+      activityLog: '消息日志',
+    },
+    status: {
+      offline: '离线',
+      connected: '已连接',
+      connecting: '连接中...',
+      disconnect: '断开',
+      connect: '连接',
+      ready: '已就绪，可发送测试消息',
+    },
+    testPlaceholder: '发送测试消息...',
+    log: {
+      title: '消息日志',
+      empty: '暂无消息',
+      noMessages: '平台消息将显示在这里',
+      clear: '清空',
     },
   },
   workspace: {

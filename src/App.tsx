@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { Sidebar, TitleBar } from './components/layout'
 import { ChatView } from './components/chat'
 import { SettingsModal } from './components/settings'
-import { PetCompanion, PetHatchModal } from './components/companion'
 import { TasksPage } from './components/tasks'
-import { TelegramPage } from './components/telegram/index'
+import { PlatformCenter } from './components/platforms'
+import { PetPage } from './components/pet'
 import { useAppStore } from './stores'
 import { useTaskScheduler } from './hooks'
 import { WorkspacePanel } from './components/workspace'
@@ -14,13 +14,12 @@ import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
 
-export type Page = 'chat' | 'tasks' | 'telegram'
+export type Page = 'chat' | 'tasks' | 'platforms' | 'pet'
 
 function App() {
   const { theme, sidebarCollapsed, toggleSidebar } = useAppStore()
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
-  const [showHatchModal, setShowHatchModal] = useState(false)
 
   useTaskScheduler()
 
@@ -90,7 +89,6 @@ function App() {
 
       <Sidebar
         onSettingsOpen={() => setShowSettings(true)}
-        onPetOpen={() => setShowHatchModal(true)}
         currentPage={currentPage}
         onNavigate={setCurrentPage}
         collapsed={sidebarCollapsed}
@@ -106,9 +104,14 @@ function App() {
               <TasksPage />
             </div>
           )}
-          {currentPage === 'telegram' && (
+          {currentPage === 'platforms' && (
             <div className="w-full h-full flex flex-col">
-              <TelegramPage />
+              <PlatformCenter />
+            </div>
+          )}
+          {currentPage === 'pet' && (
+            <div className="w-full h-full flex flex-col items-center justify-center">
+              <PetPage />
             </div>
           )}
         </div>
@@ -116,11 +119,9 @@ function App() {
 
       <WorkspacePanel />
 
-      <PetCompanion />
       <SkillDropZone />
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
-      {showHatchModal && <PetHatchModal onClose={() => setShowHatchModal(false)} />}
     </div>
   )
 }

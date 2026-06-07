@@ -1,1 +1,1 @@
-export { generatePetAppearance, generatePetId, getSpeciesEmoji, getHatEmoji } from './pet'
+// pet utilities — see src/types/pet.ts for pet types

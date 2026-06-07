@@ -15,13 +15,12 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { useAppStore, usePetStore, useTelegramStore } from '../../stores'
+import { useAppStore } from '../../stores'
 import { MagicButton } from '../ui'
 import type { Page } from '../../App'
 
 interface SidebarProps {
   onSettingsOpen: () => void
-  onPetOpen: () => void
   currentPage: Page
   onNavigate: (page: Page) => void
   collapsed?: boolean
@@ -31,7 +30,6 @@ interface SidebarProps {
 
 export function Sidebar({
   onSettingsOpen,
-  onPetOpen,
   currentPage,
   onNavigate,
   collapsed = false,
@@ -45,8 +43,6 @@ export function Sidebar({
   const deleteSession = useAppStore((s) => s.deleteSession)
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
-  const { pet, showPet } = usePetStore()
-  const { isConnected } = useTelegramStore()
   const { t } = useTranslation()
 
   const handleNewChat = useCallback(() => {
@@ -253,17 +249,16 @@ export function Sidebar({
           />
           <NavItem
             icon={Send}
-            label={t('sidebar.telegramHub')}
-            active={currentPage === 'telegram'}
-            onClick={() => onNavigate('telegram')}
+            label={t('sidebar.platformHub')}
+            active={currentPage === 'platforms'}
+            onClick={() => onNavigate('platforms')}
             collapsed={collapsed}
-            badge={isConnected}
           />
           <NavItem
             icon={PawPrint}
-            label={pet ? (showPet ? t('sidebar.sleep') : t('sidebar.wakePet')) : t('sidebar.hatch')}
-            active={showPet && !!pet}
-            onClick={onPetOpen}
+            label={t('sidebar.pet')}
+            active={currentPage === 'pet'}
+            onClick={() => onNavigate('pet')}
             collapsed={collapsed}
           />
         </div>

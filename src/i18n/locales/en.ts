@@ -12,7 +12,8 @@ const en = {
     expandTitle: 'Expand sidebar',
     untitled: 'Untitled Chat',
     dailyTasks: 'Daily Tasks',
-    telegramHub: 'Telegram Hub',
+    platformHub: 'Platform Hub',
+    pet: 'Pet',
     sleep: 'Sleep',
     wakePet: 'Wake Pet',
     hatch: 'Hatch',
@@ -209,6 +210,29 @@ const en = {
     buttons: {
       stop: 'Stop',
       startHub: 'Start Hub',
+    },
+  },
+  platforms: {
+    title: 'Platform Hub',
+    subtitle: 'Notification Hub',
+    tabs: {
+      platforms: 'Platforms',
+      activityLog: 'Message Log',
+    },
+    status: {
+      offline: 'Offline',
+      connected: 'Connected',
+      connecting: 'Connecting...',
+      disconnect: 'Disconnect',
+      connect: 'Connect',
+      ready: 'Ready — send a test message',
+    },
+    testPlaceholder: 'Send a test message...',
+    log: {
+      title: 'Message Log',
+      empty: 'No messages yet',
+      noMessages: 'Platform messages will appear here',
+      clear: 'Clear',
     },
   },
   workspace: {
