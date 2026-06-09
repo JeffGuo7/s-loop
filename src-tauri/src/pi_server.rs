@@ -10,8 +10,7 @@ pub struct PiServerProcess {
 pub struct PiServerState(pub Arc<Mutex<Option<PiServerProcess>>>);
 
 impl PiServerProcess {
-    /// Create a marker for an orphaned pi-server (not started by this instance).
-    /// Drop will NOT kill orphaned processes.
+    #[allow(dead_code)]
     pub fn orphan(url: String) -> Self {
         Self { child: None, url }
     }

@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { useAppStore } from '../../stores'
+import { useAppStore, usePetStore } from '../../stores'
 import { MagicButton } from '../ui'
 import type { Page } from '../../App'
 
@@ -23,6 +23,7 @@ interface SidebarProps {
   onSettingsOpen: () => void
   currentPage: Page
   onNavigate: (page: Page) => void
+  onPetToggle: () => void
   collapsed?: boolean
   onToggleCollapse?: () => void
   className?: string
@@ -32,6 +33,7 @@ export function Sidebar({
   onSettingsOpen,
   currentPage,
   onNavigate,
+  onPetToggle,
   collapsed = false,
   onToggleCollapse,
   className = '',
@@ -44,6 +46,7 @@ export function Sidebar({
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
   const { t } = useTranslation()
+  const petWindowVisible = usePetStore((s) => s.petWindowVisible)
 
   const handleNewChat = useCallback(() => {
     createSession()
@@ -257,8 +260,8 @@ export function Sidebar({
           <NavItem
             icon={PawPrint}
             label={t('sidebar.pet')}
-            active={currentPage === 'pet'}
-            onClick={() => onNavigate('pet')}
+            active={petWindowVisible}
+            onClick={onPetToggle}
             collapsed={collapsed}
           />
         </div>

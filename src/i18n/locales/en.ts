@@ -261,7 +261,6 @@ const en = {
     emptyTitle: 'No tasks scheduled yet',
     emptyDesc: 'Create your first automation to streamline your workflow.',
     createFirst: 'Create first task',
-    once: 'Once',
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',

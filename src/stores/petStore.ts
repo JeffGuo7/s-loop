@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Pet, PetAnimationState, PetPackage } from '../types/pet'
-import { DEFAULT_PET } from '../types/pet'
+import type { Pet, PetAnimationState, PetPackage, PetMood, PetPosition } from '../types/pet'
+import { loadPetPackages } from '../utils/petTheme'
 
-const IDLE_TIMEOUT = 30_000
+const IDLE_TIMEOUT = 20_000
 const SLEEP_TIMEOUT = 120_000
 const REACTION_MS = 1_500
 
@@ -22,7 +22,7 @@ function clearAll() {
 function startIdleChain(store: PetStore) {
   clearAll()
   _idleT = setTimeout(() => {
-    store.setState('waiting')
+    store.setState('attention')
     _sleepT = setTimeout(() => store.setState('sleeping'), SLEEP_TIMEOUT)
   }, IDLE_TIMEOUT)
 }
@@ -30,61 +30,100 @@ function startIdleChain(store: PetStore) {
 interface PetStore {
   pet: Pet | null
   packages: PetPackage[]
+  showPet: boolean
+  petWindowVisible: boolean
+  petPosition: PetPosition
+  packagesLoaded: boolean
 
   setState: (state: PetAnimationState) => void
-  hatch: (name: string, personality?: string) => Pet
+  setMood: (mood: PetMood) => void
+  setShowPet: (show: boolean) => void
+  setPetWindowVisible: (visible: boolean) => void
+  setPetPosition: (pos: PetPosition) => void
+
+  loadPackages: () => Promise<void>
+  hatch: (name: string, personality?: string, packageId?: string) => Pet
   dismiss: () => void
   interact: () => void
-  // AI hooks
+
   onThinking: () => void
   onResponded: () => void
   onWorking: () => void
   onError: () => void
+  onNotification: () => void
 }
 
 export const usePetStore = create<PetStore>()(
   persist(
     (set, get) => ({
       pet: null,
-      packages: [DEFAULT_PET],
+      packages: [],
+      showPet: false,
+      petWindowVisible: false,
+      petPosition: { x: 100, y: 100 },
+      packagesLoaded: false,
 
       setState: (state) => set(s => s.pet ? { pet: { ...s.pet, state } } : {}),
+      setMood: (mood) => set(s => s.pet ? { pet: { ...s.pet, mood } } : {}),
+      setShowPet: (show) => set({ showPet: show }),
+      setPetWindowVisible: (visible) => set({ petWindowVisible: visible }),
+      setPetPosition: (pos) => set({ petPosition: pos }),
 
-      hatch: (name, personality = 'Friendly') => {
+      loadPackages: async () => {
+        if (get().packagesLoaded) return
+        const pkgs = await loadPetPackages()
+        set({ packages: pkgs, packagesLoaded: true })
+      },
+
+      hatch: (name, personality = 'Friendly', packageId = 'clawd') => {
         const now = Date.now()
         const p: Pet = {
-          id: uid(), packageId: DEFAULT_PET.id, name, personality,
-          state: 'idle', hatchedAt: now, lastInteraction: now,
+          id: uid(),
+          packageId,
+          name,
+          personality,
+          state: 'idle',
+          mood: 'excited',
+          hatchedAt: now,
+          lastInteraction: now,
         }
-        set({ pet: p })
+        set({ pet: p, showPet: true })
         startIdleChain(get())
         return p
       },
 
-      dismiss: () => { clearAll(); set({ pet: null }) },
+      dismiss: () => { clearAll(); set({ pet: null, showPet: false }) },
 
       interact: () => {
         const p = get().pet
         if (!p) return
         clearAll()
-        set({ pet: { ...p, state: 'jumping', lastInteraction: Date.now() } })
+        set({ pet: { ...p, state: 'attention', lastInteraction: Date.now(), mood: 'happy' } })
         _reactionT = setTimeout(() => {
           const p2 = get().pet
-          if (p2) { set({ pet: { ...p2, state: 'idle' } }); startIdleChain(get()) }
+          if (p2) { set({ pet: { ...p2, state: 'idle', mood: 'happy' } }); startIdleChain(get()) }
         }, REACTION_MS)
       },
 
-      onThinking: () => { clearAll(); set(s => s.pet ? { pet: { ...s.pet, state: 'thinking' } } : {}) },
+      onThinking: () => { clearAll(); set(s => s.pet ? { pet: { ...s.pet, state: 'thinking', mood: 'neutral' } } : {}) },
       onResponded: () => {
         const p = get().pet
         if (!p) return
-        set({ pet: { ...p, state: 'idle' } })
+        set({ pet: { ...p, state: 'idle', mood: 'happy' } })
         startIdleChain(get())
       },
-      onWorking: () => { clearAll(); set(s => s.pet ? { pet: { ...s.pet, state: 'working' } } : {}) },
+      onWorking: () => { clearAll(); set(s => s.pet ? { pet: { ...s.pet, state: 'working', mood: 'neutral' } } : {}) },
       onError: () => {
         clearAll()
-        set(s => s.pet ? { pet: { ...s.pet, state: 'failed' } } : {})
+        set(s => s.pet ? { pet: { ...s.pet, state: 'error', mood: 'sleepy' } } : {})
+        _reactionT = setTimeout(() => {
+          const p2 = get().pet
+          if (p2) { set({ pet: { ...p2, state: 'idle', mood: 'neutral' } }); startIdleChain(get()) }
+        }, REACTION_MS)
+      },
+      onNotification: () => {
+        clearAll()
+        set(s => s.pet ? { pet: { ...s.pet, state: 'notification', mood: 'excited' } } : {})
         _reactionT = setTimeout(() => {
           const p2 = get().pet
           if (p2) { set({ pet: { ...p2, state: 'idle' } }); startIdleChain(get()) }
@@ -95,6 +134,8 @@ export const usePetStore = create<PetStore>()(
       name: 'snotra-pet',
       partialize: (s) => ({
         pet: s.pet ? { ...s.pet, state: 'idle' as const } : null,
+        showPet: s.showPet,
+        petPosition: s.petPosition,
       }),
     }
   )

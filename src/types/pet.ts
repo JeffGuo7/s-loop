@@ -1,76 +1,145 @@
 /**
  * Pet types — exact clawd-on-desk replica.
- * Matches codex-pet-adapter.js: ATLAS, ATLAS_ROWS, pet.json, theme.json
  */
 
-// ─── Atlas ──────────────────────────────────────────────
+// ─── Theme (from theme.json) ────────────────────────────
 
-export interface Atlas {
-  width: number
-  height: number
-  columns: number
-  rows: number
-  frameWidth: number
-  frameHeight: number
+export interface PetThemeLayout {
+  contentBox: { x: number; y: number; width: number; height: number }
+  marginBox?: { x: number; y: number; width: number; height: number }
+  centerX: number
+  baselineY: number
+  visibleHeightRatio: number
+  baselineBottomRatio?: number
 }
 
-export const ATLAS: Atlas = {
-  width: 1536, height: 1872,
-  columns: 8, rows: 9,
-  frameWidth: 192, frameHeight: 208,
+export interface PetThemeViewBox {
+  x: number; y: number; width: number; height: number
 }
 
-// ─── Animation rows (exact clawd replica) ───────────────
-
-export type AnimationRowKey =
-  | 'idle' | 'running-right' | 'running-left'
-  | 'waving' | 'jumping' | 'failed'
-  | 'waiting' | 'running' | 'review'
-
-export interface AnimationRow {
-  key: AnimationRowKey
-  row: number
-  durations: number[]
+export interface PetThemeEyeTracking {
+  enabled: boolean
+  states?: string[]
+  eyeRatioX?: number
+  eyeRatioY?: number
+  maxOffset?: number
+  bodyScale?: number
+  shadowStretch?: number
+  shadowShift?: number
+  ids?: {
+    eyes?: string
+    body?: string
+    shadow?: string
+    dozeEyes?: string
+  }
+  shadowOrigin?: string
 }
 
-/** Exact clawd ATLAS_ROWS */
-export const ATLAS_ROWS: AnimationRow[] = [
-  { key: 'idle',          row: 0, durations: [280, 110, 110, 140, 140, 320] },
-  { key: 'running-right', row: 1, durations: [120, 120, 120, 120, 120, 120, 120, 220] },
-  { key: 'running-left',  row: 2, durations: [120, 120, 120, 120, 120, 120, 120, 220] },
-  { key: 'waving',        row: 3, durations: [140, 140, 140, 280] },
-  { key: 'jumping',       row: 4, durations: [140, 140, 140, 140, 280] },
-  { key: 'failed',        row: 5, durations: [140, 140, 140, 140, 140, 140, 140, 240] },
-  { key: 'waiting',       row: 6, durations: [150, 150, 150, 150, 150, 260] },
-  { key: 'running',       row: 7, durations: [120, 120, 120, 120, 120, 220] },
-  { key: 'review',        row: 8, durations: [150, 150, 150, 150, 150, 280] },
-]
-
-export const ROW_BY_KEY = new Map<string, AnimationRow>(ATLAS_ROWS.map(r => [r.key, r]))
-
-export function rowTotalMs(row: AnimationRow): number {
-  return row.durations.reduce((a, b) => a + b, 0)
+export interface PetThemeTimings {
+  minDisplay?: Record<string, number>
+  autoReturn?: Record<string, number>
+  yawnDuration?: number
+  collapseDuration?: number
+  wakeDuration?: number
+  deepSleepTimeout?: number
+  mouseIdleTimeout?: number
+  mouseSleepTimeout?: number
+  dndSleepTransitionSvg?: string
+  dndSleepTransitionDuration?: number
 }
 
-// ─── Pet state (matches clawd theme.json states) ────────
+export interface PetThemeHitBox {
+  x: number; y: number; w: number; h: number
+}
+
+export interface PetThemeReaction {
+  file?: string
+  files?: string[]
+  duration?: number
+}
+
+export interface PetThemeMiniMode {
+  supported: boolean
+  offsetRatio?: number
+  viewBox?: PetThemeViewBox
+  states: Record<string, string[]>
+  timings?: {
+    minDisplay?: Record<string, number>
+    autoReturn?: Record<string, number>
+  }
+  glyphFlips?: Record<string, number>
+}
+
+export interface PetThemeWorkingTier {
+  minSessions: number
+  file: string
+}
+
+export interface PetThemeIdleAnimation {
+  file: string
+  duration: number
+}
+
+export interface PetTheme {
+  schemaVersion: number
+  name: string
+  author: string
+  version: string
+  description: string
+  repo?: string
+  viewBox: PetThemeViewBox
+  fileViewBoxes?: Record<string, PetThemeViewBox>
+  layout: PetThemeLayout
+  trustedRuntime?: {
+    scriptedSvgFiles?: string[]
+    scriptedSvgCycleMs?: Record<string, number>
+  }
+  eyeTracking: PetThemeEyeTracking
+  states: Record<string, string[]>
+  sleepSequence?: { mode: 'full' | 'direct' }
+  workingTiers?: PetThemeWorkingTier[]
+  jugglingTiers?: PetThemeWorkingTier[]
+  idleAnimations?: PetThemeIdleAnimation[]
+  displayHintMap?: Record<string, string>
+  updateVisuals?: Record<string, string>
+  timings: PetThemeTimings
+  hitBoxes: {
+    default: PetThemeHitBox
+    sleeping: PetThemeHitBox
+    wide: PetThemeHitBox
+  }
+  fileHitBoxes?: Record<string, PetThemeHitBox>
+  wideHitboxFiles?: string[]
+  sleepingHitboxFiles?: string[]
+  reactions: Record<string, PetThemeReaction>
+  miniMode: PetThemeMiniMode
+  sounds?: Record<string, string>
+  objectScale: {
+    widthRatio: number
+    heightRatio: number
+    imgWidthRatio?: number
+    offsetX: number
+    offsetY: number
+    imgOffsetX?: number
+    objBottom?: number
+    imgBottom?: number
+  }
+}
+
+// ─── Pet animation state (matches reference state machine) ──
 
 export type PetAnimationState =
-  | 'idle' | 'thinking' | 'working' | 'failed'
-  | 'waiting' | 'jumping' | 'waving' | 'sleeping'
+  | 'idle' | 'yawning' | 'dozing' | 'collapsing'
+  | 'thinking' | 'working' | 'juggling'
+  | 'attention' | 'notification' | 'error'
+  | 'sweeping' | 'carrying' | 'sleeping' | 'waking'
+  | 'mini-idle' | 'mini-alert' | 'mini-happy'
+  | 'mini-enter' | 'mini-peek' | 'mini-working'
+  | 'mini-crabwalk' | 'mini-enter-sleep' | 'mini-sleep'
 
-/** Maps pet animation state → atlas row key */
-export const STATE_ROW: Record<PetAnimationState, AnimationRowKey> = {
-  idle:     'idle',
-  thinking: 'review',
-  working:  'running',
-  failed:   'failed',
-  waiting:  'waiting',
-  jumping:  'jumping',
-  waving:   'waving',
-  sleeping: 'idle',
-}
+export type PetMood = 'happy' | 'neutral' | 'sleepy' | 'excited'
 
-// ─── Pet package (clawd pet.json) ───────────────────────
+// ─── Pet package ───────────────────────────────────────
 
 export interface PetPackage {
   id: string
@@ -78,9 +147,8 @@ export interface PetPackage {
   description: string
   version: string
   author?: string
-  spritesheetPath: string
-  atlas?: Atlas
-  rows?: { key: AnimationRowKey; durations?: number[] }[]
+  assetsPath: string
+  theme: PetTheme
 }
 
 // ─── Pet instance ──────────────────────────────────────
@@ -91,48 +159,16 @@ export interface Pet {
   name: string
   personality: string
   state: PetAnimationState
+  mood: PetMood
   hatchedAt: number
   lastInteraction: number
+  level?: number
+  xp?: number
 }
 
-// ─── Default pet package ───────────────────────────────
+// ─── Pet position ──────────────────────────────────────
 
-export const DEFAULT_PET: PetPackage = {
-  id: 'cloudling',
-  displayName: 'Cloudling',
-  description: 'A friendly cloud spirit companion',
-  version: '1.0.0',
-  spritesheetPath: '/pets/default/spritesheet.png',
-  atlas: ATLAS,
-}
-
-// ─── CSS keyframes generator ───────────────────────────
-
-export function rowStylesheet(prefix: string, atlas: Atlas = ATLAS): string {
-  return ATLAS_ROWS.map(row => {
-    const total = row.durations.reduce((a, b) => a + b, 0)
-    let elapsed = 0
-    const stops = row.durations.map((dur, col) => {
-      const pct = ((elapsed / total) * 100).toFixed(4)
-      elapsed += dur
-      return `  ${pct}% { background-position: -${col * atlas.frameWidth}px -${row.row * atlas.frameHeight}px; }`
-    })
-    stops.push(`  100% { background-position: -${(row.durations.length - 1) * atlas.frameWidth}px -${row.row * atlas.frameHeight}px; }`)
-    return `@keyframes ${prefix}-${row.key} {\n${stops.join('\n')}\n}`
-  }).join('\n\n')
-}
-
-export function animationConfig(rowKey: AnimationRowKey, mode: 'loop' | 'once'): {
-  name: string
-  durationMs: number
-  iterationCount: string | number
-  prefix: string
-} {
-  const row = ROW_BY_KEY.get(rowKey) ?? ATLAS_ROWS[0]
-  return {
-    name: `pet-${rowKey}`,
-    durationMs: rowTotalMs(row),
-    iterationCount: mode === 'once' ? 1 : 'infinite',
-    prefix: 'pet',
-  }
+export interface PetPosition {
+  x: number
+  y: number
 }

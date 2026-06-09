@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Sidebar, TitleBar } from './components/layout'
 import { ChatView } from './components/chat'
 import { SettingsModal } from './components/settings'
 import { TasksPage } from './components/tasks'
 import { PlatformCenter } from './components/platforms'
-import { PetPage } from './components/pet'
-import { useAppStore } from './stores'
+import { useAppStore, usePetStore } from './stores'
 import { useTaskScheduler } from './hooks'
 import { WorkspacePanel } from './components/workspace'
 import { useMCPStore } from './stores/mcpStore'
@@ -14,7 +13,9 @@ import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
 
-export type Page = 'chat' | 'tasks' | 'platforms' | 'pet'
+export type Page = 'chat' | 'tasks' | 'platforms'
+
+const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
 function App() {
   const { theme, sidebarCollapsed, toggleSidebar } = useAppStore()
@@ -28,13 +29,9 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    // Initialize MCP servers from Rust backend
     useMCPStore.getState().refreshAllServers().catch(() => {})
-
-    // Scan skills from configured paths
     useSkillStore.getState().refreshSkills().catch(() => {})
 
-    // Initialize SQLite database and migrate localStorage data
     initDatabase().then(async () => {
       const storedState = localStorage.getItem('snotra-app-storage')
       if (storedState) {
@@ -76,11 +73,63 @@ function App() {
     }).catch(console.warn)
   }, [])
 
+  const handlePetToggle = useCallback(async () => {
+    if (!inTauri) return
+
+    const store = usePetStore.getState()
+    const visible = !store.petWindowVisible
+    store.setPetWindowVisible(visible)
+
+    try {
+      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
+      const existing = await WebviewWindow.getByLabel('pet')
+
+      if (existing) {
+        if (visible) {
+          await existing.show()
+          await existing.setFocus()
+        } else {
+          await existing.hide()
+        }
+        return
+      }
+
+      if (visible) {
+        const win = new WebviewWindow('pet', {
+          url: '/pet.html',
+          title: 'Pet',
+          width: 200,
+          height: 200,
+          decorations: false,
+          transparent: true,
+          alwaysOnTop: true,
+          skipTaskbar: true,
+          visible: true,
+          resizable: false,
+          focus: false,
+        })
+        await win.once('tauri://created', () => {
+          usePetStore.getState().setPetWindowVisible(true)
+          console.log('[pet] window created')
+        })
+        await win.once('tauri://error', (e: unknown) => {
+          console.error('[pet] window error:', e)
+          usePetStore.getState().setPetWindowVisible(false)
+        })
+        await win.once('tauri://close-requested', () => {
+          usePetStore.getState().setPetWindowVisible(false)
+          console.log('[pet] window closed')
+        })
+      }
+    } catch (err) {
+      console.error('[pet] toggle failed:', err)
+    }
+  }, [])
+
   return (
     <div className="app-shell flex h-screen w-screen overflow-hidden bg-bg relative">
       <TitleBar />
-      
-      {/* Global Unified Background */}
+
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-accent/5 rounded-full blur-[160px] opacity-60" />
         <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] rounded-full bg-accent/8 blur-[140px]" />
@@ -91,6 +140,7 @@ function App() {
         onSettingsOpen={() => setShowSettings(true)}
         currentPage={currentPage}
         onNavigate={setCurrentPage}
+        onPetToggle={handlePetToggle}
         collapsed={sidebarCollapsed}
         onToggleCollapse={toggleSidebar}
         className="pt-10"
@@ -107,11 +157,6 @@ function App() {
           {currentPage === 'platforms' && (
             <div className="w-full h-full flex flex-col">
               <PlatformCenter />
-            </div>
-          )}
-          {currentPage === 'pet' && (
-            <div className="w-full h-full flex flex-col items-center justify-center">
-              <PetPage />
             </div>
           )}
         </div>

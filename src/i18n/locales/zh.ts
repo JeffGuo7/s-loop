@@ -260,7 +260,6 @@ const zh = {
     emptyTitle: '暂无计划任务',
     emptyDesc: '创建您的第一个自动化任务以简化工作流程。',
     createFirst: '创建第一个任务',
-    once: '单次',
     daily: '每日',
     weekly: '每周',
     monthly: '每月',

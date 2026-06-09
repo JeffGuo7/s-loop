@@ -1,1 +1,1 @@
-// pet utilities — see src/types/pet.ts for pet types
+export { loadPetPackages, getThemeSvg, getSvgPath, getReactionSvg, getAllPackages, getPackageById } from './petTheme'

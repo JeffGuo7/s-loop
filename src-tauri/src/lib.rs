@@ -9,8 +9,7 @@ use std::sync::{Arc, Mutex};
 
 const PI_SERVER_PORT: u16 = 4096;
 
-/// Check if a pi-server is alive and healthy on the given port.
-/// Performs an actual HTTP health check, not just TCP.
+#[allow(dead_code)]
 fn check_server_healthy(port: u16) -> bool {
     use std::io::{Read, Write};
     let mut stream = match std::net::TcpStream::connect(format!("127.0.0.1:{port}")) {
@@ -45,7 +44,7 @@ fn kill_process_on_port(port: u16) {
             let pid = line.split_whitespace().last().unwrap_or("");
             if let Ok(pid) = pid.parse::<u32>() {
                 let _ = Command::new("taskkill")
-                    .args(["/F", "/PID", &pid.to_string()])
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
                     .output();
             }
         }
