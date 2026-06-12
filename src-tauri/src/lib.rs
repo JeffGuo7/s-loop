@@ -30,6 +30,8 @@ fn check_server_healthy(port: u16) -> bool {
 }
 
 /// Kill any process listening on the given port (Windows only).
+/// Parses netstat -ano output for the port and kills the owning PID.
+/// Uses only the port number for matching — no locale-dependent strings.
 #[cfg(windows)]
 fn kill_process_on_port(port: u16) {
     use std::process::Command;
@@ -39,10 +41,12 @@ fn kill_process_on_port(port: u16) {
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok());
     let Some(stdout) = output else { return };
+    let port_str = format!(":{port}");
     for line in stdout.lines() {
-        if line.contains(&format!(":{port}")) && line.contains("LISTENING") {
-            let pid = line.split_whitespace().last().unwrap_or("");
-            if let Ok(pid) = pid.parse::<u32>() {
+        if !line.contains(&port_str) { continue; }
+        let pid = line.split_whitespace().last().unwrap_or("");
+        if let Ok(pid) = pid.parse::<u32>() {
+            if pid > 0 {
                 let _ = Command::new("taskkill")
                     .args(["/F", "/T", "/PID", &pid.to_string()])
                     .output();

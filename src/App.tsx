@@ -4,6 +4,7 @@ import { ChatView } from './components/chat'
 import { SettingsModal } from './components/settings'
 import { TasksPage } from './components/tasks'
 import { PlatformCenter } from './components/platforms'
+import { PetPage } from './components/pet'
 import { useAppStore, usePetStore } from './stores'
 import { useTaskScheduler } from './hooks'
 import { WorkspacePanel } from './components/workspace'
@@ -13,7 +14,7 @@ import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
 
-export type Page = 'chat' | 'tasks' | 'platforms'
+export type Page = 'chat' | 'tasks' | 'platforms' | 'pet'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -23,6 +24,39 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
 
   useTaskScheduler()
+
+  useEffect(() => {
+    const tid = setTimeout(async () => {
+      if (!inTauri) return
+      const { pet, petWindowVisible } = usePetStore.getState()
+      if (pet && petWindowVisible) {
+        try {
+          const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
+          const existing = await WebviewWindow.getByLabel('pet')
+          if (!existing) {
+            const win = new WebviewWindow('pet', {
+              url: '/pet.html',
+              title: 'Pet',
+              width: 200,
+              height: 200,
+              decorations: false,
+              transparent: true,
+              shadow: false,
+              alwaysOnTop: true,
+              skipTaskbar: true,
+              visible: true,
+              resizable: false,
+              focus: false,
+            })
+            win.once('tauri://close-requested', () => {
+              usePetStore.getState().setPetWindowVisible(false)
+            })
+          }
+        } catch { /* window already exists or not in tauri */ }
+      }
+    }, 800)
+    return () => clearTimeout(tid)
+  }, [])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -102,6 +136,7 @@ function App() {
           height: 200,
           decorations: false,
           transparent: true,
+          shadow: false,
           alwaysOnTop: true,
           skipTaskbar: true,
           visible: true,
@@ -140,7 +175,6 @@ function App() {
         onSettingsOpen={() => setShowSettings(true)}
         currentPage={currentPage}
         onNavigate={setCurrentPage}
-        onPetToggle={handlePetToggle}
         collapsed={sidebarCollapsed}
         onToggleCollapse={toggleSidebar}
         className="pt-10"
@@ -159,6 +193,7 @@ function App() {
               <PlatformCenter />
             </div>
           )}
+          {currentPage === 'pet' && <PetPage onToggleWindow={handlePetToggle} />}
         </div>
       </main>
 

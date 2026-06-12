@@ -21,10 +21,16 @@ function getTools(dir, webSearchConfig) {
     const providerName = webSearchConfig?.provider || 'bing'
     tools.push({
       name: 'web_search', label: 'Web Search',
-      description: `Search the web for current information (provider: ${providerName}). Returns results with real source URLs, titles, and snippets. Use web_fetch to read full page content from any interesting URL.`,
-      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] },
+      description: `Search the web and return results with URLs, titles, and snippets.
+
+CRITICAL RULE: The query must be one continuous, natural phrase — no space-separated keywords. Instead of "塞尔达传说时之笛 最新资讯 2024", write "塞尔达传说时之笛最新资讯". Never split Chinese text into individual words or characters.`,
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'One continuous phrase — no spaces between Chinese words, no standalone dates or keywords. Write like natural human writing.' } }, required: ['query'] },
       execute: async (_id, params) => {
-        const result = await webSearch(params.query, webSearchConfig)
+        const query = params.query
+        if (/^[\u4e00-\u9fff]{1,2}$/.test(query.trim())) {
+          return { content: [{ type: 'text', text: `Search query "${query}" is too short. Use a complete phrase.` }], details: {} }
+        }
+        const result = await webSearch(query, webSearchConfig)
         if (result.error) {
           return { content: [{ type: 'text', text: `Search failed: ${result.error}` }], details: {} }
         }
@@ -320,6 +326,15 @@ createServer((req, res) => {
   })
 }).listen(PORT, '127.0.0.1', () => {
   console.log(`[pi-server] listening on http://127.0.0.1:${PORT}`)
+
+  // Detect parent process exit via stdin pipe close (works on all platforms)
+  if (process.stdin) {
+    process.stdin.on('end', () => {
+      console.log('[pi-server] parent process exited, shutting down')
+      process.exit(0)
+    })
+    process.stdin.resume()
+  }
 
   // Initialize and start task scheduler
   const snotraDir = process.env.SNOTRA_PROJECT_DIR || process.cwd()

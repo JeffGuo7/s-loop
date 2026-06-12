@@ -27,6 +27,14 @@ function startIdleChain(store: PetStore) {
   }, IDLE_TIMEOUT)
 }
 
+function emitPetEvent(state: PetAnimationState, mood: PetMood) {
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    import('@tauri-apps/api/event').then(({ emit }) => {
+      emit('pet-state', { state, mood }).catch(() => {})
+    }).catch(() => {})
+  }
+}
+
 interface PetStore {
   pet: Pet | null
   packages: PetPackage[]
@@ -63,7 +71,11 @@ export const usePetStore = create<PetStore>()(
       petPosition: { x: 100, y: 100 },
       packagesLoaded: false,
 
-      setState: (state) => set(s => s.pet ? { pet: { ...s.pet, state } } : {}),
+      setState: (state) => set(s => {
+        if (!s.pet) return {}
+        emitPetEvent(state, s.pet.mood)
+        return { pet: { ...s.pet, state } }
+      }),
       setMood: (mood) => set(s => s.pet ? { pet: { ...s.pet, mood } } : {}),
       setShowPet: (show) => set({ showPet: show }),
       setPetWindowVisible: (visible) => set({ petWindowVisible: visible }),
@@ -99,34 +111,38 @@ export const usePetStore = create<PetStore>()(
         if (!p) return
         clearAll()
         set({ pet: { ...p, state: 'attention', lastInteraction: Date.now(), mood: 'happy' } })
+        emitPetEvent('attention', 'happy')
         _reactionT = setTimeout(() => {
           const p2 = get().pet
-          if (p2) { set({ pet: { ...p2, state: 'idle', mood: 'happy' } }); startIdleChain(get()) }
+          if (p2) { set({ pet: { ...p2, state: 'idle', mood: 'happy' } }); emitPetEvent('idle', 'happy'); startIdleChain(get()) }
         }, REACTION_MS)
       },
 
-      onThinking: () => { clearAll(); set(s => s.pet ? { pet: { ...s.pet, state: 'thinking', mood: 'neutral' } } : {}) },
+      onThinking: () => { clearAll(); set(s => s.pet ? { pet: { ...s.pet, state: 'thinking', mood: 'neutral' } } : {}); emitPetEvent('thinking', 'neutral') },
       onResponded: () => {
         const p = get().pet
         if (!p) return
         set({ pet: { ...p, state: 'idle', mood: 'happy' } })
+        emitPetEvent('idle', 'happy')
         startIdleChain(get())
       },
-      onWorking: () => { clearAll(); set(s => s.pet ? { pet: { ...s.pet, state: 'working', mood: 'neutral' } } : {}) },
+      onWorking: () => { clearAll(); set(s => s.pet ? { pet: { ...s.pet, state: 'working', mood: 'neutral' } } : {}); emitPetEvent('working', 'neutral') },
       onError: () => {
         clearAll()
         set(s => s.pet ? { pet: { ...s.pet, state: 'error', mood: 'sleepy' } } : {})
+        emitPetEvent('error', 'sleepy')
         _reactionT = setTimeout(() => {
           const p2 = get().pet
-          if (p2) { set({ pet: { ...p2, state: 'idle', mood: 'neutral' } }); startIdleChain(get()) }
+          if (p2) { set({ pet: { ...p2, state: 'idle', mood: 'neutral' } }); emitPetEvent('idle', 'neutral'); startIdleChain(get()) }
         }, REACTION_MS)
       },
       onNotification: () => {
         clearAll()
         set(s => s.pet ? { pet: { ...s.pet, state: 'notification', mood: 'excited' } } : {})
+        emitPetEvent('notification', 'excited')
         _reactionT = setTimeout(() => {
           const p2 = get().pet
-          if (p2) { set({ pet: { ...p2, state: 'idle' } }); startIdleChain(get()) }
+          if (p2) { set({ pet: { ...p2, state: 'idle' } }); emitPetEvent('idle', p2.mood); startIdleChain(get()) }
         }, REACTION_MS)
       },
     }),
@@ -135,6 +151,7 @@ export const usePetStore = create<PetStore>()(
       partialize: (s) => ({
         pet: s.pet ? { ...s.pet, state: 'idle' as const } : null,
         showPet: s.showPet,
+        petWindowVisible: s.petWindowVisible,
         petPosition: s.petPosition,
       }),
     }

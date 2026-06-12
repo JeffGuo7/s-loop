@@ -24,7 +24,7 @@ Snotra (Tauri 2)
   │                     │
   │                     ├── createAgentSession() (同 openclaw)
   │                     ├── 原生工具: read/bash/edit/write/grep/find/ls
-  │                     ├── 联网搜索: web_search (DuckDuckGo)
+  │                     ├── 联网搜索: web_search (Bing 默认, 支持 Brave/SearXNG/Tavily/Exa)
   │                     ├── SSE 流式: text/thinking/tool events
   │                     └── Provider 模型列表 API
   │
@@ -112,7 +112,7 @@ npm run tauri:build
 | `grep` | 搜索文件内容 |
 | `find` | 查找文件 |
 | `ls` | 列出目录 |
-| `web_search` | 联网搜索 (DuckDuckGo) |
+| `web_search` | 联网搜索 (Bing 默认, 多引擎支持) |
 
 ## 项目结构
 

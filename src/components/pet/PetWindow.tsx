@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { usePetStore } from '../../stores'
 import { getSvgPath } from '../../utils/petTheme'
+import type { PetAnimationState, PetMood } from '../../types/pet'
 
 export function PetWindow() {
   const pet = usePetStore(s => s.pet)
@@ -8,6 +9,7 @@ export function PetWindow() {
   const packagesLoaded = usePetStore(s => s.packagesLoaded)
   const store = usePetStore
 
+  const [displayState, setDisplayState] = useState<PetAnimationState>('idle')
   const [svgFailed, setSvgFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const attentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -24,17 +26,39 @@ export function PetWindow() {
     }
   }, [loaded, packagesLoaded])
 
+  useEffect(() => {
+    let unlisten: (() => void) | null = null
+    const setup = async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event')
+        const fn = await listen<{ state: PetAnimationState; mood: PetMood }>(
+          'pet-state',
+          (event) => {
+            setDisplayState(event.payload.state)
+          }
+        )
+        unlisten = fn
+      } catch {
+        // Not in Tauri, use store directly
+      }
+    }
+    setup()
+    return () => { if (unlisten) unlisten() }
+  }, [])
+
   const currentPkg = useMemo(() =>
     packages.find(p => p.id === 'clawd'),
     [packages]
   )
 
+  const currentState = displayState
+
   const svgPath = useMemo(() => {
     const p = store.getState().pet
     if (!p || !currentPkg) return null
     setSvgFailed(false)
-    return getSvgPath(currentPkg, p.state)
-  }, [currentPkg, pet?.state])
+    return getSvgPath(currentPkg, currentState)
+  }, [currentPkg, currentState])
 
   const handleInteract = useCallback(() => {
     const s = store.getState()

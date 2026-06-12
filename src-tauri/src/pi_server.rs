@@ -23,7 +23,7 @@ impl PiServerProcess {
         let node_path = std::env::var("PI_NODE_PATH").unwrap_or_else(|_| "node".into());
 
         let mut cmd = Command::new(&node_path);
-        cmd.args([&format!("{}/src-tauri/pi-server/index.mjs", project_dir)]);
+        cmd.args(["--watch", &format!("{}/src-tauri/pi-server/index.mjs", project_dir)]);
         cmd.env("PI_SERVER_PORT", port.to_string());
         cmd.current_dir(project_dir);
 
@@ -33,6 +33,7 @@ impl PiServerProcess {
             cmd.creation_flags(0x08000000);
         }
 
+        cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 

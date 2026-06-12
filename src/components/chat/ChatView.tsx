@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAppStore, useAgentStore, useWebSearchStore } from '../../stores'
+import { useAppStore, useAgentStore, useWebSearchStore, usePetStore } from '../../stores'
 import { useSkillStore } from '../../stores/skillStore'
 import { useMCPStore } from '../../stores/mcpStore'
 import { Cpu, Sparkles } from 'lucide-react'
@@ -65,6 +65,7 @@ export function ChatView() {
       },
       onToolCall: (id, name, args) => {
         console.log('[Snotra] Tool call:', name, id)
+        usePetStore.getState().onWorking()
         const sid = activeSessionIdRef.current
         if (!sid) return
         const sm = useAppStore.getState().streamingMessage[sid]
@@ -134,6 +135,7 @@ export function ChatView() {
           }))
         } catch {
           setError(t('chat.errors.sessionFailed'))
+          usePetStore.getState().onError()
           return
         }
       } else {
@@ -201,6 +203,8 @@ export function ChatView() {
 
       startStreaming(activeSessionId, 'pending-' + Date.now())
 
+      usePetStore.getState().onThinking()
+
       const result = await Pi.prompt(pid!, enrichedContent, {
         systemPrompt: activeAgent?.instructions || undefined,
         providerID: effectiveModel?.providerID,
@@ -214,6 +218,7 @@ export function ChatView() {
       if (result.error) {
         setError(result.error)
         finishStreaming(activeSessionId)
+        usePetStore.getState().onError()
         return
       }
 
@@ -244,6 +249,7 @@ export function ChatView() {
       }
 
       commitStreamingMessage(activeSessionId, completedMessage)
+      usePetStore.getState().onResponded()
     },
     [activeSessionId, activeProvider, providerConfigs, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream],
   )
@@ -251,6 +257,7 @@ export function ChatView() {
   const abort = useCallback(() => {
     if (pidRef.current) Pi.abortSession(pidRef.current)
     if (activeSessionId) finishStreaming(activeSessionId)
+    usePetStore.getState().onResponded()
   }, [activeSessionId, finishStreaming])
 
   const streamingMessages = useAppStore((state) => state.streamingMessage)

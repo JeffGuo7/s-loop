@@ -159,7 +159,7 @@ const en = {
     },
     websearch: {
       title: 'Web Search',
-      description: 'Configure how Snotra searches the web. Bing works out-of-the-box with no configuration.',
+      description: 'Configure how Snotra searches the web. DDGS works out-of-the-box with no configuration.',
       searchEngine: 'Search Engine',
       maxResults: 'Max Results',
       usingProvider: 'Active provider',

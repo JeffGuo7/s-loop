@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { usePetStore } from '../../stores'
 import { getSvgPath } from '../../utils/petTheme'
-import { Sparkles, Activity, Info, PawPrint, AlertTriangle } from 'lucide-react'
+import { Sparkles, PawPrint, Trash2, Monitor, MonitorOff, Info, Activity } from 'lucide-react'
 
 const STATE_LABELS: Record<string, string> = {
   idle: 'Idle', yawning: 'Yawning', dozing: 'Dozing',
@@ -15,16 +15,32 @@ const MOOD_EMOJI: Record<string, string> = {
   happy: '😊', neutral: '😐', sleepy: '😴', excited: '🤩',
 }
 
-export function PetPage() {
-  const { pet, packages, packagesLoaded, loadPackages, hatch, dismiss, interact } = usePetStore()
-  const [showHatch, setShowHatch] = useState(!pet)
+interface PetPageProps {
+  onToggleWindow: () => void
+}
+
+export function PetPage({ onToggleWindow }: PetPageProps) {
+  const pet = usePetStore(s => s.pet)
+  const packages = usePetStore(s => s.packages)
+  const packagesLoaded = usePetStore(s => s.packagesLoaded)
+  const petWindowVisible = usePetStore(s => s.petWindowVisible)
+  const { loadPackages, hatch, dismiss, interact } = usePetStore.getState()
+
+  const [showHatch, setShowHatch] = useState(false)
   const [hatchName, setHatchName] = useState('')
-  const [hatchPkg, setHatchPkg] = useState('cloudling')
   const [svgFailed, setSvgFailed] = useState(false)
 
   useEffect(() => { loadPackages() }, [loadPackages])
 
-  const currentPkg = useMemo(() => packages.find(p => p.id === pet?.packageId), [packages, pet?.packageId])
+  useEffect(() => {
+    if (!pet) setShowHatch(true)
+    else setShowHatch(false)
+  }, [pet])
+
+  const currentPkg = useMemo(() =>
+    packages.find(p => p.id === 'clawd'),
+    [packages]
+  )
 
   const svgPath = useMemo(() => {
     if (!pet || !currentPkg) return null
@@ -35,7 +51,7 @@ export function PetPage() {
   if (!packagesLoaded) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-transparent">
-        <div className="animate-pulse text-text-tertiary font-bold tracking-tight">Loading pets...</div>
+        <div className="animate-pulse text-text-tertiary font-bold tracking-tight">Loading...</div>
       </div>
     )
   }
@@ -52,8 +68,8 @@ export function PetPage() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-3xl font-bold text-text tracking-tight">Hatch a Pet</h2>
-            <p className="text-[14px] text-text-tertiary">Choose your companion and give it a name.</p>
+            <h2 className="text-3xl font-bold text-text tracking-tight">Hatch Clawd</h2>
+            <p className="text-[14px] text-text-tertiary">Your desktop companion awaits.</p>
           </div>
 
           <div className="space-y-4">
@@ -62,34 +78,13 @@ export function PetPage() {
               value={hatchName}
               onChange={e => setHatchName(e.target.value)}
               placeholder="Name your pet..."
-              onKeyDown={e => e.key === 'Enter' && hatchName.trim() && (hatch(hatchName.trim(), 'Friendly', hatchPkg), setShowHatch(false))}
+              onKeyDown={e => e.key === 'Enter' && hatchName.trim() && hatch(hatchName.trim(), 'Friendly', 'clawd')}
               className="w-full px-6 py-4 rounded-2xl bg-surface-secondary/40 border border-border-light focus:border-accent/40 outline-none text-[15px] font-bold text-center tracking-tight transition-all"
               autoFocus
             />
 
-            {packages.length > 1 && (
-              <div className="flex items-center justify-center gap-3">
-                <span className="text-[13px] font-bold text-text-tertiary">Type:</span>
-                <div className="flex gap-2">
-                  {packages.map(pkg => (
-                    <button
-                      key={pkg.id}
-                      onClick={() => setHatchPkg(pkg.id)}
-                      className={`px-5 py-2.5 rounded-xl text-[13px] font-bold tracking-tight transition-all border ${
-                        hatchPkg === pkg.id
-                          ? 'bg-accent text-accent-foreground border-accent shadow-sm'
-                          : 'bg-surface-secondary/40 text-text-secondary border-border-light hover:border-accent/30'
-                      }`}
-                    >
-                      {pkg.displayName}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <button
-              onClick={() => { hatch(hatchName.trim() || 'Cloudling', 'Friendly', hatchPkg); setShowHatch(false) }}
+              onClick={() => hatch(hatchName.trim() || 'Clawd', 'Friendly', 'clawd')}
               className="w-full px-8 py-4 rounded-2xl bg-accent text-accent-foreground font-bold text-[15px] shadow-lg shadow-accent/20 hover:shadow-accent/40 transition-all"
             >
               <span className="flex items-center justify-center gap-2">
@@ -106,25 +101,7 @@ export function PetPage() {
     <div className="h-full w-full flex flex-col items-center justify-center bg-transparent">
       <div className="text-center space-y-8 max-w-lg mx-auto animate-fade-in">
 
-        {/* Pet theme switcher */}
-        {packages.length > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            {packages.map(pkg => (
-              <button
-                key={pkg.id}
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-[0.15em] transition-all border ${
-                  pet.packageId === pkg.id
-                    ? 'bg-accent/10 text-accent border-accent/20'
-                    : 'text-text-quaternary border-transparent hover:text-text-tertiary'
-                }`}
-              >
-                {pkg.displayName}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Pet SVG */}
+        {/* Pet SVG preview */}
         <div className="relative mx-auto cursor-pointer group" onClick={() => interact()}>
           {svgPath && !svgFailed ? (
             <object
@@ -132,21 +109,16 @@ export function PetPage() {
               data={svgPath}
               type="image/svg+xml"
               className="w-auto h-auto"
-              style={currentPkg?.id === 'clawd' ? { width: '180px', height: '180px' } : { width: '240px', height: '200px' }}
+              style={{ width: '180px', height: '180px' }}
               aria-label={pet.name}
               onError={() => setSvgFailed(true)}
             />
           ) : (
             <div
               className="rounded-3xl bg-gradient-to-br from-accent/10 to-surface-secondary/50 flex items-center justify-center border-2 border-dashed border-accent/20"
-              style={currentPkg?.id === 'clawd' ? { width: '180px', height: '180px' } : { width: '240px', height: '200px' }}
+              style={{ width: '180px', height: '180px' }}
             >
-              <div className="text-center space-y-2">
-                <AlertTriangle size={28} className="text-text-quaternary mx-auto opacity-30" />
-                <p className="text-[11px] text-text-quaternary font-bold opacity-30">
-                  {currentPkg?.id === 'clawd' ? 'Clawd' : 'Cloudling'}
-                </p>
-              </div>
+              <PawPrint size={48} className="text-text-quaternary opacity-20" />
             </div>
           )}
         </div>
@@ -165,13 +137,10 @@ export function PetPage() {
               {STATE_LABELS[pet.state] || pet.state}
             </span>
           </div>
-          <p className="text-[14px] text-text-tertiary italic">"{pet.personality}"</p>
-          <p className="text-[14px] text-text-tertiary">
-            {MOOD_EMOJI[pet.mood] || '😐'} {pet.mood}
-          </p>
+          <p className="text-[14px] text-text-tertiary italic">"{pet.personality}"  {MOOD_EMOJI[pet.mood]}</p>
         </div>
 
-        {/* Stats bar */}
+        {/* Stats */}
         <div className="flex items-center justify-center gap-6 text-[11px] font-bold uppercase tracking-[0.15em] text-text-tertiary opacity-50">
           <div className="flex items-center gap-2">
             <Info size={12} />
@@ -179,29 +148,35 @@ export function PetPage() {
           </div>
           <div className="flex items-center gap-2">
             <Activity size={12} />
-            <span>{currentPkg?.displayName || 'Pet'}</span>
+            <span>Clawd</span>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-center gap-4 pt-4">
+        <div className="flex flex-col items-center gap-3 pt-4">
           <button
-            onClick={() => interact()}
-            className="px-6 py-3 rounded-2xl bg-accent/10 text-accent font-bold text-[13px] hover:bg-accent hover:text-accent-foreground transition-all border border-accent/15"
+            onClick={onToggleWindow}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-surface-secondary/60 text-text-secondary font-bold text-[13px] hover:bg-surface-secondary hover:text-text border border-border-light transition-all"
           >
-            <PawPrint size={16} className="inline mr-2" />Interact
+            {petWindowVisible ? <Monitor size={16} /> : <MonitorOff size={16} />}
+            {petWindowVisible ? 'Hide on Desktop' : 'Show on Desktop'}
           </button>
-          <button
-            onClick={() => { dismiss(); setShowHatch(true) }}
-            className="px-6 py-3 rounded-2xl bg-surface-secondary/50 text-text-tertiary font-bold text-[13px] hover:text-text hover:bg-surface-secondary transition-all"
-          >
-            Dismiss
-          </button>
-        </div>
 
-        <p className="text-[11px] text-text-quaternary opacity-30">
-          {currentPkg?.id === 'clawd' ? 'Clawd' : 'Cloudling'} — AI companion
-        </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => interact()}
+              className="px-6 py-3 rounded-2xl bg-accent/10 text-accent font-bold text-[13px] hover:bg-accent hover:text-accent-foreground transition-all border border-accent/15"
+            >
+              <PawPrint size={16} className="inline mr-2" />Interact
+            </button>
+            <button
+              onClick={() => { dismiss(); setShowHatch(true) }}
+              className="px-6 py-3 rounded-2xl bg-red-500/10 text-red-400 font-bold text-[13px] hover:bg-red-500/20 transition-all"
+            >
+              <Trash2 size={16} className="inline mr-2" />Dismiss
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

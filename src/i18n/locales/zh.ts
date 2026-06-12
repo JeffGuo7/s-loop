@@ -158,7 +158,7 @@ const zh = {
     },
     websearch: {
       title: '网络搜索',
-      description: '配置 Snotra 的网络搜索方式。Bing 无需配置即可使用。',
+      description: '配置 Snotra 的网络搜索方式。DDGS 无需配置即可使用。',
       searchEngine: '搜索引擎',
       maxResults: '最大结果数',
       usingProvider: '当前使用',

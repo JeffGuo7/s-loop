@@ -29,16 +29,37 @@ class SearchResult {
  * if the initial results don't seem relevant.
  */
 async function searchBing(query, limit = 5) {
-  // Try the original query first, then fallback to a cleaned version
-  const candidates = [...new Set([query, cleanChineseQuery(query)])]
+  // Detect if results look like dictionary spam (Bing bug with some Chinese queries)
+  function isDictSpam(results) {
+    if (!results.length) return false
+    const dictSites = ['baike.baidu.com', 'zdic.net', 'hanyuguoxue.com', 'chagushici.com', 'hgcha.com', 'gushici.net', 'dictionary', 'gushici']
+    const r = results[0]
+    const isDictSite = dictSites.some(s => r.url?.includes(s))
+    const shortTitle = r.title?.replace(/[\s_\-]/g, '').length < 6
+    return isDictSite && shortTitle
+  }
+
+  // Build candidate queries: original, cleaned, and "just the topic" (before first space)
+  const candidates = [...new Set([
+    query,
+    cleanChineseQuery(query),
+    query.split(/[\s,，、]+/)[0],  // topic only (e.g. "塞尔达传说时之笛")
+  ])]
   const seenUrls = new Set()
   let bestResults = []
   let foundRelevant = false
 
   for (const q of candidates) {
     if (foundRelevant) break
+    if (!q || q.length < 2) continue
     const results = await searchBingRaw(q, limit)
     if (!results.length) continue
+
+    // Skip if Bing returned dictionary spam
+    if (isDictSpam(results)) {
+      console.log(`[bing-search] skipping dictionary spam for "${q}"`)
+      continue
+    }
 
     const keywords = extractKeywords(query)
     const relevant = keywords.length === 0 || results.some(r => {
