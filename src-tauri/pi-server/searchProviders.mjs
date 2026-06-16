@@ -20,67 +20,7 @@ class SearchResult {
 
 // ─── Bing (default, zero-config, works in China) ────────
 
-/**
- * Bing search — uses cheerio CSS selectors to parse cn.bing.com.
- * No API key required. Accessible in China.
- *
- * Bing has known issues with long Chinese queries containing time words
- * (明天/今天/昨天). This function auto-retries with a cleaned query
- * if the initial results don't seem relevant.
- */
 async function searchBing(query, limit = 5) {
-  // Detect if results look like dictionary spam (Bing bug with some Chinese queries)
-  function isDictSpam(results) {
-    if (!results.length) return false
-    const dictSites = ['baike.baidu.com', 'zdic.net', 'hanyuguoxue.com', 'chagushici.com', 'hgcha.com', 'gushici.net', 'dictionary', 'gushici']
-    const r = results[0]
-    const isDictSite = dictSites.some(s => r.url?.includes(s))
-    const shortTitle = r.title?.replace(/[\s_\-]/g, '').length < 6
-    return isDictSite && shortTitle
-  }
-
-  // Build candidate queries: original, cleaned, and "just the topic" (before first space)
-  const candidates = [...new Set([
-    query,
-    cleanChineseQuery(query),
-    query.split(/[\s,，、]+/)[0],  // topic only (e.g. "塞尔达传说时之笛")
-  ])]
-  const seenUrls = new Set()
-  let bestResults = []
-  let foundRelevant = false
-
-  for (const q of candidates) {
-    if (foundRelevant) break
-    if (!q || q.length < 2) continue
-    const results = await searchBingRaw(q, limit)
-    if (!results.length) continue
-
-    // Skip if Bing returned dictionary spam
-    if (isDictSpam(results)) {
-      console.log(`[bing-search] skipping dictionary spam for "${q}"`)
-      continue
-    }
-
-    const keywords = extractKeywords(query)
-    const relevant = keywords.length === 0 || results.some(r => {
-      const title = r.title.toLowerCase()
-      const matchCount = keywords.filter(kw => title.includes(kw)).length
-      return matchCount >= 2 || matchCount === keywords.length
-    })
-
-    if (relevant) { bestResults = results; foundRelevant = true; break }
-    if (bestResults.length === 0) bestResults = results
-  }
-
-  return bestResults.filter(r => {
-    if (seenUrls.has(r.url)) return false
-    seenUrls.add(r.url)
-    return true
-  }).slice(0, limit)
-}
-
-/** Raw Bing fetch + cheerio parse */
-async function searchBingRaw(query, limit) {
   const url = `https://cn.bing.com/search?q=${encodeURIComponent(query)}&count=${limit}`
   const res = await fetch(url, {
     headers: {
@@ -111,27 +51,6 @@ async function searchBingRaw(query, limit) {
   })
 
   return results
-}
-
-/**
- * Clean a Chinese query: strip time words that confuse Bing, add "天气预报" for weather queries.
- * "昆山明天天气" → "昆山 天气预报"
- */
-function cleanChineseQuery(query) {
-  let cleaned = query
-    .replace(/今天|明天|昨天|后天|昨日|今日|明日/gi, '')
-    .replace(/的|了|吗|呢|吧|呀|啊|哦|嗯/gi, '')
-    .trim()
-  // Ensure space between city name and 天气
-  cleaned = cleaned.replace(/([^\s])天气/g, '$1 天气')
-  if (cleaned.length < 2) cleaned = query.replace(/今天|明天|昨天|后天/g, '').trim()
-  return cleaned || query
-}
-
-/** Extract non-stopword keywords from query for relevance check */
-function extractKeywords(query) {
-  const stop = new Set('的 了 吗 呢 吧 在 是 有 和 与 或 这 那 哪 什么 怎么 如何 为什么 a an the is are to for of in on at by'.split(' '))
-  return query.toLowerCase().split(/[\s,，、]+/).filter(w => w.length >= 2 && !stop.has(w))
 }
 
 /** Decode Bing redirect URL (ck/a?...&u=...) → real URL */
