@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore, useAgentStore, useWebSearchStore, usePetStore } from '../../stores'
 import { useSkillStore } from '../../stores/skillStore'
 import { useMCPStore } from '../../stores/mcpStore'
-import { Cpu, Sparkles } from 'lucide-react'
+import { Cpu, Sparkles, Paperclip } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import * as Pi from '../../utils/piClient'
@@ -30,6 +30,9 @@ export function ChatView() {
   } = useAppStore()
 
   const [error, setError] = useState<string | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [dragTargetZone, setDragTargetZone] = useState<'message' | 'input'>('message')
+  const containerRef = useRef<HTMLDivElement>(null)
   const pidRef = useRef('')
   const unsubRef = useRef<(() => void) | null>(null)
 
@@ -98,7 +101,8 @@ export function ChatView() {
 
   const handleSubmit = useCallback(
     async (content: string) => {
-      if (!content || !activeSessionId) return
+      const sid = useAppStore.getState().activeSessionId
+      if (!content || !sid) return
       setError(null)
 
       const providerConfig = activeProvider ? providerConfigs[activeProvider] : null
@@ -112,17 +116,17 @@ export function ChatView() {
 
       // Add user message
       const uid = Math.random().toString(36).substring(2, 15)
-      addMessage(activeSessionId, {
-        info: { id: uid, sessionID: activeSessionId, role: 'user', time: { created: Date.now() } },
-        parts: [{ id: `${uid}-0`, type: 'text', text: content, sessionID: activeSessionId, messageID: uid }],
+      addMessage(sid, {
+        info: { id: uid, sessionID: sid, role: 'user', time: { created: Date.now() } },
+        parts: [{ id: `${uid}-0`, type: 'text', text: content, sessionID: sid, messageID: uid }],
       })
 
       if (session?.title === 'New Chat') {
-        updateSessionTitle(activeSessionId, content.slice(0, 40) + (content.length > 40 ? '...' : ''))
+        updateSessionTitle(sid, content.slice(0, 40) + (content.length > 40 ? '...' : ''))
       }
 
       // Create or reuse Pi session
-      let pid = (session as any)?.piId
+      let pid = (useAppStore.getState().sessions.find(s => s.id === sid) as any)?.piId ?? null
       if (!pid) {
         try {
           const ks = await Pi.createSession()
@@ -130,7 +134,7 @@ export function ChatView() {
           pidRef.current = pid
           useAppStore.setState((state) => ({
             sessions: state.sessions.map((s) =>
-              s.id === activeSessionId ? { ...s, piId: pid } : s,
+              s.id === sid ? { ...s, piId: pid } : s,
             ),
           }))
         } catch {
@@ -201,7 +205,7 @@ export function ChatView() {
         ? { providerID: activeProvider!, modelID: activeAgent.model }
         : model
 
-      startStreaming(activeSessionId, 'pending-' + Date.now())
+      startStreaming(sid, 'pending-' + Date.now())
 
       usePetStore.getState().onThinking()
 
@@ -217,13 +221,13 @@ export function ChatView() {
 
       if (result.error) {
         setError(result.error)
-        finishStreaming(activeSessionId)
+        finishStreaming(sid)
         usePetStore.getState().onError()
         return
       }
 
       const msgID = `pi-msg-${Date.now()}`
-      const sm = useAppStore.getState().streamingMessage[activeSessionId]
+      const sm = useAppStore.getState().streamingMessage[sid]
       const accumulatedParts = sm?.parts || []
       const textPart = accumulatedParts.find(p => p.type === 'text')
       if (textPart && 'text' in textPart) {
@@ -239,16 +243,16 @@ export function ChatView() {
         accumulatedParts.push({
           id: `pi-text-${Date.now()}`,
           type: 'text', text: fallbackText,
-          sessionID: activeSessionId, messageID: msgID,
+          sessionID: sid, messageID: msgID,
         } as any)
       }
 
       const completedMessage: KiloMessage = {
-        info: { id: msgID, sessionID: activeSessionId, role: 'assistant', time: { created: Date.now() } },
+        info: { id: msgID, sessionID: sid, role: 'assistant', time: { created: Date.now() } },
         parts: accumulatedParts,
       }
 
-      commitStreamingMessage(activeSessionId, completedMessage)
+      commitStreamingMessage(sid, completedMessage)
       usePetStore.getState().onResponded()
     },
     [activeSessionId, activeProvider, providerConfigs, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream],
@@ -259,6 +263,75 @@ export function ChatView() {
     if (activeSessionId) finishStreaming(activeSessionId)
     usePetStore.getState().onResponded()
   }, [activeSessionId, finishStreaming])
+
+  // ── File/folder drag into message area ──
+
+  async function listFilesRecursive(dirPath: string, maxFiles = 30, depth = 0): Promise<string[]> {
+    if (depth > 5 || maxFiles <= 0) return []
+    const { invoke } = await import('@tauri-apps/api/core')
+    const entries = await invoke<any[]>('list_directory', { path: dirPath })
+    const skipDirs = new Set(['node_modules', '.git', 'target', '__pycache__', 'dist', '.next', '.cache'])
+    let results: string[] = []
+    for (const entry of entries) {
+      if (entry.is_dir) {
+        if (skipDirs.has(entry.name)) continue
+        const sub = await listFilesRecursive(entry.path, maxFiles - results.length, depth + 1)
+        results = results.concat(sub)
+      } else {
+        results.push(entry.path)
+        if (results.length >= maxFiles) break
+      }
+    }
+    return results
+  }
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setIsDragOver(true)
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const relativeY = e.clientY - rect.top
+      const inputZoneStart = rect.height * 0.6
+      setDragTargetZone(relativeY > inputZoneStart ? 'input' : 'message')
+    }
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setIsDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+
+    const fileData = e.dataTransfer.getData('application/x-snotra-file')
+    if (!fileData) return
+
+    const { path, name, isDir } = JSON.parse(fileData)
+
+    let content = ''
+    if (isDir) {
+      try {
+        const files = await listFilesRecursive(path)
+        const summary = files.length > 0
+          ? files.map(f => `- ${f}`).join('\n')
+          : '(empty folder)'
+        content = `[Folder: ${name}](${path})\n\n\`\`\`\n${summary}\n\`\`\``
+      } catch {
+        content = `[Folder: ${name}](${path})`
+      }
+    } else {
+      content = `[File: ${name}](${path})`
+    }
+
+    if (!useAppStore.getState().activeSessionId) {
+      useAppStore.getState().createSession()
+    }
+
+    handleSubmit(content)
+  }, [handleSubmit])
 
   const streamingMessages = useAppStore((state) => state.streamingMessage)
   const streamingMessage = activeSessionId ? streamingMessages[activeSessionId] : EMPTY_STREAMING
@@ -295,7 +368,24 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-transparent h-full w-full overflow-hidden">
+    <div
+      ref={containerRef}
+      className="flex-1 flex flex-col bg-transparent h-full w-full overflow-hidden relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragOver && dragTargetZone === 'message' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none rounded-[inherit]">
+          <div className="w-full h-full mx-4 my-4 rounded-[28px] border-2 border-dashed border-accent/50 bg-accent/5 backdrop-blur-[2px] flex flex-col items-center justify-center gap-4 animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
+              <Paperclip size={28} className="text-accent" />
+            </div>
+            <p className="text-lg font-bold text-accent tracking-tight">释放文件/文件夹到此处直接发送</p>
+            <p className="text-sm text-text-tertiary font-medium">文件将立即发送给 AI 分析处理</p>
+          </div>
+        </div>
+      )}
       <div className="flex-1 min-h-0 relative bg-transparent">
         <AnimatePresence mode="wait">
           {isEmpty ? (

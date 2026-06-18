@@ -117,10 +117,10 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
     (e: React.DragEvent) => {
       draggingRef.current = true
       e.dataTransfer.setData('text/plain', path)
-      e.dataTransfer.setData('application/x-snotra-file', JSON.stringify({ path, name }))
+      e.dataTransfer.setData('application/x-snotra-file', JSON.stringify({ path, name, isDir }))
       e.dataTransfer.effectAllowed = 'copy'
     },
-    [path, name],
+    [path, name, isDir],
   )
 
   const handleDragEnd = useCallback(() => {
@@ -139,12 +139,12 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
       <div
         role="button"
         tabIndex={0}
-        draggable={!isDir}
+        draggable={true}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onKeyDown={handleKeyDown}
-        onDragStart={!isDir ? handleDragStart : undefined}
-        onDragEnd={!isDir ? handleDragEnd : undefined}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
         className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-surface-secondary/60 transition-all duration-300 text-left select-none outline-none focus-visible:ring-2 focus-visible:ring-accent group/tree-item"
         style={{ paddingLeft: `${paddingLeft}px` }}
         title={path}

@@ -54,6 +54,7 @@ export function ChatInput({
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     setIsDragOver(false)
 
     const newAttachments: FileAttachment[] = []
