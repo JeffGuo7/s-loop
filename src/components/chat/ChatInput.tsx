@@ -214,9 +214,6 @@ export function ChatInput({
                 onChange={setInput}
                 isDisabled={disabled || isStreaming}
                 className="w-full selection:bg-accent/20"
-                classNames={{
-                  inputWrapper: "!bg-transparent !shadow-none !border-none after:!bg-transparent before:!bg-transparent focus-within:!bg-transparent",
-                }}
               >
                 <TextArea
                   ref={textareaRef}

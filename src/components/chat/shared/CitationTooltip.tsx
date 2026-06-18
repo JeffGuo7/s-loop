@@ -13,15 +13,20 @@ interface CitationTooltipProps {
 
 export function CitationTooltip({ citation, children }: CitationTooltipProps) {
   const [visible, setVisible] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<number | null>(null)
 
   const show = () => {
-    clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setVisible(true), 300)
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current)
+    }
+    timerRef.current = window.setTimeout(() => setVisible(true), 300)
   }
 
   const hide = () => {
-    clearTimeout(timerRef.current)
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
     setVisible(false)
   }
 
@@ -31,7 +36,13 @@ export function CitationTooltip({ citation, children }: CitationTooltipProps) {
       {visible && citation && (
         <div
           className="absolute z-50 bottom-full left-0 mb-2 p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl min-w-[240px] max-w-[360px] animate-fade-in"
-          onMouseEnter={() => { clearTimeout(timerRef.current); setVisible(true) }}
+          onMouseEnter={() => {
+            if (timerRef.current !== null) {
+              window.clearTimeout(timerRef.current)
+              timerRef.current = null
+            }
+            setVisible(true)
+          }}
           onMouseLeave={() => setVisible(false)}
         >
           {citation.title && (

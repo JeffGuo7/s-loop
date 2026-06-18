@@ -6,7 +6,7 @@ import { StreamingIndicator } from './shared/StreamingIndicator'
 import { shouldUseDocumentLayout } from './shared/Markdown'
 import { User, Cpu } from 'lucide-react'
 
-import type { KiloMessage, MessagePart, TextPart, FilePart } from '../../types'
+import type { KiloMessage, MessagePart, TextPart } from '../../types'
 
 type BlockType = 'stack' | 'text'
 

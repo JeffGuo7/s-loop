@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Markdown } from './Markdown'
 
 interface SmoothStreamProps {
@@ -7,7 +7,19 @@ interface SmoothStreamProps {
 }
 
 const languages = ['en-US', 'de-DE', 'es-ES', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'ru-RU', 'fr-FR']
-const segmenter = new Intl.Segmenter(languages)
+const SegmenterCtor = (Intl as typeof Intl & {
+  Segmenter?: new (
+    locales?: string | string[],
+    options?: { granularity?: 'grapheme' | 'word' | 'sentence' }
+  ) => { segment(input: string): Iterable<{ segment: string }> }
+}).Segmenter
+const segmenter = SegmenterCtor ? new SegmenterCtor(languages, { granularity: 'grapheme' }) : null
+
+function splitGraphemes(input: string): string[] {
+  if (!input) return []
+  if (!segmenter) return Array.from(input)
+  return Array.from(segmenter.segment(input), (part) => part.segment)
+}
 
 /**
  * EXACT replica of Cherry Studio's useSmoothStream + Markdown content update pattern.
@@ -40,7 +52,7 @@ export function SmoothStream({ text, isStreaming }: SmoothStreamProps) {
 
     if (!oldContent && newContent) {
       // First content: queue all of it (don't show immediately)
-      const chars = Array.from(segmenter.segment(newContent)).map(s => s.segment)
+      const chars = splitGraphemes(newContent)
       chunkQueueRef.current = chars
       prevContentRef.current = newContent
       return
@@ -49,7 +61,7 @@ export function SmoothStream({ text, isStreaming }: SmoothStreamProps) {
     if (oldContent && newContent && !newContent.startsWith(oldContent)) {
       // Content reset: replace everything
       chunkQueueRef.current = []
-      const chars = Array.from(segmenter.segment(newContent)).map(s => s.segment)
+      const chars = splitGraphemes(newContent)
       chunkQueueRef.current = chars
       displayedTextRef.current = ''
       prevContentRef.current = newContent
@@ -59,7 +71,7 @@ export function SmoothStream({ text, isStreaming }: SmoothStreamProps) {
     // Normal streaming: compute delta
     const delta = newContent.substring(oldContent.length)
     if (delta) {
-      const chars = Array.from(segmenter.segment(delta)).map(s => s.segment)
+      const chars = splitGraphemes(delta)
       chunkQueueRef.current = [...chunkQueueRef.current, ...chars]
     }
 

@@ -361,7 +361,7 @@ function MarkdownInner({ children, className = '', variant = 'default' }: Markdo
       )
     },
 
-    a({ href, children, node }) {
+    a({ href, children }) {
       const childrenArray = React.Children.toArray(children)
       const hasSup = childrenArray.some(
         (child: any) => child?.type === 'sup'

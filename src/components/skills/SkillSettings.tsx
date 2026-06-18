@@ -22,7 +22,7 @@ import { CopyButton } from '../chat/shared/CopyButton';
 
 export function SkillSettings() {
   const { t } = useTranslation();
-  const { skills, paths, skillMeta, isScanning, lastScanTime, scanError, removeSkill, toggleSkill, addSkill, addPath, removePath, refreshSkills, clearScanError } = useSkillStore();
+  const { skills, paths, isScanning, lastScanTime, scanError, removeSkill, toggleSkill, addSkill, addPath, removePath, refreshSkills, clearScanError } = useSkillStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPathModal, setShowPathModal] = useState(false);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);

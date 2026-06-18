@@ -1,20 +1,3 @@
-let highlighter: any = null
-
-async function getHighlighter() {
-  if (!highlighter) {
-    const shiki = await import('shiki')
-    highlighter = await shiki.createHighlighter({
-      themes: ['github-dark', 'github-light'],
-      langs: [
-        'javascript', 'typescript', 'python', 'css', 'html', 'json', 'bash',
-        'shell', 'sql', 'rust', 'go', 'java', 'ruby', 'php', 'c', 'cpp',
-        'yaml', 'markdown', 'xml', 'dockerfile', 'graphql', 'plaintext',
-      ],
-    })
-  }
-  return highlighter
-}
-
 export interface HighlightRequest {
   id: string
   code: string

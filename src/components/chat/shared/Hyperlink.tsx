@@ -7,14 +7,17 @@ interface HyperlinkProps {
 
 export function Hyperlink({ href, children }: HyperlinkProps) {
   const [showPreview, setShowPreview] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<number | null>(null)
 
   const handleMouseEnter = () => {
-    timerRef.current = setTimeout(() => setShowPreview(true), 500)
+    timerRef.current = window.setTimeout(() => setShowPreview(true), 500)
   }
 
   const handleMouseLeave = () => {
-    clearTimeout(timerRef.current)
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
     setShowPreview(false)
   }
 
@@ -33,7 +36,13 @@ export function Hyperlink({ href, children }: HyperlinkProps) {
       {showPreview && (
         <div
           className="absolute z-50 bottom-full left-0 mb-2 p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl min-w-[280px] max-w-[400px] animate-fade-in"
-          onMouseEnter={() => { clearTimeout(timerRef.current); setShowPreview(true) }}
+          onMouseEnter={() => {
+            if (timerRef.current !== null) {
+              window.clearTimeout(timerRef.current)
+              timerRef.current = null
+            }
+            setShowPreview(true)
+          }}
           onMouseLeave={() => setShowPreview(false)}
         >
           <div className="w-8 h-8 rounded-lg bg-[var(--color-accent-muted)] flex items-center justify-center mb-2">

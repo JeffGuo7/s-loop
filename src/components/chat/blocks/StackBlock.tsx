@@ -15,11 +15,9 @@ export function StackBlock({ parts, isStreaming }: StackBlockProps) {
   const [elapsed, setElapsed] = useState(0)
 
   const toolParts = parts.filter((p): p is ToolPart => p.type === 'tool')
-  const reasoningParts = parts.filter(p => p.type === 'reasoning')
   const hasRunningTool = toolParts.some(p => (p.state as any)?.status === 'running')
   const hasFailedTool = toolParts.some(p => (p.state as any)?.error)
   const toolCount = toolParts.length
-  const hasReasoning = reasoningParts.length > 0
 
   useEffect(() => {
     if (!isStreaming) {
