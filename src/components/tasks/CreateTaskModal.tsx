@@ -13,7 +13,7 @@ interface CreateTaskModalProps {
 export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
   const { t } = useTranslation();
   const { createTask } = useTaskStore();
-  const { providerConfigs, activeProvider } = useAppStore();
+  const { providerConfigs, activeProvider, activeSessionId, workspaceDir, createSession } = useAppStore();
   const { skills } = useSkillStore();
 
   const [name, setName] = useState('');
@@ -22,6 +22,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
   const [scheduleKind, setScheduleKind] = useState<ScheduleKind>('interval');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [deliver, setDeliver] = useState<'chat' | 'silent'>('chat');
+  const [provider, setProvider] = useState(activeProvider);
   const [model, setModel] = useState(providerConfigs[activeProvider]?.model || '');
   const [error, setError] = useState<string | null>(null);
 
@@ -31,13 +32,20 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
 
     try {
       const schedule = parseSchedule(scheduleInput.trim());
+      const deliverSessionId = deliver === 'chat'
+        ? (activeSessionId || createSession())
+        : undefined;
       await createTask({
         name: name.trim(),
         prompt: prompt.trim(),
         schedule,
         skills: selectedSkills,
+        provider,
         model,
+        apiKey: providerConfigs[provider]?.apiKey || '',
+        workspaceDir: workspaceDir || undefined,
         deliver,
+        deliverSessionId,
         enabled: true,
       });
       onClose();
@@ -96,10 +104,16 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
               <label className="flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">
                 <Cpu size={14} className="text-accent" /> {t('createTask.inferenceModel')}
               </label>
-              <select value={model} onChange={(e) => setModel(e.target.value)}
+              <select
+                value={provider}
+                onChange={(e) => {
+                  const nextProvider = e.target.value;
+                  setProvider(nextProvider);
+                  setModel(providerConfigs[nextProvider]?.model || '');
+                }}
                 className="w-full px-6 py-4.5 rounded-[20px] bg-surface-secondary/40 border border-border-light focus:bg-surface focus:border-accent/40 transition-all outline-none text-[15px] font-bold tracking-tight shadow-inner appearance-none cursor-pointer">
                 {Object.keys(providerConfigs).map((p) => (
-                  <option key={p} value={providerConfigs[p].model}>{providerConfigs[p].model} ({p})</option>
+                  <option key={p} value={p}>{providerConfigs[p].model || t('chat.status.noModel')} ({p})</option>
                 ))}
               </select>
             </div>

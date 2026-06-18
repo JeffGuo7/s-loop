@@ -34,14 +34,23 @@ export interface ScheduledTask {
   /** Per-task model/provider overrides */
   model?: string
   provider?: string
+  apiKey?: string
+  workspaceDir?: string
   /** Deliver output to the chat when done */
   deliver: 'chat' | 'silent'
+  deliverSessionId?: string
+  deliveredRunId?: string
+  deliveryError?: string
 
   enabled: boolean
   repeat?: RepeatConfig
 
   nextRunAt: number | null
   lastRunAt: number | null
+  lastStartedAt?: number | null
+  lastFinishedAt?: number | null
+  lastRunId?: string
+  lastTrigger?: 'manual' | 'scheduled'
   lastStatus: TaskStatus
   lastError?: string
   createdAt: number

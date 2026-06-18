@@ -69,10 +69,15 @@ const createCronPrompt = async (content, options) => {
   try {
     const model = getModel(options.providerID, options.modelID)
     if (!model) return { text: '', error: 'Model not found' }
+    const cwd = options.workspaceDir || process.cwd()
+    const tools = getTools(cwd, options.webSearchConfig)
+    const sysPrompt = options.systemPrompt || 'You are a helpful assistant.'
+    const fullPrompt = options.workspaceDir ? `${sysPrompt}\n\nWorkspace: ${options.workspaceDir}` : sysPrompt
     const agent = new Agent({
       initialState: {
-        systemPrompt: options.systemPrompt || 'You are a helpful assistant.',
+        systemPrompt: fullPrompt,
         model,
+        tools,
         thinkingLevel: 'off',
       },
       sessionId: options.sessionId || 'cron-' + Date.now(),
@@ -142,12 +147,13 @@ createServer((req, res) => {
 
         const params = body ? JSON.parse(body) : {}
         const result = await runTask(task, {
-          projectDir: params.projectDir || process.cwd(),
+          projectDir: params.projectDir || task.workspaceDir || process.cwd(),
           apiKey: task.apiKey || params.apiKey || '',
           defaultProvider: params.defaultProvider || 'anthropic',
           defaultModel: params.defaultModel || 'claude-sonnet-4-20250514',
           prompt: createCronPrompt,
           makeSession: true,
+          trigger: 'manual',
         })
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(result))
@@ -199,7 +205,7 @@ createServer((req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ healthy: true })); return
+    res.end(JSON.stringify({ healthy: true, service: 'snotra-pi-server', port: PORT })); return
   }
 
   if (req.method === 'GET' && url.pathname === '/models') {

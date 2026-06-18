@@ -15,6 +15,9 @@ import cronParser from 'cron-parser'
 
 const TICK_INTERVAL = 60_000  // check every 60s
 const ONESHOT_GRACE_MS = 120_000  // 2-min grace for one-shot tasks
+const RUNNING_STALE_MS = 15 * 60_000
+const MAX_CONCURRENT_RUNS = 2
+const _activeRuns = new Map()
 
 // Paths resolved at init time
 let _tasksDir = ''
@@ -116,11 +119,19 @@ export function createTask(taskData) {
     model: taskData.model || undefined,
     provider: taskData.provider || undefined,
     apiKey: taskData.apiKey || '',
+    workspaceDir: taskData.workspaceDir || undefined,
     deliver: taskData.deliver || 'chat',
+    deliverSessionId: taskData.deliverSessionId || undefined,
+    deliveredRunId: undefined,
+    deliveryError: undefined,
     enabled: taskData.enabled !== false,
     repeat: taskData.repeat || undefined,
     nextRunAt,
     lastRunAt: null,
+    lastStartedAt: null,
+    lastFinishedAt: null,
+    lastRunId: undefined,
+    lastTrigger: undefined,
     lastStatus: 'pending',
     lastError: undefined,
     createdAt: now,
@@ -150,10 +161,25 @@ export function getDueTasks() {
   const now = Date.now()
   const tasks = _loadTasksRaw()
   const due = []
+  let changed = false
 
   for (const task of tasks) {
     if (!task.enabled) continue
-    if (task.lastStatus === 'running') continue
+    if (task.lastStatus === 'running') {
+      const startedAt = task.lastStartedAt || task.lastRunAt || now
+      if (now - startedAt > RUNNING_STALE_MS) {
+        task.lastStatus = 'failed'
+        task.lastError = 'Recovered from stale running state'
+        task.lastFinishedAt = now
+        task.lastRunId = undefined
+        if (!task.nextRunAt && task.enabled && task.schedule.kind !== 'once') {
+          task.nextRunAt = _computeNextRun(task.schedule, startedAt)
+        }
+        changed = true
+      } else {
+        continue
+      }
+    }
 
     const nextRun = task.nextRunAt
     if (!nextRun) continue
@@ -166,7 +192,7 @@ export function getDueTasks() {
         const newNext = _computeNextRun(task.schedule, now)
         if (newNext) {
           task.nextRunAt = newNext
-          _saveTasks(tasks)
+          changed = true
         }
         continue
       }
@@ -174,18 +200,54 @@ export function getDueTasks() {
     }
   }
 
+  if (changed) {
+    _saveTasks(tasks)
+  }
+
   return due
 }
 
-export function markTaskRun(taskId, status, output, error) {
+export function markTaskRunning(taskId, runMeta = {}) {
+  const tasks = _loadTasksRaw()
+  const task = tasks.find(t => t.id === taskId)
+  if (!task) return null
+
+  const now = Date.now()
+  if (!task.enabled) return null
+  if (task.lastStatus === 'running') return null
+
+  task.lastStatus = 'running'
+  task.lastError = undefined
+  task.lastStartedAt = now
+  task.lastRunId = runMeta.runId || randomUUID()
+  task.lastTrigger = runMeta.trigger || 'scheduled'
+  task.nextRunAt = _computeNextRun(task.schedule, now)
+
+  if (!task.nextRunAt && task.schedule.kind === 'once') {
+    task.enabled = false
+  }
+
+  _saveTasks(tasks)
+  return { ...task }
+}
+
+export function markTaskRun(taskId, status, output, error, runMeta = {}) {
   const tasks = _loadTasksRaw()
   const task = tasks.find(t => t.id === taskId)
   if (!task) return null
 
   const now = Date.now()
   task.lastRunAt = now
+  task.lastFinishedAt = now
   task.lastStatus = status
   task.lastError = error || undefined
+  task.deliveryError = undefined
+  if (runMeta.runId) {
+    task.lastRunId = runMeta.runId
+  }
+  if (runMeta.trigger) {
+    task.lastTrigger = runMeta.trigger
+  }
 
   // Increment repeat count
   if (task.repeat) {
@@ -198,9 +260,11 @@ export function markTaskRun(taskId, status, output, error) {
     }
   }
 
-  // Compute next run
-  task.nextRunAt = _computeNextRun(task.schedule, now)
-  if (!task.nextRunAt) {
+  // Compute next run when it was not already reserved before execution
+  if (task.enabled && task.nextRunAt == null && task.schedule.kind !== 'once') {
+    task.nextRunAt = _computeNextRun(task.schedule, now)
+  }
+  if (!task.nextRunAt && task.schedule.kind === 'once') {
     task.enabled = false  // one-shot completed
   }
 
@@ -223,7 +287,7 @@ export function getTaskOutputs(taskId) {
   const files = readdirSync(dir).sort().reverse().slice(0, 10)
   return files.map(f => ({
     timestamp: f.replace(/\.md$/, '').replace(/-/g, ':').replace(/T/, ' ').replace(/.\d+Z/, ''),
-    content: readFileSync(join(dir, f), 'utf-8').slice(0, 500),
+    content: readFileSync(join(dir, f), 'utf-8'),
     file: f,
   }))
 }
@@ -238,19 +302,36 @@ export function getTaskOutputs(taskId) {
  * since the scheduler doesn't own those dependencies.
  */
 export async function runTask(task, deps) {
-  const { agent, apiKey } = deps
+  const { apiKey } = deps
   const startTime = Date.now()
+  const runId = randomUUID()
   let output = ''
   let error = undefined
+  let activeTask = null
+
+  if (_activeRuns.has(task.id)) {
+    return { success: false, output: '', error: 'Task is already running' }
+  }
+
+  activeTask = markTaskRunning(task.id, {
+    runId,
+    trigger: deps.trigger || 'scheduled',
+  })
+
+  if (!activeTask) {
+    return { success: false, output: '', error: 'Task could not be reserved for execution' }
+  }
+
+  _activeRuns.set(task.id, runId)
 
   try {
     // Build prompt with skills + context from chain
-    let fullPrompt = task.prompt
+    let fullPrompt = activeTask.prompt
 
     // Load skills — scan SKILL.md files from project
-    if (task.skills && task.skills.length > 0 && deps.projectDir) {
+    if (activeTask.skills && activeTask.skills.length > 0 && deps.projectDir) {
       const skillBlocks = []
-      for (const skillName of task.skills) {
+      for (const skillName of activeTask.skills) {
         const skillDir = join(deps.projectDir, 'skills', skillName)
         const skillFile = join(skillDir, 'SKILL.md')
         if (existsSync(skillFile)) {
@@ -264,9 +345,9 @@ export async function runTask(task, deps) {
     }
 
     // Load contextFrom (latest output from sibling tasks)
-    if (task.contextFrom && task.contextFrom.length > 0) {
+    if (activeTask.contextFrom && activeTask.contextFrom.length > 0) {
       const contextBlocks = []
-      for (const srcId of task.contextFrom) {
+      for (const srcId of activeTask.contextFrom) {
         const srcDir = join(_outputDir, srcId)
         if (existsSync(srcDir)) {
           const files = readdirSync(srcDir).sort()
@@ -291,10 +372,11 @@ export async function runTask(task, deps) {
     // Reuse the pi-server's Agent if this is a scheduled task
     const options = {
       systemPrompt: undefined,
-      providerID: task.provider || deps.defaultProvider,
-      modelID: task.model || deps.defaultModel,
+      providerID: activeTask.provider || deps.defaultProvider,
+      modelID: activeTask.model || deps.defaultModel,
       thinkingLevel: 'off',
-      apiKey: task.apiKey || apiKey,
+      apiKey: activeTask.apiKey || apiKey,
+      workspaceDir: activeTask.workspaceDir || deps.projectDir,
     }
     if (deps.makeSession) {
       // If running inside pi-server, create a session
@@ -313,19 +395,28 @@ export async function runTask(task, deps) {
     output = `Error: ${error}`
   }
 
-  // Save output to disk
-  const doc = `# Task: ${task.name}\n` +
-    `**Run:** ${new Date(startTime).toISOString()}\n` +
-    `**Duration:** ${((Date.now() - startTime) / 1000).toFixed(1)}s\n` +
-    `**Status:** ${error ? 'failed' : 'success'}\n\n` +
-    `## Output\n\n${output}\n`
+  try {
+    // Save output to disk
+    const doc = `# Task: ${task.name}\n` +
+      `**Run:** ${new Date(startTime).toISOString()}\n` +
+      `**Duration:** ${((Date.now() - startTime) / 1000).toFixed(1)}s\n` +
+      `**Status:** ${error ? 'failed' : 'success'}\n\n` +
+      `## Output\n\n${output}\n`
 
-  saveTaskOutput(task.id, doc)
+    saveTaskOutput(task.id, doc)
 
-  // Mark run
-  markTaskRun(task.id, error ? 'failed' : 'completed', output, error)
+    // Mark run
+    markTaskRun(task.id, error ? 'failed' : 'completed', output, error, {
+      runId,
+      trigger: deps.trigger || 'scheduled',
+    })
 
-  return { success: !error, output, error }
+    return { success: !error, output, error }
+  } finally {
+    if (_activeRuns.get(task.id) === runId) {
+      _activeRuns.delete(task.id)
+    }
+  }
 }
 
 // ─── Ticker ──────────────────────────────────────────────
@@ -341,10 +432,13 @@ export function startTicker(deps) {
 
   const tick = async () => {
     try {
-      const due = getDueTasks()
+      const capacity = Math.max(0, MAX_CONCURRENT_RUNS - _activeRuns.size)
+      if (capacity === 0) return
+
+      const due = getDueTasks().slice(0, capacity)
       for (const task of due) {
         // Fire-and-forget each due task
-        runTask(task, deps).catch(err => {
+        runTask(task, { ...deps, trigger: 'scheduled' }).catch(err => {
           console.error('[task-scheduler] run failed:', task.id, err?.message)
         })
       }
@@ -374,7 +468,7 @@ export function init(baseDir) {
 // Re-export for pi-server
 const cronJobs = {
   init, loadTasks, getTask, createTask, updateTask, removeTask,
-  getDueTasks, markTaskRun, saveTaskOutput, getTaskOutputs,
+  getDueTasks, markTaskRunning, markTaskRun, saveTaskOutput, getTaskOutputs,
   runTask, startTicker, stopTicker,
 }
 

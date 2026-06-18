@@ -13,7 +13,8 @@ export function TaskList({ onCreateTask }: TaskListProps) {
   const { t } = useTranslation();
   const { tasks, toggleTask, removeTask, triggerRun, fetchOutput } = useTaskStore();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [outputCache, setOutputCache] = useState<Record<string, { timestamp: string; content: string }[]>>({});
+  const [outputCache, setOutputCache] = useState<Record<string, { timestamp: string; content: string; file?: string }[]>>({});
+  const [loadingOutputId, setLoadingOutputId] = useState<string | null>(null);
 
   const formatNextRun = (timestamp: number | null) => {
     if (!timestamp) return t('tasks.completed');
@@ -41,6 +42,24 @@ export function TaskList({ onCreateTask }: TaskListProps) {
         return 'text-text-tertiary';
       default:
         return 'text-text-secondary';
+    }
+  };
+
+  const toggleOutputs = async (taskId: string) => {
+    if (expandedId === taskId) {
+      setExpandedId(null);
+      return;
+    }
+
+    setExpandedId(taskId);
+    if (outputCache[taskId]) return;
+
+    setLoadingOutputId(taskId);
+    try {
+      const outputs = await fetchOutput(taskId);
+      setOutputCache((prev) => ({ ...prev, [taskId]: outputs }));
+    } finally {
+      setLoadingOutputId((current) => (current === taskId ? null : current));
     }
   };
 
@@ -95,13 +114,14 @@ export function TaskList({ onCreateTask }: TaskListProps) {
               <div
                 key={task.id}
                 className={`
-                  group flex items-center gap-8 p-6 rounded-[32px] border transition-all duration-700
+                  group rounded-[32px] border transition-all duration-700 overflow-hidden
                   ${task.enabled
                     ? 'bg-surface border-border hover:border-accent/25 hover:shadow-3xl hover:shadow-accent/10 hover:-translate-y-1.5'
                     : 'bg-surface-secondary/60 border-border-light opacity-50 hover:opacity-80'
                   }
                 `}
               >
+                <div className="flex items-center gap-8 p-6">
                 {/* Status Indicator Dot */}
                 <div className="relative flex items-center justify-center shrink-0 ml-4">
                   <div className={`
@@ -124,10 +144,20 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                     <span className="shrink-0 text-[11px] font-bold uppercase tracking-[0.2em] px-5 py-1.5 rounded-full bg-accent-subtle text-accent border border-accent/15 shadow-sm">
                       {task.schedule.display}
                     </span>
+                    {task.deliver === 'chat' && task.deliverSessionId && (
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] px-4 py-1.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/15">
+                        Chat
+                      </span>
+                    )}
                   </div>
                   <p className="text-[14px] text-text-tertiary truncate mt-2 leading-relaxed font-bold opacity-70">
                     {task.prompt.slice(0, 100)}
                   </p>
+                  {(task.deliveredRunId || task.deliveryError) && (
+                    <p className={`text-[12px] mt-3 font-bold ${task.deliveryError ? 'text-red-500' : 'text-green-500/80'}`}>
+                      {task.deliveryError ? `投递失败: ${task.deliveryError}` : '已投递到聊天'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Status & Time */}
@@ -142,6 +172,13 @@ export function TaskList({ onCreateTask }: TaskListProps) {
 
                 {/* Actions */}
                 <div className="flex items-center gap-4 shrink-0 pr-4">
+                  <button
+                    onClick={() => toggleOutputs(task.id)}
+                    className="p-4 rounded-[16px] hover:bg-accent/10 text-text-quaternary hover:text-accent transition-all duration-500"
+                    title="View outputs"
+                  >
+                    <FileText size={20} />
+                  </button>
                   <button
                     onClick={() => toggleTask(task.id)}
                     className={`
@@ -168,6 +205,35 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                     <Trash2 size={20} />
                   </button>
                 </div>
+                </div>
+
+                {expandedId === task.id && (
+                  <div className="border-t border-border-light px-8 py-6 bg-surface-secondary/30">
+                    {loadingOutputId === task.id ? (
+                      <p className="text-[13px] font-bold text-text-tertiary opacity-70">正在加载任务输出...</p>
+                    ) : (outputCache[task.id]?.length ?? 0) === 0 ? (
+                      <p className="text-[13px] font-bold text-text-tertiary opacity-70">还没有可查看的执行输出。</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {outputCache[task.id].map((output) => (
+                          <div key={output.file || output.timestamp} className="rounded-[20px] border border-border-light bg-surface p-5">
+                            <div className="flex items-center justify-between gap-4 mb-3">
+                              <p className="text-[12px] font-bold uppercase tracking-[0.25em] text-accent">
+                                {output.timestamp}
+                              </p>
+                              {output.file && (
+                                <span className="text-[11px] text-text-quaternary font-mono">{output.file}</span>
+                              )}
+                            </div>
+                            <pre className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text-secondary font-mono max-h-80 overflow-auto scrollbar-subtle">
+                              {output.content}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

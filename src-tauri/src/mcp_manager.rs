@@ -2,8 +2,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::{mpsc, Arc, Mutex, RwLock};
+use std::time::Duration;
 
 // ---- Data Types ----
 
@@ -24,11 +25,25 @@ pub struct MCPServerStatus {
 
 // ---- Internal Process Manager ----
 
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+const MAX_DIAGNOSTIC_LINES: usize = 50;
+
+fn push_diagnostic(diagnostics: &Arc<Mutex<Vec<String>>>, stream: &str, line: String) {
+    if let Ok(mut messages) = diagnostics.lock() {
+        if messages.len() >= MAX_DIAGNOSTIC_LINES {
+            messages.remove(0);
+        }
+        messages.push(format!("{stream}: {line}"));
+    }
+}
+
 struct MCPServerProcess {
+    name: String,
     child: Child,
-    reader: BufReader<std::process::ChildStdout>,
-    writer: std::process::ChildStdin,
+    response_rx: mpsc::Receiver<Result<String, String>>,
+    writer: ChildStdin,
     tools: Vec<MCPTool>,
+    diagnostics: Arc<Mutex<Vec<String>>>,
 }
 
 impl MCPServerProcess {
@@ -43,14 +58,19 @@ impl MCPServerProcess {
 
         let stdin = child.stdin.take().ok_or("Failed to capture stdin")?;
         let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
-        let reader = BufReader::new(stdout);
+        let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+        let diagnostics = Arc::new(Mutex::new(Vec::new()));
+        let response_rx = Self::spawn_stdout_reader(name, stdout, Arc::clone(&diagnostics));
+        Self::spawn_stderr_drain(name, stderr, Arc::clone(&diagnostics));
         let writer = stdin;
 
         let mut process = Self {
+            name: name.to_string(),
             child,
-            reader,
+            response_rx,
             writer,
             tools: Vec::new(),
+            diagnostics,
         };
 
         // Step 1: Initialize
@@ -87,6 +107,77 @@ impl MCPServerProcess {
         Ok(process)
     }
 
+    fn spawn_stdout_reader(
+        name: &str,
+        stdout: ChildStdout,
+        diagnostics: Arc<Mutex<Vec<String>>>,
+    ) -> mpsc::Receiver<Result<String, String>> {
+        let (tx, rx) = mpsc::channel();
+        let server_name = name.to_string();
+
+        std::thread::spawn(move || {
+            for line in BufReader::new(stdout).lines() {
+                match line {
+                    Ok(line) => {
+                        push_diagnostic(&diagnostics, "stdout", line.clone());
+                        if tx.send(Ok(line)).is_err() {
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        let message = format!(
+                            "Failed to read response from MCP server '{}': {}",
+                            server_name, err
+                        );
+                        push_diagnostic(&diagnostics, "stdout", message.clone());
+                        let _ = tx.send(Err(message));
+                        break;
+                    }
+                }
+            }
+        });
+
+        rx
+    }
+
+    fn spawn_stderr_drain(
+        name: &str,
+        stderr: std::process::ChildStderr,
+        diagnostics: Arc<Mutex<Vec<String>>>,
+    ) {
+        let server_name = name.to_string();
+
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines() {
+                match line {
+                    Ok(line) => {
+                        push_diagnostic(&diagnostics, "stderr", line.clone());
+                        eprintln!("[snotra:mcp:{}] {}", server_name, line);
+                    }
+                    Err(err) => {
+                        let message =
+                            format!("Failed to drain stderr from MCP server '{}': {}", server_name, err);
+                        push_diagnostic(&diagnostics, "stderr", message.clone());
+                        eprintln!("[snotra:mcp:{}] {}", server_name, message);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    fn diagnostics_summary(&self) -> String {
+        if let Ok(messages) = self.diagnostics.lock() {
+            if messages.is_empty() {
+                String::new()
+            } else {
+                format!(" | diagnostics: {}", messages.join(" | "))
+            }
+        } else {
+            String::new()
+        }
+    }
+
     fn send_request(&mut self, id: u64, method: &str, params: Value) -> Result<Value, String> {
         let request = json!({
             "jsonrpc": "2.0",
@@ -103,10 +194,27 @@ impl MCPServerProcess {
         self.writer.flush().map_err(|e| e.to_string())?;
 
         loop {
-            let mut line = String::new();
-            self.reader
-                .read_line(&mut line)
-                .map_err(|e| format!("Failed to read response from MCP server '{}': {}", method, e))?;
+            let line = match self.response_rx.recv_timeout(REQUEST_TIMEOUT) {
+                Ok(Ok(line)) => line,
+                Ok(Err(err)) => return Err(err),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    return Err(format!(
+                        "Timed out waiting for MCP server '{}' to respond to '{}'/id={}{}",
+                        self.name,
+                        method,
+                        id,
+                        self.diagnostics_summary()
+                    ))
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(format!(
+                        "MCP server '{}' disconnected while waiting for '{}'{}",
+                        self.name,
+                        method,
+                        self.diagnostics_summary()
+                    ))
+                }
+            };
 
             if line.trim().is_empty() {
                 continue;
@@ -192,15 +300,36 @@ impl MCPServerProcess {
 
 // ---- Global State ----
 
+struct ServerHandle {
+    process: Mutex<MCPServerProcess>,
+}
+
 pub struct MCPManager {
-    processes: Mutex<HashMap<String, MCPServerProcess>>,
+    processes: RwLock<HashMap<String, Arc<ServerHandle>>>,
 }
 
 impl MCPManager {
     pub fn new() -> Self {
         Self {
-            processes: Mutex::new(HashMap::new()),
+            processes: RwLock::new(HashMap::new()),
         }
+    }
+
+    fn get_handle(&self, name: &str) -> Result<Arc<ServerHandle>, String> {
+        let processes = self.processes.read().map_err(|e| e.to_string())?;
+        processes
+            .get(name)
+            .cloned()
+            .ok_or_else(|| format!("Server '{}' not connected", name))
+    }
+
+    fn with_process<T, F>(&self, name: &str, f: F) -> Result<T, String>
+    where
+        F: FnOnce(&mut MCPServerProcess) -> Result<T, String>,
+    {
+        let handle = self.get_handle(name)?;
+        let mut process = handle.process.lock().map_err(|e| e.to_string())?;
+        f(&mut process)
     }
 
     pub fn connect(
@@ -209,33 +338,42 @@ impl MCPManager {
         command: &str,
         args: &[String],
     ) -> Result<MCPServerStatus, String> {
-        let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
+        let existing = {
+            let mut processes = self.processes.write().map_err(|e| e.to_string())?;
+            processes.remove(name)
+        };
 
-        if let Some(mut existing) = processes.remove(name) {
-            existing.shutdown();
+        if let Some(existing) = existing {
+            let mut process = existing.process.lock().map_err(|e| e.to_string())?;
+            process.shutdown();
         }
 
-        match MCPServerProcess::start(name, command, args) {
-            Ok(process) => {
-                let tools = process.tools.clone();
-                let status = MCPServerStatus {
-                    name: name.to_string(),
-                    status: "connected".to_string(),
-                    error: None,
-                    tools: tools.clone(),
-                };
-                processes.insert(name.to_string(), process);
-                Ok(status)
-            }
-            Err(e) => {
-                Err(format!("Connection failed: {}", e))
-            }
-        }
+        let process = MCPServerProcess::start(name, command, args)
+            .map_err(|e| format!("Connection failed: {}", e))?;
+        let status = MCPServerStatus {
+            name: name.to_string(),
+            status: "connected".to_string(),
+            error: None,
+            tools: process.tools.clone(),
+        };
+
+        let mut processes = self.processes.write().map_err(|e| e.to_string())?;
+        processes.insert(
+            name.to_string(),
+            Arc::new(ServerHandle {
+                process: Mutex::new(process),
+            }),
+        );
+        Ok(status)
     }
 
     pub fn disconnect(&self, name: &str) -> Result<(), String> {
-        let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
-        if let Some(mut process) = processes.remove(name) {
+        let handle = {
+            let mut processes = self.processes.write().map_err(|e| e.to_string())?;
+            processes.remove(name)
+        };
+        if let Some(handle) = handle {
+            let mut process = handle.process.lock().map_err(|e| e.to_string())?;
             process.shutdown();
             Ok(())
         } else {
@@ -244,19 +382,11 @@ impl MCPManager {
     }
 
     pub fn list_tools(&self, name: &str) -> Result<Vec<MCPTool>, String> {
-        let processes = self.processes.lock().map_err(|e| e.to_string())?;
-        let process = processes
-            .get(name)
-            .ok_or_else(|| format!("Server '{}' not connected", name))?;
-        Ok(process.tools.clone())
+        self.with_process(name, |process| Ok(process.tools.clone()))
     }
 
     pub fn refresh_tools(&self, name: &str) -> Result<Vec<MCPTool>, String> {
-        let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
-        let process = processes
-            .get_mut(name)
-            .ok_or_else(|| format!("Server '{}' not connected", name))?;
-        process.refresh_tools()
+        self.with_process(name, |process| process.refresh_tools())
     }
 
     pub fn call_tool(
@@ -265,42 +395,51 @@ impl MCPManager {
         tool_name: &str,
         arguments: Value,
     ) -> Result<Value, String> {
-        let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
-        let process = processes
-            .get_mut(name)
-            .ok_or_else(|| format!("Server '{}' not connected", name))?;
-        process.call_tool(tool_name, arguments)
+        self.with_process(name, |process| process.call_tool(tool_name, arguments))
     }
 
     pub fn get_status(&self, name: &str) -> Result<MCPServerStatus, String> {
-        let processes = self.processes.lock().map_err(|e| e.to_string())?;
-        let process = processes
-            .get(name)
-            .ok_or_else(|| format!("Server '{}' not connected", name))?;
-        Ok(MCPServerStatus {
-            name: name.to_string(),
-            status: "connected".to_string(),
-            error: None,
-            tools: process.tools.clone(),
-        })
-    }
-
-    pub fn list_servers(&self) -> Result<Vec<MCPServerStatus>, String> {
-        let processes = self.processes.lock().map_err(|e| e.to_string())?;
-        Ok(processes
-            .iter()
-            .map(|(name, process)| MCPServerStatus {
-                name: name.clone(),
+        self.with_process(name, |process| {
+            Ok(MCPServerStatus {
+                name: name.to_string(),
                 status: "connected".to_string(),
                 error: None,
                 tools: process.tools.clone(),
             })
-            .collect())
+        })
+    }
+
+    pub fn list_servers(&self) -> Result<Vec<MCPServerStatus>, String> {
+        let handles: Vec<(String, Arc<ServerHandle>)> = {
+            let processes = self.processes.read().map_err(|e| e.to_string())?;
+            processes
+                .iter()
+                .map(|(name, handle)| (name.clone(), Arc::clone(handle)))
+                .collect()
+        };
+
+        let mut statuses = Vec::with_capacity(handles.len());
+        for (name, handle) in handles {
+            let process = handle.process.lock().map_err(|e| e.to_string())?;
+            statuses.push(MCPServerStatus {
+                name,
+                status: "connected".to_string(),
+                error: None,
+                tools: process.tools.clone(),
+            });
+        }
+        Ok(statuses)
     }
 
     pub fn cleanup(&self) {
-        if let Ok(mut processes) = self.processes.lock() {
-            for (_, mut process) in processes.drain() {
+        let handles = if let Ok(mut processes) = self.processes.write() {
+            processes.drain().map(|(_, handle)| handle).collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+
+        for handle in handles {
+            if let Ok(mut process) = handle.process.lock() {
                 process.shutdown();
             }
         }

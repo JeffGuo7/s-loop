@@ -33,25 +33,18 @@ export function ChatView() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [dragTargetZone, setDragTargetZone] = useState<'message' | 'input'>('message')
   const containerRef = useRef<HTMLDivElement>(null)
-  const pidRef = useRef('')
-  const unsubRef = useRef<(() => void) | null>(null)
+  const streamUnsubsRef = useRef(new Map<string, () => void>())
 
-  const activeSessionIdRef = useRef(activeSessionId)
-  activeSessionIdRef.current = activeSessionId
-
-  const subscribeStream = useCallback((pid: string) => {
-    unsubRef.current?.()
-    unsubRef.current = Pi.subscribeStream(pid, {
+  const subscribeStream = useCallback((piSessionId: string, sid: string) => {
+    streamUnsubsRef.current.get(piSessionId)?.()
+    let unsubscribe = () => {}
+    unsubscribe = Pi.subscribeStream(piSessionId, {
       onText: (partPid, delta) => {
-        const sid = activeSessionIdRef.current
-        if (!sid) return
         if (useAppStore.getState().streamingMessage[sid]) {
           useAppStore.getState().appendStreamingDelta(sid, partPid, delta)
         }
       },
       onThinking: (delta) => {
-        const sid = activeSessionIdRef.current
-        if (!sid) return
         const sm = useAppStore.getState().streamingMessage[sid]
         if (!sm) return
         const parts = [...sm.parts]
@@ -69,8 +62,6 @@ export function ChatView() {
       onToolCall: (id, name, args) => {
         console.log('[Snotra] Tool call:', name, id)
         usePetStore.getState().onWorking()
-        const sid = activeSessionIdRef.current
-        if (!sid) return
         const sm = useAppStore.getState().streamingMessage[sid]
         if (!sm) return
         useAppStore.getState().updateStreamingPart(sid, id, {
@@ -80,8 +71,6 @@ export function ChatView() {
         } as any)
       },
       onToolResult: (id, name, result) => {
-        const sid = activeSessionIdRef.current
-        if (!sid) return
         const sm = useAppStore.getState().streamingMessage[sid]
         if (!sm) return
         useAppStore.getState().updateStreamingPart(sid, id, {
@@ -90,8 +79,12 @@ export function ChatView() {
           sessionID: sid, messageID: sm.messageID,
         } as any)
       },
-      onDone: () => { },
+      onDone: () => {
+        unsubscribe()
+        streamUnsubsRef.current.delete(piSessionId)
+      },
     })
+    streamUnsubsRef.current.set(piSessionId, unsubscribe)
   }, [])
 
   const session = sessions.find((s) => s.id === activeSessionId)
@@ -131,7 +124,6 @@ export function ChatView() {
         try {
           const ks = await Pi.createSession()
           pid = ks.id
-          pidRef.current = pid
           useAppStore.setState((state) => ({
             sessions: state.sessions.map((s) =>
               s.id === sid ? { ...s, piId: pid } : s,
@@ -142,12 +134,10 @@ export function ChatView() {
           usePetStore.getState().onError()
           return
         }
-      } else {
-        pidRef.current = pid
       }
 
       // Subscribe for streaming visual feedback
-      subscribeStream(pid)
+      subscribeStream(pid, sid)
 
       // Build context
       const agentStore = useAgentStore.getState()
@@ -258,11 +248,19 @@ export function ChatView() {
     [activeSessionId, activeProvider, providerConfigs, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream],
   )
 
+  const activePiSessionId = activeSessionId
+    ? (sessions.find((s) => s.id === activeSessionId) as any)?.piId ?? ''
+    : ''
+
   const abort = useCallback(() => {
-    if (pidRef.current) Pi.abortSession(pidRef.current)
+    if (activePiSessionId) {
+      Pi.abortSession(activePiSessionId)
+      streamUnsubsRef.current.get(activePiSessionId)?.()
+      streamUnsubsRef.current.delete(activePiSessionId)
+    }
     if (activeSessionId) finishStreaming(activeSessionId)
     usePetStore.getState().onResponded()
-  }, [activeSessionId, finishStreaming])
+  }, [activePiSessionId, activeSessionId, finishStreaming])
 
   // ── File/folder drag into message area ──
 

@@ -1,5 +1,3 @@
-import type { MessagePart } from '../types'
-
 const DEFAULT_BASE = 'http://127.0.0.1:4096'
 let _base = DEFAULT_BASE
 
@@ -33,8 +31,12 @@ export interface PromptResult {
   error?: string
 }
 
-let _currentAbort: AbortController | null = null
-let _currentCallbacks: PiStreamCallbacks | null = null
+interface StreamState {
+  abortController?: AbortController
+  callbacks?: PiStreamCallbacks
+}
+
+const _streams = new Map<string, StreamState>()
 
 export async function fetchModels(provider: string, apiKey?: string, baseUrl?: string): Promise<Array<{ id: string; name: string }>> {
   try {
@@ -73,23 +75,21 @@ export async function createSession(): Promise<{ id: string }> {
   return res.json()
 }
 
-function parseSSELine(line: string): { event: string; data: any } | null {
-  const trimmed = line.trim()
-  if (!trimmed || trimmed.startsWith(':')) return null
-  const eventMatch = trimmed.match(/^event: (.+)$/)
-  const dataMatch = trimmed.match(/^data: (.+)$/)
-  if (eventMatch) return null // return on data line
-  if (dataMatch) return null
-  return null
-}
-
 export function subscribeStream(
-  _sessionId: string,
+  sessionId: string,
   callbacks: PiStreamCallbacks,
 ): () => void {
-  _currentCallbacks = callbacks
+  const existing = _streams.get(sessionId) || {}
+  _streams.set(sessionId, { ...existing, callbacks })
+
   return () => {
-    _currentCallbacks = null
+    const current = _streams.get(sessionId)
+    if (!current || current.callbacks !== callbacks) return
+    if (current.abortController) {
+      _streams.set(sessionId, { abortController: current.abortController })
+    } else {
+      _streams.delete(sessionId)
+    }
   }
 }
 
@@ -113,7 +113,8 @@ export async function prompt(
   },
 ): Promise<PromptResult> {
   const controller = new AbortController()
-  _currentAbort = controller
+  const existing = _streams.get(sessionId) || {}
+  _streams.set(sessionId, { ...existing, abortController: controller })
 
   try {
     const body: Record<string, any> = { content }
@@ -145,8 +146,6 @@ export async function prompt(
     let buffer = ''
     let resultText = ''
 
-    const cb = _currentCallbacks
-
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -171,6 +170,7 @@ export async function prompt(
           if (dataLine.startsWith('data: ')) {
             try {
               const data = JSON.parse(dataLine.slice(6))
+              const cb = _streams.get(sessionId)?.callbacks
               switch (eventType) {
                 case 'text_delta':
                   cb?.onText(data.pid || '', data.delta)
@@ -188,14 +188,17 @@ export async function prompt(
                   break
                 case 'result':
                   resultText = data.text || ''
-                  cb?.onResult(resultText)
+                  cb?.onResult?.(resultText)
                   break
                 case 'error':
                   resultText = `Error: ${data.message}`
-                  cb?.onError(data.message)
+                  cb?.onError?.(data.message)
                   break
               }
-              if (eventType === 'done') return { text: resultText }
+              if (eventType === 'done') {
+                cb?.onDone()
+                return { text: resultText }
+              }
             } catch { /* skip invalid JSON */ }
           }
           // Consume the data line
@@ -212,12 +215,27 @@ export async function prompt(
     if ((err as any)?.name === 'AbortError') return { text: '' }
     return { text: '', error: err instanceof Error ? err.message : String(err) }
   } finally {
-    _currentAbort = null
-    _currentCallbacks = null
+    const current = _streams.get(sessionId)
+    if (current?.abortController === controller) {
+      if (current.callbacks) {
+        _streams.set(sessionId, { callbacks: current.callbacks })
+      } else {
+        _streams.delete(sessionId)
+      }
+    }
   }
 }
 
-export function abortSession(_sessionId?: string): void {
-  _currentAbort?.abort()
-  _currentAbort = null
+export function abortSession(sessionId?: string): void {
+  if (!sessionId) return
+
+  const current = _streams.get(sessionId)
+  current?.abortController?.abort()
+
+  if (!current) return
+  if (current.callbacks) {
+    _streams.set(sessionId, { callbacks: current.callbacks })
+  } else {
+    _streams.delete(sessionId)
+  }
 }

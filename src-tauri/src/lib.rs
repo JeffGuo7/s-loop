@@ -8,6 +8,8 @@ use crate::pi_server::{PiServerProcess, PiServerState};
 use std::sync::{Arc, Mutex};
 
 const PI_SERVER_PORT: u16 = 4096;
+const PI_SERVER_PORT_SEARCH_LIMIT: u16 = 20;
+const PI_SERVER_SERVICE_MARKER: &str = "\"service\":\"snotra-pi-server\"";
 
 #[allow(dead_code)]
 fn check_server_healthy(port: u16) -> bool {
@@ -26,62 +28,41 @@ fn check_server_healthy(port: u16) -> bool {
     if stream.read_to_string(&mut response).is_err() {
         return false;
     }
-    response.contains("200 OK") || response.contains("healthy")
+    response.contains("200 OK")
+        && response.contains("\"healthy\":true")
+        && response.contains(PI_SERVER_SERVICE_MARKER)
 }
 
-/// Kill any process listening on the given port (Windows only).
-/// Parses netstat -ano output for the port and kills the owning PID.
-/// Uses only the port number for matching — no locale-dependent strings.
-#[cfg(windows)]
-fn kill_process_on_port(port: u16) {
-    use std::process::Command;
-    let output = Command::new("netstat")
-        .args(["-ano"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok());
-    let Some(stdout) = output else { return };
-    let port_str = format!(":{port}");
-    for line in stdout.lines() {
-        if !line.contains(&port_str) { continue; }
-        let pid = line.split_whitespace().last().unwrap_or("");
-        if let Ok(pid) = pid.parse::<u32>() {
-            if pid > 0 {
-                let _ = Command::new("taskkill")
-                    .args(["/F", "/T", "/PID", &pid.to_string()])
-                    .output();
-            }
+fn port_from_url(url: &str) -> Option<u16> {
+    url.rsplit(':')
+        .next()
+        .map(|segment| segment.trim_end_matches('/'))
+        .and_then(|segment| segment.parse::<u16>().ok())
+}
+
+fn find_available_port(preferred: u16) -> Result<u16, String> {
+    for offset in 0..=PI_SERVER_PORT_SEARCH_LIMIT {
+        let port = preferred + offset;
+        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return Ok(port);
         }
     }
-}
-
-#[cfg(not(windows))]
-fn kill_process_on_port(_port: u16) {
-    // Non-Windows: use lsof + kill
-    let _ = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(format!("lsof -ti :{_port} | xargs kill -9 2>/dev/null"))
-        .output();
+    Err(format!(
+        "No available port found in range {}-{}",
+        preferred,
+        preferred + PI_SERVER_PORT_SEARCH_LIMIT
+    ))
 }
 
 fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, String> {
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
-    if guard.is_some() {
-        return Err("pi-server is already running".into());
-    }
-
-    // Kill any process on our port to guarantee a fresh start
-    if std::net::TcpStream::connect(format!("127.0.0.1:{PI_SERVER_PORT}")).is_ok() {
-        eprintln!("[snotra] Killing old process on port {PI_SERVER_PORT}...");
-        kill_process_on_port(PI_SERVER_PORT);
-        // Wait up to 3 seconds for the port to be fully released
-        for _ in 0..6 {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            if std::net::TcpStream::connect(format!("127.0.0.1:{PI_SERVER_PORT}")).is_err() {
-                break;
+    if let Some(existing) = guard.as_ref() {
+        if let Some(port) = port_from_url(&existing.url) {
+            if check_server_healthy(port) {
+                return Ok(existing.url.clone());
             }
-            eprintln!("[snotra] Port still occupied, waiting...");
         }
+        drop(guard.take());
     }
 
     // Retry up to 3 times — port cleanup may take a moment on Windows
@@ -90,7 +71,22 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
         if attempt > 0 {
             std::thread::sleep(std::time::Duration::from_millis(1000));
         }
-        match PiServerProcess::start(project_dir, PI_SERVER_PORT) {
+        let port = match find_available_port(PI_SERVER_PORT) {
+            Ok(port) => port,
+            Err(e) => {
+                last_err = e;
+                continue;
+            }
+        };
+
+        if port != PI_SERVER_PORT {
+            eprintln!(
+                "[snotra] Preferred port {} is occupied, falling back to {}.",
+                PI_SERVER_PORT, port
+            );
+        }
+
+        match PiServerProcess::start(project_dir, port) {
             Ok(proc) => {
                 let url = proc.url.clone();
                 *guard = Some(proc);
@@ -144,76 +140,77 @@ fn stop_server(state: tauri::State<PiServerState>) -> Result<(), String> {
 
 #[tauri::command]
 fn server_status(state: tauri::State<PiServerState>) -> Result<bool, String> {
-    let guard = state.0.lock().map_err(|e| e.to_string())?;
-    Ok(guard.is_some())
+    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(existing) = guard.as_ref() {
+        if let Some(port) = port_from_url(&existing.url) {
+            if check_server_healthy(port) {
+                return Ok(true);
+            }
+        }
+        drop(guard.take());
+    }
+    Ok(false)
 }
 
 // ---- MCP Commands ----
 
 #[tauri::command]
 fn mcp_connect(
-    state: tauri::State<Mutex<MCPManager>>,
+    state: tauri::State<MCPManager>,
     name: String,
     command: String,
     args: Vec<String>,
 ) -> Result<mcp_manager::MCPServerStatus, String> {
-    let manager = state.lock().map_err(|e| e.to_string())?;
-    manager.connect(&name, &command, &args)
+    state.connect(&name, &command, &args)
 }
 
 #[tauri::command]
 fn mcp_disconnect(
-    state: tauri::State<Mutex<MCPManager>>,
+    state: tauri::State<MCPManager>,
     name: String,
 ) -> Result<(), String> {
-    let manager = state.lock().map_err(|e| e.to_string())?;
-    manager.disconnect(&name)
+    state.disconnect(&name)
 }
 
 #[tauri::command]
 fn mcp_refresh_tools(
-    state: tauri::State<Mutex<MCPManager>>,
+    state: tauri::State<MCPManager>,
     name: String,
 ) -> Result<Vec<mcp_manager::MCPTool>, String> {
-    let manager = state.lock().map_err(|e| e.to_string())?;
-    manager.refresh_tools(&name)
+    state.refresh_tools(&name)
 }
 
 #[tauri::command]
 fn mcp_list_tools(
-    state: tauri::State<Mutex<MCPManager>>,
+    state: tauri::State<MCPManager>,
     name: String,
 ) -> Result<Vec<mcp_manager::MCPTool>, String> {
-    let manager = state.lock().map_err(|e| e.to_string())?;
-    manager.list_tools(&name)
+    state.list_tools(&name)
 }
 
 #[tauri::command]
 fn mcp_call_tool(
-    state: tauri::State<Mutex<MCPManager>>,
+    state: tauri::State<MCPManager>,
     name: String,
     tool_name: String,
     arguments: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    let manager = state.lock().map_err(|e| e.to_string())?;
-    manager.call_tool(&name, &tool_name, arguments)
+    state.call_tool(&name, &tool_name, arguments)
 }
 
 #[tauri::command]
 fn mcp_list_servers(
-    state: tauri::State<Mutex<MCPManager>>,
+    state: tauri::State<MCPManager>,
 ) -> Result<Vec<mcp_manager::MCPServerStatus>, String> {
-    let manager = state.lock().map_err(|e| e.to_string())?;
-    manager.list_servers()
+    state.list_servers()
 }
 
 #[tauri::command]
 fn mcp_get_status(
-    state: tauri::State<Mutex<MCPManager>>,
+    state: tauri::State<MCPManager>,
     name: String,
 ) -> Result<mcp_manager::MCPServerStatus, String> {
-    let manager = state.lock().map_err(|e| e.to_string())?;
-    manager.get_status(&name)
+    state.get_status(&name)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -244,7 +241,7 @@ pub fn run() {
             mcp_list_servers,
             mcp_get_status,
         ])
-        .manage(Mutex::new(MCPManager::new()))
+        .manage(MCPManager::new())
         .setup(move |_app| {
             let state = PiServerState(server_state_arc);
             tauri::async_runtime::spawn(async move {

@@ -1,6 +1,7 @@
-use std::io::BufRead;
+use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::{Duration, Instant};
 
 pub struct PiServerProcess {
     child: Option<Child>,
@@ -41,50 +42,92 @@ impl PiServerProcess {
 
         let stdout = child.stdout.take().ok_or("No stdout")?;
         let stderr = child.stderr.take().ok_or("No stderr")?;
-        let reader = std::io::BufReader::new(stdout);
-        let err_reader = std::io::BufReader::new(stderr);
+        let diagnostics = Arc::new(Mutex::new(Vec::<String>::new()));
+        let stdout_diagnostics = Arc::clone(&diagnostics);
+        let stderr_diagnostics = Arc::clone(&diagnostics);
+        let (ready_tx, ready_rx) = mpsc::channel::<String>();
         let mut url = String::new();
-        let mut errors = String::new();
 
-        for line in reader.lines() {
-            let Ok(line) = line else { continue };
-            if line.contains("listening on") {
-                if let Some(start) = line.find("http") {
-                    url = line[start..].trim().to_string();
-                } else {
-                    url = format!("http://127.0.0.1:{}", port);
+        std::thread::spawn(move || {
+            let mut announced_ready = false;
+            for line in BufReader::new(stdout).lines() {
+                let Ok(line) = line else { continue };
+                if let Ok(mut messages) = stdout_diagnostics.lock() {
+                    if messages.len() >= 50 {
+                        messages.remove(0);
+                    }
+                    messages.push(format!("stdout: {line}"));
                 }
-                break;
+                if line.contains("Error:") || line.contains("error:") {
+                    eprintln!("[pi-server] {}", line);
+                }
+                if !announced_ready && line.contains("listening on") {
+                    let detected_url = if let Some(start) = line.find("http") {
+                        line[start..].trim().to_string()
+                    } else {
+                        format!("http://127.0.0.1:{}", port)
+                    };
+                    let _ = ready_tx.send(detected_url);
+                    announced_ready = true;
+                }
             }
-            if line.contains("Error:") || line.contains("error:") {
-                eprintln!("[pi-server] {}", line);
+        });
+
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines() {
+                let Ok(line) = line else { continue };
+                if let Ok(mut messages) = stderr_diagnostics.lock() {
+                    if messages.len() >= 50 {
+                        messages.remove(0);
+                    }
+                    messages.push(format!("stderr: {line}"));
+                }
+                if line.contains("Error:") || line.contains("error:") {
+                    eprintln!("[pi-server] {}", line);
+                }
+            }
+        });
+
+        let start_time = Instant::now();
+        let startup_timeout = Duration::from_secs(30);
+
+        while url.is_empty() && start_time.elapsed() < startup_timeout {
+            match ready_rx.recv_timeout(Duration::from_millis(250)) {
+                Ok(detected_url) => {
+                    url = detected_url;
+                    break;
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {}
+            }
+
+            if let Some(status) = child
+                .try_wait()
+                .map_err(|e| format!("Failed to inspect pi-server process: {e}"))?
+            {
+                let _ = status;
+                break;
             }
         }
 
         if url.is_empty() {
             let _ = child.kill();
             let _ = child.wait();
-            // Drain stderr for diagnostics
-            for line in err_reader.lines() {
-                if let Ok(line) = line {
-                    errors.push_str(&line);
-                    errors.push('\n');
+            let details = if let Ok(messages) = diagnostics.lock() {
+                if messages.is_empty() {
+                    if start_time.elapsed() >= startup_timeout {
+                        " (startup timed out waiting for listening URL)".into()
+                    } else {
+                        " (port may not have been released yet)".into()
+                    }
+                } else {
+                    format!(": {}", messages.join(" | "))
                 }
-            }
-            let details = if !errors.is_empty() {
-                format!(": {}", errors.trim())
             } else {
-                " (port may not have been released yet)".into()
+                " (startup diagnostics unavailable)".into()
             };
             return Err(format!("pi-server started but no listening URL detected{}", details));
         }
-
-        // Spawn a background thread to drain stderr so the pipe doesn't fill up
-        std::thread::spawn(move || {
-            for _line in err_reader.lines() {
-                // discarded — just draining to prevent pipe deadlock
-            }
-        });
 
         Ok(Self { child: Some(child), url })
     }

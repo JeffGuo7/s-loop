@@ -13,10 +13,12 @@ import { useSkillStore } from './stores/skillStore'
 import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
+import { setBaseUrl } from './utils/piClient'
 
 export type Page = 'chat' | 'tasks' | 'platforms' | 'pet'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+const APP_STORAGE_KEY = 'snotra-storage'
 
 function App() {
   const { theme, sidebarCollapsed, toggleSidebar } = useAppStore()
@@ -63,11 +65,33 @@ function App() {
   }, [theme])
 
   useEffect(() => {
+    if (!inTauri) return
+
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        const url = await invoke<string>('start_server')
+        if (!cancelled && url) {
+          setBaseUrl(url)
+        }
+      } catch (err) {
+        console.warn('[app] failed to resolve pi-server url:', err)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     useMCPStore.getState().refreshAllServers().catch(() => {})
     useSkillStore.getState().refreshSkills().catch(() => {})
 
     initDatabase().then(async () => {
-      const storedState = localStorage.getItem('snotra-app-storage')
+      const storedState = localStorage.getItem(APP_STORAGE_KEY)
       if (storedState) {
         try {
           const parsed = JSON.parse(storedState)
@@ -95,7 +119,9 @@ function App() {
               }
             }
           }
-        } catch { /* migration failed, continue with empty DB */ }
+        } catch (err) {
+          console.error('[app] failed to migrate persisted sessions into SQLite:', err)
+        }
       }
 
       await useAppStore.getState().loadFromDb()
