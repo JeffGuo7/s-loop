@@ -36,7 +36,7 @@ function getFileIcon(name: string): LucideIcon {
 
 function attachFileByEvent(path: string, name: string) {
   window.dispatchEvent(
-    new CustomEvent('snotra-file-attach', {
+    new CustomEvent('s-loop-file-attach', {
       detail: { path, name },
     }),
   )
@@ -117,7 +117,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
     (e: React.DragEvent) => {
       draggingRef.current = true
       e.dataTransfer.setData('text/plain', path)
-      e.dataTransfer.setData('application/x-snotra-file', JSON.stringify({ path, name, isDir }))
+      e.dataTransfer.setData('application/x-s-loop-file', JSON.stringify({ path, name, isDir }))
       e.dataTransfer.effectAllowed = 'copy'
     },
     [path, name, isDir],

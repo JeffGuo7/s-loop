@@ -1,4 +1,4 @@
-# Snotra
+# S-Loop
 
 AI 桌面助手 — Tauri 2 桌面应用，后端集成 [Pi Agent SDK](https://github.com/earendil-works/pi-mono) (Node.js 进程) 作为 AI 引擎，支持 500+ 模型、原生工具调用 (bash/read/write/web_search)、MCP 工具系统、Skills 技能系统、定时任务、桌面宠物、Telegram 集成。
 
@@ -18,7 +18,7 @@ AI 桌面助手 — Tauri 2 桌面应用，后端集成 [Pi Agent SDK](https://g
 ## 架构
 
 ```
-Snotra (Tauri 2)
+S-Loop (Tauri 2)
   │
   ├── Rust ──spawn──► pi-server (Node.js)
   │                     │
@@ -68,7 +68,7 @@ Snotra (Tauri 2)
 ### 安装
 
 ```bash
-cd Snotra
+cd s-loop
 npm install
 ```
 
@@ -117,7 +117,7 @@ npm run tauri:build
 ## 项目结构
 
 ```
-Snotra/
+S-Loop/
 ├── src/                     # React 前端
 │   ├── components/
 │   │   ├── chat/            # ChatView, ChatInput, MessageList, MessageItem

@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    snotra_temp_lib::run()
+    s_loop_lib::run()
 }

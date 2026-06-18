@@ -85,7 +85,7 @@ export const usePlatformStore = create<PlatformState>()(
         const platform = get().platforms.find((p) => p.id === id)
         if (!platform || !platform.connected) return 'Not connected'
         try {
-          await get().send(id, `Test message from Snotra at ${new Date().toLocaleString()}`)
+          await get().send(id, `Test message from S-Loop at ${new Date().toLocaleString()}`)
           return null
         } catch (err) {
           return err instanceof Error ? err.message : 'Test failed'

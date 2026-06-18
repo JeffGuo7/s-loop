@@ -1,6 +1,6 @@
 const en = {
   titlebar: {
-    appName: 'Snotra',
+    appName: 'S-Loop',
   },
   sidebar: {
     newChat: 'New Chat',
@@ -21,10 +21,10 @@ const en = {
   chat: {
     welcome: {
       title: 'Welcome to',
-      appName: 'Snotra',
+      appName: 'S-Loop',
       description: 'Your intelligent orchestration workspace. Seamlessly manage agents, files, and workflows.',
       newConversation: 'New Conversation',
-      subtitle: 'Snotra Workspace',
+      subtitle: 'S-Loop Workspace',
       howCanIHelp: 'How can I help?',
       emptyDesc: 'Seamlessly orchestrate your workspace, files, and AI agents.',
     },
@@ -159,7 +159,7 @@ const en = {
     },
     websearch: {
       title: 'Web Search',
-      description: 'Configure how Snotra searches the web. DDGS works out-of-the-box with no configuration.',
+      description: 'Configure how S-Loop searches the web. DDGS works out-of-the-box with no configuration.',
       searchEngine: 'Search Engine',
       maxResults: 'Max Results',
       usingProvider: 'Active provider',

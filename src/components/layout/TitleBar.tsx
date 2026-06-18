@@ -39,7 +39,7 @@ export function TitleBar() {
           </span>
         </div>
         <span className="text-[12px] font-black uppercase tracking-[0.3em] text-text-tertiary opacity-40">
-          Snotra
+          S-Loop
         </span>
       </div>
 

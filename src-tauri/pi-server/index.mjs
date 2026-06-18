@@ -205,7 +205,7 @@ createServer((req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ healthy: true, service: 'snotra-pi-server', port: PORT })); return
+    res.end(JSON.stringify({ healthy: true, service: 's-loop-pi-server', port: PORT })); return
   }
 
   if (req.method === 'GET' && url.pathname === '/models') {
@@ -343,10 +343,10 @@ createServer((req, res) => {
   }
 
   // Initialize and start task scheduler
-  const snotraDir = process.env.SNOTRA_PROJECT_DIR || process.cwd()
-  initTasks(snotraDir)
+  const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+  initTasks(sLoopDir)
   startTicker({
-    projectDir: snotraDir,
+    projectDir: sLoopDir,
     apiKey: process.env.PI_API_KEY || '',
     defaultProvider: 'anthropic',
     defaultModel: 'claude-sonnet-4-20250514',

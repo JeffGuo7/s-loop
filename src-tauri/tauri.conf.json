@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Snotra",
+  "productName": "S-Loop",
   "version": "0.1.0",
-  "identifier": "com.snotra.app",
+  "identifier": "com.sloop.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Snotra",
+        "title": "S-Loop",
         "width": 1280,
         "height": 800,
         "minWidth": 800,

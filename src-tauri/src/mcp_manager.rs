@@ -80,13 +80,13 @@ impl MCPServerProcess {
             json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": { "name": "snotra", "version": "1.0.0" }
+                "clientInfo": { "name": "s-loop", "version": "1.0.0" }
             }),
         )?;
 
         let server_info = result.get("serverInfo").and_then(|i| i.get("name")).and_then(|n| n.as_str()).unwrap_or("unknown");
         let protocol_version = result.get("protocolVersion").and_then(|v| v.as_str()).unwrap_or("unknown");
-        eprintln!("[snotra:mcp] Server '{}' connected: name={}, protocol={}", name, server_info, protocol_version);
+        eprintln!("[s-loop:mcp] Server '{}' connected: name={}, protocol={}", name, server_info, protocol_version);
 
         // Step 2: Send initialized notification (no response expected)
         let notif = json!({
@@ -152,13 +152,13 @@ impl MCPServerProcess {
                 match line {
                     Ok(line) => {
                         push_diagnostic(&diagnostics, "stderr", line.clone());
-                        eprintln!("[snotra:mcp:{}] {}", server_name, line);
+                        eprintln!("[s-loop:mcp:{}] {}", server_name, line);
                     }
                     Err(err) => {
                         let message =
                             format!("Failed to drain stderr from MCP server '{}': {}", server_name, err);
                         push_diagnostic(&diagnostics, "stderr", message.clone());
-                        eprintln!("[snotra:mcp:{}] {}", server_name, message);
+                        eprintln!("[s-loop:mcp:{}] {}", server_name, message);
                         break;
                     }
                 }
@@ -224,7 +224,7 @@ impl MCPServerProcess {
             let response = match response {
                 Ok(r) => r,
                 Err(e) => {
-                    eprintln!("[snotra:mcp] JSON parse error: {} | line: {}", e, line.trim());
+                    eprintln!("[s-loop:mcp] JSON parse error: {} | line: {}", e, line.trim());
                     continue;
                 }
             };
@@ -243,7 +243,7 @@ impl MCPServerProcess {
                     return Ok(response.get("result").cloned().unwrap_or(json!(null)));
                 }
                 Some(Value::Number(_)) => {
-                    eprintln!("[snotra:mcp] Unexpected response ID for request {} on method {}", id, method);
+                    eprintln!("[s-loop:mcp] Unexpected response ID for request {} on method {}", id, method);
                     continue;
                 }
                 _ => {

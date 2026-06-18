@@ -60,7 +60,7 @@ export function ChatView() {
         }
       },
       onToolCall: (id, name, args) => {
-        console.log('[Snotra] Tool call:', name, id)
+        console.log('[S-Loop] Tool call:', name, id)
         usePetStore.getState().onWorking()
         const sm = useAppStore.getState().streamingMessage[sid]
         if (!sm) return
@@ -304,7 +304,7 @@ export function ChatView() {
     e.preventDefault()
     setIsDragOver(false)
 
-    const fileData = e.dataTransfer.getData('application/x-snotra-file')
+    const fileData = e.dataTransfer.getData('application/x-s-loop-file')
     if (!fileData) return
 
     const { path, name, isDir } = JSON.parse(fileData)

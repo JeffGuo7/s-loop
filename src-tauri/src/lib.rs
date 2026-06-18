@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 const PI_SERVER_PORT: u16 = 4096;
 const PI_SERVER_PORT_SEARCH_LIMIT: u16 = 20;
-const PI_SERVER_SERVICE_MARKER: &str = "\"service\":\"snotra-pi-server\"";
+const PI_SERVER_SERVICE_MARKER: &str = "\"service\":\"s-loop-pi-server\"";
 
 #[allow(dead_code)]
 fn check_server_healthy(port: u16) -> bool {
@@ -81,7 +81,7 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
 
         if port != PI_SERVER_PORT {
             eprintln!(
-                "[snotra] Preferred port {} is occupied, falling back to {}.",
+                "[s-loop] Preferred port {} is occupied, falling back to {}.",
                 PI_SERVER_PORT, port
             );
         }
@@ -93,7 +93,7 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
                 return Ok(url);
             }
             Err(e) => {
-                eprintln!("[snotra] Start attempt {} failed: {}", attempt + 1, e);
+                eprintln!("[s-loop] Start attempt {} failed: {}", attempt + 1, e);
                 last_err = e;
             }
         }
@@ -103,6 +103,9 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
 }
 
 fn resolve_project_dir() -> String {
+    if let Some(dir) = std::env::var("S_LOOP_PROJECT_DIR").ok() {
+        return dir;
+    }
     if let Some(dir) = std::env::var("SNOTRA_PROJECT_DIR").ok() {
         return dir;
     }
@@ -246,8 +249,8 @@ pub fn run() {
             let state = PiServerState(server_state_arc);
             tauri::async_runtime::spawn(async move {
                 match do_start_server(&state, &project_dir) {
-                    Ok(url) => eprintln!("[snotra] pi-server started at {url}"),
-                    Err(e) => eprintln!("[snotra] pi-server start failed: {e}"),
+                    Ok(url) => eprintln!("[s-loop] pi-server started at {url}"),
+                    Err(e) => eprintln!("[s-loop] pi-server start failed: {e}"),
                 }
             });
             Ok(())

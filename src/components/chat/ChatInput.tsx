@@ -48,8 +48,8 @@ export function ChatInput({
         })
       }
     }
-    window.addEventListener('snotra-file-attach', handler)
-    return () => window.removeEventListener('snotra-file-attach', handler)
+    window.addEventListener('s-loop-file-attach', handler)
+    return () => window.removeEventListener('s-loop-file-attach', handler)
   }, [])
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -60,7 +60,7 @@ export function ChatInput({
     const newAttachments: FileAttachment[] = []
 
     // Internal file drag (from FileTree) — path is in dataTransfer
-    const fileData = e.dataTransfer.getData('application/x-snotra-file')
+    const fileData = e.dataTransfer.getData('application/x-s-loop-file')
     if (fileData) {
       try {
         const { path, name } = JSON.parse(fileData)

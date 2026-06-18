@@ -1,9 +1,9 @@
 /**
- * Task scheduler — cron engine for Snotra.
+ * Task scheduler — cron engine for S-Loop.
  * Inspired by hermes-agent-main's cron/jobs.py design.
  *
- * Tasks are stored in {snotra_data}/tasks/tasks.json
- * Execution output saved to {snotra_data}/tasks/output/{taskId}/{timestamp}.md
+ * Tasks are stored in {s-loop_data}/tasks/tasks.json
+ * Execution output saved to {s-loop_data}/tasks/output/{taskId}/{timestamp}.md
  *
  * The scheduler runs inside pi-server tick() every 60 seconds.
  * It does NOT need the frontend to be open — survives app restart.

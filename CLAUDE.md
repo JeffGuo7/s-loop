@@ -1,4 +1,4 @@
-# Snotra 项目规则
+# S-Loop 项目规则
 
 ## 技术栈
 
@@ -18,7 +18,7 @@
 Pi Agent SDK 运行在浏览器进程中，直接调用 LLM API — **不需要外部服务进程**。
 
 ```
-Snotra (Tauri + React) ──Pi Agent SDK── HTTP ──► Anthropic / OpenAI / DeepSeek / ...
+S-Loop (Tauri + React) ──Pi Agent SDK── HTTP ──► Anthropic / OpenAI / DeepSeek / ...
 ```
 
 - `src/utils/piClient.ts` — Pi Agent 封装层
@@ -101,5 +101,5 @@ npm run tauri:build # 构建桌面应用
 
 - `npm run tauri:dev` 启动 Tauri + Vite 开发环境
 - Rust 代码位于 `src-tauri/`，编译用 MSVC 工具链 (rustup default stable-msvc)
-- Tauri 自动通过 `resolve_project_dir()` 找 Snotra 项目目录
+- Tauri 自动通过 `resolve_project_dir()` 找 S-Loop 项目目录
 - `npm run tauri:dev` 是阻塞式进程，会打开桌面窗口

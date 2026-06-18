@@ -1,6 +1,6 @@
 const zh = {
   titlebar: {
-    appName: 'Snotra',
+    appName: 'S-Loop',
   },
   sidebar: {
     newChat: '新建对话',
@@ -21,10 +21,10 @@ const zh = {
   chat: {
     welcome: {
       title: '欢迎使用',
-      appName: 'Snotra',
+      appName: 'S-Loop',
       description: '您的智能编排工作空间。无缝管理代理、文件和工作流程。',
       newConversation: '新建会话',
-      subtitle: 'Snotra 工作空间',
+      subtitle: 'S-Loop 工作空间',
       howCanIHelp: '有什么可以帮助您的？',
       emptyDesc: '无缝编排您的工作空间、文件和 AI 代理。',
     },
@@ -158,7 +158,7 @@ const zh = {
     },
     websearch: {
       title: '网络搜索',
-      description: '配置 Snotra 的网络搜索方式。DDGS 无需配置即可使用。',
+      description: '配置 S-Loop 的网络搜索方式。DDGS 无需配置即可使用。',
       searchEngine: '搜索引擎',
       maxResults: '最大结果数',
       usingProvider: '当前使用',
