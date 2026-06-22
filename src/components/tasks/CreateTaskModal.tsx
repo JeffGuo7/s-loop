@@ -4,7 +4,8 @@ import { useTaskStore, useAppStore, useSkillStore } from '../../stores';
 import { X, Clock, Cpu, Shield, BookOpen } from 'lucide-react';
 import { MagicButton } from '../ui';
 import { parseSchedule } from '../../types/task';
-import type { ScheduleKind } from '../../types/task';
+import { PLATFORM_PRESETS } from '../../types/platform';
+import type { ScheduleKind, TaskDelivery } from '../../types/task';
 
 interface CreateTaskModalProps {
   onClose: () => void;
@@ -21,10 +22,16 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
   const [scheduleInput, setScheduleInput] = useState('every 30m');
   const [scheduleKind, setScheduleKind] = useState<ScheduleKind>('interval');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [deliver, setDeliver] = useState<'chat' | 'silent'>('chat');
+  const [deliver, setDeliver] = useState<TaskDelivery>('chat');
   const [provider, setProvider] = useState(activeProvider);
   const [model, setModel] = useState(providerConfigs[activeProvider]?.model || '');
   const [error, setError] = useState<string | null>(null);
+
+  const deliveryOptions: Array<{ id: TaskDelivery; label: string }> = [
+    { id: 'chat', label: t('createTask.deliverChat') },
+    { id: 'silent', label: t('createTask.deliverSilent') },
+    ...PLATFORM_PRESETS.map((platform) => ({ id: platform.id, label: platform.name })),
+  ];
 
   const handleSubmit = async () => {
     if (!name.trim() || !prompt.trim() || !scheduleInput.trim()) return;
@@ -178,11 +185,11 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
             <label className="flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.2em] text-text-tertiary ml-1 opacity-70">
               <Shield size={14} className="text-accent" /> {t('createTask.deliveryLabel')}
             </label>
-            <div className="flex gap-3">
-              {(['chat', 'silent'] as const).map((d) => (
-                <button key={d} onClick={() => setDeliver(d)}
-                  className={`px-6 py-2.5 rounded-[14px] text-[13px] font-bold tracking-tight transition-all border ${deliver === d ? 'bg-accent text-accent-foreground border-accent' : 'bg-surface-secondary/50 border-border-light text-text-tertiary hover:text-text'}`}>
-                  {t(`createTask.${d === 'chat' ? 'deliverChat' : 'deliverSilent'}`)}
+            <div className="flex flex-wrap gap-3">
+              {deliveryOptions.map((option) => (
+                <button key={option.id} onClick={() => setDeliver(option.id)}
+                  className={`px-6 py-2.5 rounded-[14px] text-[13px] font-bold tracking-tight transition-all border ${deliver === option.id ? 'bg-accent text-accent-foreground border-accent' : 'bg-surface-secondary/50 border-border-light text-text-tertiary hover:text-text'}`}>
+                  {option.label}
                 </button>
               ))}
             </div>

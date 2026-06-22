@@ -2,17 +2,21 @@ import { useTranslation } from 'react-i18next'
 import { usePlatformStore } from '../../stores'
 import { PlatformCard } from './PlatformCard'
 import { PlatformMessageLog } from './PlatformMessageLog'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Bot, MessageSquare } from 'lucide-react'
 
 type Tab = 'platforms' | 'log'
 
 export function PlatformCenter() {
   const { t } = useTranslation()
-  const { platforms, messages } = usePlatformStore()
+  const { platforms, messages, error, load } = usePlatformStore()
   const [activeTab, setActiveTab] = useState<Tab>('platforms')
 
   const connectedCount = useMemo(() => platforms.filter((p) => p.connected).length, [platforms])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   return (
     <div className="h-full flex overflow-hidden bg-transparent">
@@ -72,6 +76,11 @@ export function PlatformCenter() {
 
         <div className="flex-1 overflow-y-auto px-10 py-10 scrollbar-subtle">
           <div className="max-w-2xl mx-auto space-y-8 animate-fade-in-up">
+            {error && (
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-4 text-[13px] text-red-400">
+                {error}
+              </div>
+            )}
             {activeTab === 'platforms' ? (
               <div className="grid gap-4">
                 {platforms.map((platform) => (

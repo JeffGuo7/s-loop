@@ -91,12 +91,18 @@ export function ChatView() {
   const sessionMessages = useAppStore((state) => state.sessionMessages)
   const messages = activeSessionId ? sessionMessages[activeSessionId] || EMPTY_MESSAGES : EMPTY_MESSAGES
   const isEmpty = messages.length === 0
+  const isReadOnlySession = !!session?.readOnly
 
   const handleSubmit = useCallback(
     async (content: string) => {
       const sid = useAppStore.getState().activeSessionId
       if (!content || !sid) return
       setError(null)
+
+      if (isReadOnlySession) {
+        setError(t('chat.session.readOnlyHint'))
+        return
+      }
 
       const providerConfig = activeProvider ? providerConfigs[activeProvider] : null
       if (!providerConfig) { setError(t('chat.errors.noProvider')); return }
@@ -245,7 +251,7 @@ export function ChatView() {
       commitStreamingMessage(sid, completedMessage)
       usePetStore.getState().onResponded()
     },
-    [activeSessionId, activeProvider, providerConfigs, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream],
+    [activeSessionId, activeProvider, providerConfigs, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream, isReadOnlySession],
   )
 
   const activePiSessionId = activeSessionId
@@ -405,6 +411,30 @@ export function ChatView() {
             </motion.div>
           ) : (
             <motion.div key={activeSessionId} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3, ease: 'easeOut' }} className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden">
+              {session && (session.sourceLabel || session.readOnly) && (
+                <div className="sticky top-0 z-10 px-4 pt-4">
+                  <div className="rounded-[20px] border border-border-light bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[13px] font-bold tracking-tight text-text">{session.title}</span>
+                      {session.sourceLabel && (
+                        <span className="inline-flex items-center rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-accent">
+                          {session.sourceLabel}
+                        </span>
+                      )}
+                      {session.readOnly && (
+                        <span className="inline-flex items-center rounded-full border border-border-light bg-surface-secondary/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-text-tertiary">
+                          {t('chat.session.readOnly')}
+                        </span>
+                      )}
+                    </div>
+                    {session.readOnly && (
+                      <p className="mt-2 text-[12px] font-medium text-text-tertiary">
+                        {t('chat.session.readOnlyHint')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               <MessageList sessionId={activeSessionId!} />
               {error && (
                 <div className="absolute top-8 left-4 right-4 z-20 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm backdrop-blur-md">
@@ -419,7 +449,13 @@ export function ChatView() {
         <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
           <div className="bg-linear-to-t from-bg via-bg/95 to-transparent pt-12 pb-2 pointer-events-auto">
             <div className="w-full max-w-(--spacing-chat-max) mx-auto relative px-4">
-              <ChatInput onSubmit={handleSubmit} onAbort={abort} isStreaming={isStreaming} placeholder={t('chat.input.placeholder')} />
+              <ChatInput
+                onSubmit={handleSubmit}
+                onAbort={abort}
+                isStreaming={isStreaming}
+                disabled={isReadOnlySession}
+                placeholder={isReadOnlySession ? t('chat.session.readOnlyPlaceholder') : t('chat.input.placeholder')}
+              />
               <div className="mt-2 pb-2 text-[10px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
                 <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
                   <Cpu size={12} className="text-accent/60" />

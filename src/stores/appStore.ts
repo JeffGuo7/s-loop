@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import i18n from '../i18n'
 import type { Session, ProviderConfig, Companion, ProviderInfo, KiloMessage, MessagePart, MessageInfo } from '../types'
 import * as db from '../utils/database'
+import { enrichSession } from '../utils/sessionMeta'
 
 interface AppState {
   // Sessions (cached from DB)
@@ -18,7 +19,7 @@ interface AppState {
     info?: MessageInfo
   }>
 
-  // Provider â€?now dynamic (any OpenCode provider ID)
+  // Provider ï¿½?now dynamic (any OpenCode provider ID)
   activeProvider: string
   providerConfigs: Record<string, ProviderConfig>
   providerList: ProviderInfo[]
@@ -105,9 +106,10 @@ export const useAppStore = create<AppState>()(
       loadFromDb: async () => {
         try {
           const rows = await db.getAllSessions()
-          const sessions: Session[] = rows.map(r => ({
+          const sessions: Session[] = rows.map(r => enrichSession({
             id: r.id,
             title: r.title,
+            model: r.model,
             createdAt: r.created_at,
             updatedAt: r.updated_at,
           }))
@@ -133,7 +135,7 @@ export const useAppStore = create<AppState>()(
       createSession: () => {
         const id = generateId()
         const now = Date.now()
-        const session: Session = { id, title: 'New Chat', createdAt: now, updatedAt: now }
+        const session: Session = enrichSession({ id, title: 'New Chat', model: '', createdAt: now, updatedAt: now })
         set((state) => ({
           sessions: [...state.sessions, session],
           activeSessionId: id,

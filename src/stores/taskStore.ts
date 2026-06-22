@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { getBaseUrl } from '../utils/piClient'
-import type { ScheduledTask, TaskSchedule } from '../types/task'
+import { sendPlatformMessage } from '../utils/platformClient'
+import type { ScheduledTask, TaskDelivery, TaskSchedule } from '../types/task'
+import type { PlatformId } from '../types/platform'
 import type { KiloMessage } from '../types'
 
 interface TaskState {
@@ -25,7 +27,7 @@ export interface CreateTaskInput {
   provider?: string
   apiKey?: string
   workspaceDir?: string
-  deliver?: 'chat' | 'silent'
+  deliver?: TaskDelivery
   deliverSessionId?: string
   enabled?: boolean
 }
@@ -34,11 +36,10 @@ const BASE = () => getBaseUrl()
 
 async function deliverTaskResults(tasks: ScheduledTask[]) {
   const pending = tasks.filter((task) =>
-    task.deliver === 'chat' &&
-    task.deliverSessionId &&
     task.lastRunId &&
     task.lastRunId !== task.deliveredRunId &&
-    (task.lastStatus === 'completed' || task.lastStatus === 'failed'),
+    task.deliver !== 'silent' &&
+    (task.lastStatus === 'completed' || task.lastStatus === 'failed')
   )
 
   if (pending.length === 0) return
@@ -52,49 +53,61 @@ async function deliverTaskResults(tasks: ScheduledTask[]) {
       const latest = outputs[0]?.content?.trim()
       if (!latest) continue
 
-      const now = Date.now()
-      const messageId = `task-${task.id}-${task.lastRunId}`
-      const appStore = useAppStore.getState()
-      let sessionId = task.deliverSessionId
-      if (!sessionId) {
-        sessionId = appStore.createSession()
-      }
-      if (!appStore.sessions.some((session) => session.id === sessionId)) {
-        await appStore.loadFromDb()
-      }
-      if (!useAppStore.getState().sessions.some((session) => session.id === sessionId)) {
-        sessionId = useAppStore.getState().createSession()
-      }
+      if (task.deliver === 'chat') {
+        const now = Date.now()
+        const messageId = `task-${task.id}-${task.lastRunId}`
+        const appStore = useAppStore.getState()
+        let sessionId = task.deliverSessionId
+        if (!sessionId) {
+          sessionId = appStore.createSession()
+        }
+        if (!appStore.sessions.some((session) => session.id === sessionId)) {
+          await appStore.loadFromDb()
+        }
+        if (!useAppStore.getState().sessions.some((session) => session.id === sessionId)) {
+          sessionId = useAppStore.getState().createSession()
+        }
 
-      const message: KiloMessage = {
-        info: {
-          id: messageId,
-          sessionID: sessionId,
-          role: 'assistant',
-          time: { created: now, completed: now },
-        },
-        parts: [
-          {
-            id: `${messageId}-text`,
-            type: 'text',
-            text: latest,
+        const message: KiloMessage = {
+          info: {
+            id: messageId,
             sessionID: sessionId,
-            messageID: messageId,
+            role: 'assistant',
             time: { created: now, completed: now },
           },
-        ],
-      }
-      useAppStore.getState().addMessage(sessionId, message)
+          parts: [
+            {
+              id: `${messageId}-text`,
+              type: 'text',
+              text: latest,
+              sessionID: sessionId,
+              messageID: messageId,
+              time: { created: now, completed: now },
+            },
+          ],
+        }
+        useAppStore.getState().addMessage(sessionId, message)
 
-      await fetch(`${BASE()}/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          deliverSessionId: sessionId,
-          deliveredRunId: task.lastRunId,
-          deliveryError: undefined,
-        }),
-      })
+        await fetch(`${BASE()}/tasks/${task.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deliverSessionId: sessionId,
+            deliveredRunId: task.lastRunId,
+            deliveryError: undefined,
+          }),
+        })
+      } else {
+        await sendPlatformMessage(task.deliver as PlatformId, latest)
+        await fetch(`${BASE()}/tasks/${task.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deliveredRunId: task.lastRunId,
+            deliveryError: undefined,
+          }),
+        })
+      }
     } catch (err) {
       await fetch(`${BASE()}/tasks/${task.id}`, {
         method: 'PUT',

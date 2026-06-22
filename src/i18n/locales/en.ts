@@ -37,6 +37,11 @@ const en = {
       intelligence: 'Intelligence',
       ref: 'ref',
     },
+    session: {
+      readOnly: 'Read Only',
+      readOnlyHint: 'This is a mirrored session from an external platform. It is currently driven by inbound platform events and cannot be typed into from the desktop app.',
+      readOnlyPlaceholder: 'External platform sessions are read-only in the desktop app',
+    },
     errors: {
       noProvider: 'No API provider configured. Please set up a provider in Settings.',
       noApiKey: 'API key not configured. Please enter your API key in Settings.',

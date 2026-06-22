@@ -152,6 +152,12 @@ export interface Session {
   id: string
   title: string
   kiloId?: string
+  piId?: string
+  model?: string
+  source?: 'local' | 'platform'
+  platformId?: 'telegram' | 'feishu' | 'dingtalk' | 'wechat'
+  sourceLabel?: string
+  readOnly?: boolean
   createdAt: number
   updatedAt: number
 }

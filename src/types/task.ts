@@ -1,4 +1,7 @@
+import type { PlatformId } from './platform'
+
 export type ScheduleKind = 'once' | 'interval' | 'cron'
+export type TaskDelivery = 'chat' | 'silent' | PlatformId
 
 export interface TaskSchedule {
   kind: ScheduleKind
@@ -36,8 +39,8 @@ export interface ScheduledTask {
   provider?: string
   apiKey?: string
   workspaceDir?: string
-  /** Deliver output to the chat when done */
-  deliver: 'chat' | 'silent'
+  /** Deliver output to chat or a configured platform when done */
+  deliver: TaskDelivery
   deliverSessionId?: string
   deliveredRunId?: string
   deliveryError?: string

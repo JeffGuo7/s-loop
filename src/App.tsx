@@ -6,14 +6,14 @@ import { TasksPage } from './components/tasks'
 import { PlatformCenter } from './components/platforms'
 import { PetPage } from './components/pet'
 import { useAppStore, usePetStore } from './stores'
-import { useTaskScheduler } from './hooks'
+import { useTaskScheduler, useTelegramChatSync } from './hooks'
 import { WorkspacePanel } from './components/workspace'
 import { useMCPStore } from './stores/mcpStore'
 import { useSkillStore } from './stores/skillStore'
 import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
-import { setBaseUrl } from './utils/piClient'
+import { setBaseUrl, syncRuntimeConfig } from './utils/piClient'
 
 export type Page = 'chat' | 'tasks' | 'platforms' | 'pet'
 
@@ -21,11 +21,12 @@ const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const APP_STORAGE_KEY = 'snotra-storage'
 
 function App() {
-  const { theme, sidebarCollapsed, toggleSidebar } = useAppStore()
+  const { theme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, workspaceDir } = useAppStore()
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
 
   useTaskScheduler()
+  useTelegramChatSync()
 
   useEffect(() => {
     const tid = setTimeout(async () => {
@@ -85,6 +86,19 @@ function App() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    const config = providerConfigs[activeProvider]
+    if (!config?.model) return
+    syncRuntimeConfig({
+      providerID: activeProvider,
+      modelID: config.model,
+      apiKey: config.apiKey,
+      workspaceDir: workspaceDir ?? undefined,
+    }).catch((err) => {
+      console.warn('[app] failed to sync runtime config:', err)
+    })
+  }, [activeProvider, providerConfigs, workspaceDir])
 
   useEffect(() => {
     useMCPStore.getState().refreshAllServers().catch(() => {})

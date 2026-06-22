@@ -4,6 +4,7 @@ import { Plus, Clock, Trash2, Play, Pause, RefreshCw, Zap, FileText } from 'luci
 import { useState } from 'react';
 import { MagicButton } from '../ui';
 import type { ScheduledTask } from '../../types/task';
+import { PLATFORM_PRESETS } from '../../types/platform';
 
 interface TaskListProps {
   onCreateTask: () => void;
@@ -15,6 +16,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [outputCache, setOutputCache] = useState<Record<string, { timestamp: string; content: string; file?: string }[]>>({});
   const [loadingOutputId, setLoadingOutputId] = useState<string | null>(null);
+  const platformNameMap = Object.fromEntries(PLATFORM_PRESETS.map((platform) => [platform.id, platform.name]));
 
   const formatNextRun = (timestamp: number | null) => {
     if (!timestamp) return t('tasks.completed');
@@ -61,6 +63,20 @@ export function TaskList({ onCreateTask }: TaskListProps) {
     } finally {
       setLoadingOutputId((current) => (current === taskId ? null : current));
     }
+  };
+
+  const getDeliveryLabel = (task: ScheduledTask) => {
+    if (task.deliver === 'chat') return 'Chat';
+    if (task.deliver === 'silent') return 'Silent';
+    return platformNameMap[task.deliver] || task.deliver;
+  };
+
+  const getDeliveryStatusText = (task: ScheduledTask) => {
+    if (task.deliveryError) return `投递失败: ${task.deliveryError}`;
+    if (!task.deliveredRunId) return null;
+    if (task.deliver === 'chat') return '已投递到聊天';
+    if (task.deliver === 'silent') return null;
+    return `已投递到${platformNameMap[task.deliver] || task.deliver}`;
   };
 
   return (
@@ -144,18 +160,20 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                     <span className="shrink-0 text-[11px] font-bold uppercase tracking-[0.2em] px-5 py-1.5 rounded-full bg-accent-subtle text-accent border border-accent/15 shadow-sm">
                       {task.schedule.display}
                     </span>
-                    {task.deliver === 'chat' && task.deliverSessionId && (
-                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] px-4 py-1.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/15">
-                        Chat
-                      </span>
-                    )}
+                    <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border ${
+                      task.deliver === 'silent'
+                        ? 'bg-text-tertiary/10 text-text-tertiary border-border-light'
+                        : 'bg-green-500/10 text-green-500 border-green-500/15'
+                    }`}>
+                      {getDeliveryLabel(task)}
+                    </span>
                   </div>
                   <p className="text-[14px] text-text-tertiary truncate mt-2 leading-relaxed font-bold opacity-70">
                     {task.prompt.slice(0, 100)}
                   </p>
-                  {(task.deliveredRunId || task.deliveryError) && (
+                  {getDeliveryStatusText(task) && (
                     <p className={`text-[12px] mt-3 font-bold ${task.deliveryError ? 'text-red-500' : 'text-green-500/80'}`}>
-                      {task.deliveryError ? `投递失败: ${task.deliveryError}` : '已投递到聊天'}
+                      {getDeliveryStatusText(task)}
                     </p>
                   )}
                 </div>

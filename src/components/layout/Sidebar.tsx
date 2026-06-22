@@ -156,6 +156,8 @@ export function Sidebar({
         {sessions.map((session) => {
           const isActive = session.id === activeSessionId
           const title = session.title || t('sidebar.untitled')
+          const isPlatformSession = session.source === 'platform'
+          const sessionBadge = session.sourceLabel || (session.readOnly ? t('chat.session.readOnly') : '')
 
           if (collapsed) {
             return (
@@ -173,6 +175,11 @@ export function Sidebar({
                 }`}>
                   <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
                 </div>
+                {isPlatformSession && (
+                  <div className="absolute -top-1.5 -right-1.5 min-w-3 h-3 px-1 rounded-full bg-accent text-[8px] leading-3 font-black text-white shadow-sm">
+                    P
+                  </div>
+                )}
                 {isActive && (
                   <div className="absolute left-0 top-3 bottom-3 w-1 bg-accent rounded-r-full z-20 shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
                 )}
@@ -202,6 +209,22 @@ export function Sidebar({
                 }`}>
                   {title}
                 </p>
+                {sessionBadge && (
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.18em] ${
+                      isPlatformSession
+                        ? 'border-accent/20 bg-accent/10 text-accent'
+                        : 'border-border-light bg-surface-secondary/70 text-text-tertiary'
+                    }`}>
+                      {sessionBadge}
+                    </span>
+                    {session.readOnly && (
+                      <span className="inline-flex items-center rounded-full border border-border-light bg-surface-secondary/70 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.18em] text-text-tertiary">
+                        {t('chat.session.readOnly')}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div

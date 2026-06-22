@@ -4,6 +4,7 @@ import { usePlatformStore } from '../../stores'
 import { Send, Check, Loader2, Link, Link2Off, ChevronDown } from 'lucide-react'
 import { MagicButton } from '../ui'
 import type { PlatformConfig } from '../../types/platform'
+import { getBaseUrl } from '../../utils/piClient'
 
 interface PlatformCardProps {
   platform: PlatformConfig
@@ -15,6 +16,14 @@ export function PlatformCard({ platform }: PlatformCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [testMsg, setTestMsg] = useState('')
   const connecting = isConnecting[platform.id] || false
+  const inboundUrl = ['feishu', 'dingtalk', 'wechat'].includes(platform.id)
+    ? `${getBaseUrl()}/platforms/inbound/${platform.id}`
+    : ''
+  const inboundGuide = {
+    feishu: '飞书建议同时填写事件 Token 与 Encrypt Key。事件订阅回调先做 token/签名校验，再快速 ACK，模式参考 openclaw 的企业平台 webhook 处理。',
+    dingtalk: '钉钉建议填写回调 Token；出站仍可复用现有加签密钥。若平台回调会重复投递，S-Loop 会按 messageId 做轻量去重。',
+    wechat: '企业微信建议填写回调 Token。当前先做最小 token 校验和快速 ACK，后续可继续补更完整的签名与时间窗校验。',
+  }[platform.id as 'feishu' | 'dingtalk' | 'wechat']
 
   const allRequiredFilled = platform.fields
     .filter((f) => f.required)
@@ -26,16 +35,20 @@ export function PlatformCard({ platform }: PlatformCardProps) {
 
   const handleConnect = () => {
     if (platform.connected) {
-      disconnect(platform.id)
+      void disconnect(platform.id)
     } else {
-      connect(platform.id)
+      void connect(platform.id)
     }
   }
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!testMsg.trim()) return
-    send(platform.id, testMsg.trim())
-    setTestMsg('')
+    try {
+      await send(platform.id, testMsg.trim())
+      setTestMsg('')
+    } catch {
+      // Error state is surfaced by the store.
+    }
   }
 
   return (
@@ -104,6 +117,25 @@ export function PlatformCard({ platform }: PlatformCardProps) {
             ))}
           </div>
 
+          {inboundUrl && (
+            <div className="rounded-xl border border-border-light bg-surface-secondary/40 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-tertiary mb-2">
+                Inbound Webhook
+              </p>
+              <p className="text-[12px] font-mono font-bold break-all text-text-secondary">
+                {inboundUrl}
+              </p>
+              <p className="mt-2 text-[11px] text-text-quaternary leading-relaxed">
+                企业平台入站已走 webhook 监听。若要让飞书、钉钉、企业微信从云端回调到本机，请为该地址配置公网映射或内网穿透。
+              </p>
+              {inboundGuide && (
+                <p className="mt-2 text-[11px] text-text-quaternary leading-relaxed">
+                  {inboundGuide}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex items-center gap-3 pt-2">
             <MagicButton
@@ -138,11 +170,15 @@ export function PlatformCard({ platform }: PlatformCardProps) {
                   value={testMsg}
                   onChange={(e) => setTestMsg(e.target.value)}
                   placeholder={t('platforms.testPlaceholder')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      void handleSend()
+                    }
+                  }}
                   className="flex-1 px-4 py-2.5 rounded-xl bg-surface-secondary/50 border border-border-light outline-none text-[13px] font-medium transition-all"
                 />
                 <button
-                  onClick={handleSend}
+                  onClick={() => void handleSend()}
                   disabled={!testMsg.trim()}
                   className="p-2.5 rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-all disabled:opacity-30"
                 >

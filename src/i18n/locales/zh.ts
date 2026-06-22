@@ -37,6 +37,11 @@ const zh = {
       intelligence: '智能',
       ref: '个引用',
     },
+    session: {
+      readOnly: '只读',
+      readOnlyHint: '这是来自外部平台的镜像会话，当前由平台入站消息驱动，桌面端暂不支持直接输入。',
+      readOnlyPlaceholder: '外部平台镜像会话暂不支持在桌面端直接发送',
+    },
     errors: {
       noProvider: '未配置 API 提供商。请在设置中配置提供商。',
       noApiKey: 'API 密钥未配置。请在设置中输入您的 API 密钥。',

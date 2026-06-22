@@ -75,6 +75,19 @@ export async function createSession(): Promise<{ id: string }> {
   return res.json()
 }
 
+export async function syncRuntimeConfig(config: {
+  providerID: string
+  modelID: string
+  apiKey?: string
+  workspaceDir?: string
+}): Promise<void> {
+  await fetch(`${_base}/runtime/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+}
+
 export function subscribeStream(
   sessionId: string,
   callbacks: PiStreamCallbacks,

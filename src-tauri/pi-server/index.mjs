@@ -1,13 +1,39 @@
 import { createServer } from 'node:http'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, getModels } from '@earendil-works/pi-ai'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 import { webSearch, fetchUrl } from './searchProviders.mjs'
 import { init as initTasks, loadTasks, getTask, createTask, updateTask, removeTask, getTaskOutputs, runTask, startTicker } from './task-scheduler.mjs'
+import {
+  clearPlatformMessages,
+  connectPlatform,
+  getPlatformConfig,
+  disconnectPlatform,
+  getPlatformSnapshot,
+  initPlatformCenter,
+  recordPlatformMessage,
+  sendPlatformMessage,
+  testPlatform,
+  updatePlatformConfig,
+} from './platform-center.mjs'
+import { initTelegramMonitor, startTelegramMonitor, stopTelegramMonitor } from './telegram-monitor.mjs'
+import {
+  getPlatformChatSyncSnapshot,
+  initTelegramChatSync,
+  recordPlatformInbound,
+  recordPlatformOutbound,
+} from './telegram-chat-sync.mjs'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const sessions = new Map()
+const inboundSeen = new Map()
+const runtimeConfig = {
+  providerID: 'anthropic',
+  modelID: 'claude-sonnet-4-20250514',
+  apiKey: process.env.PI_API_KEY || '',
+  workspaceDir: undefined,
+}
 
 function createSSE(event, data) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
@@ -64,6 +90,303 @@ CRITICAL RULE: The query must be one continuous, natural phrase — no space-sep
 process.on('uncaughtException', (err) => console.error('[pi-server] UNCAUGHT:', err))
 process.on('unhandledRejection', (err) => console.error('[pi-server] UNHANDLED:', err))
 
+function extractAssistantText(last) {
+  let text = ''
+  if (last?.content) {
+    text = last.content.find(c => c.type === 'text')?.text || ''
+    if (!text) text = last.content.find(c => c.type === 'thinking')?.text || ''
+    if (!text) {
+      for (const c of last.content) {
+        if (typeof c.text === 'string' && c.text) {
+          text = c.text
+          break
+        }
+      }
+    }
+  }
+  if (!text && last?.errorMessage) text = `Error: ${last.errorMessage}`
+  return text || ''
+}
+
+async function readJsonBody(req) {
+  return await new Promise((resolve, reject) => {
+    let body = ''
+    req.on('data', c => body += c)
+    req.on('end', () => {
+      try {
+        resolve(body ? JSON.parse(body) : {})
+      } catch (err) {
+        reject(err)
+      }
+    })
+    req.on('error', reject)
+  })
+}
+
+async function readRawJsonBody(req, { maxBytes = 64 * 1024, timeoutMs = 5000 } = {}) {
+  return await new Promise((resolve, reject) => {
+    let body = ''
+    let size = 0
+    const timer = setTimeout(() => {
+      req.destroy()
+      reject(new Error('Request body timeout'))
+    }, timeoutMs)
+
+    req.on('data', (chunk) => {
+      size += chunk.length
+      if (size > maxBytes) {
+        clearTimeout(timer)
+        req.destroy()
+        reject(new Error('Request body too large'))
+        return
+      }
+      body += chunk
+    })
+    req.on('end', () => {
+      clearTimeout(timer)
+      try {
+        resolve({
+          raw: body,
+          data: body ? JSON.parse(body) : {},
+        })
+      } catch (err) {
+        reject(err)
+      }
+    })
+    req.on('error', (err) => {
+      clearTimeout(timer)
+      reject(err)
+    })
+  })
+}
+
+function normalizePlatformInbound(platformId, payload) {
+  if (platformId === 'feishu') {
+    if (payload.challenge) {
+      return { challenge: payload.challenge }
+    }
+    const event = payload.event || {}
+    const message = event.message || {}
+    const sender = event.sender || {}
+    let text = ''
+    if (typeof message.content === 'string') {
+      try {
+        const parsed = JSON.parse(message.content)
+        text = parsed?.text || parsed?.content || ''
+      } catch {
+        text = message.content
+      }
+    }
+    if (!text?.trim()) return null
+    const chatId = String(message.chat_id || event.open_chat_id || event.chat_id || '')
+    return {
+      platformId,
+      conversationId: String(message.chat_id || event.open_chat_id || event.chat_id || sender.sender_id?.open_id || sender.sender_id?.union_id || ''),
+      chatId,
+      threadId: message.thread_id || null,
+      messageId: message.message_id || payload.header?.event_id || Date.now(),
+      text: text.trim(),
+      username: sender.sender_id?.open_id || sender.sender_id?.union_id || '',
+    }
+  }
+
+  if (platformId === 'dingtalk') {
+    if (payload.challenge) {
+      return { challenge: payload.challenge }
+    }
+    const text = payload.text?.content || payload.content?.text || payload.message?.text?.content || payload.text
+    if (!String(text || '').trim()) return null
+    const conversationId = String(payload.conversationId || payload.chatbotConversationId || payload.sessionWebhook || payload.senderStaffId || '')
+    return {
+      platformId,
+      conversationId,
+      chatId: conversationId,
+      threadId: null,
+      messageId: payload.msgId || payload.messageId || Date.now(),
+      text: String(text).trim(),
+      username: payload.senderNick || payload.senderStaffId || '',
+    }
+  }
+
+  if (platformId === 'wechat') {
+    const text = payload.text?.content || payload.content || payload.message?.content || payload.msg || ''
+    if (!String(text || '').trim()) return null
+    const conversationId = String(payload.chatid || payload.roomid || payload.from?.id || payload.sender || '')
+    return {
+      platformId,
+      conversationId,
+      chatId: conversationId,
+      threadId: null,
+      messageId: payload.msgid || payload.messageId || Date.now(),
+      text: String(text).trim(),
+      username: payload.from?.name || payload.sender || '',
+    }
+  }
+
+  return null
+}
+
+function constantTimeEqual(left, right) {
+  const a = Buffer.from(String(left || ''), 'utf8')
+  const b = Buffer.from(String(right || ''), 'utf8')
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
+}
+
+function verifyPlatformInbound(platformId, rawBody, payload, headers) {
+  const platform = getPlatformConfig(platformId)
+  if (!platform?.connected) {
+    return { ok: false, error: `${platform?.name || platformId} 未连接` }
+  }
+
+  if (platformId === 'feishu') {
+    const verificationToken = platform.values.verificationToken?.trim()
+    const encryptKey = platform.values.encryptKey?.trim()
+    const payloadToken = payload?.header?.token || payload?.token || ''
+    if (verificationToken && !constantTimeEqual(payloadToken, verificationToken)) {
+      return { ok: false, error: '飞书 token 校验失败' }
+    }
+    const signature = headers['x-lark-signature']
+    const timestamp = headers['x-lark-request-timestamp']
+    const nonce = headers['x-lark-request-nonce']
+    if (encryptKey && signature && timestamp && nonce) {
+      const expected = createHash('sha256')
+        .update(`${timestamp}${nonce}${encryptKey}${rawBody}`, 'utf8')
+        .digest('hex')
+      if (!constantTimeEqual(signature, expected)) {
+        return { ok: false, error: '飞书签名校验失败' }
+      }
+    }
+    return { ok: true }
+  }
+
+  if (platformId === 'dingtalk') {
+    const inboundToken = platform.values.inboundToken?.trim()
+    const payloadToken = payload?.token || payload?.headers?.token || ''
+    if (inboundToken && !constantTimeEqual(payloadToken, inboundToken)) {
+      return { ok: false, error: '钉钉 token 校验失败' }
+    }
+    return { ok: true }
+  }
+
+  if (platformId === 'wechat') {
+    const inboundToken = platform.values.inboundToken?.trim()
+    const payloadToken = payload?.token || payload?.headers?.token || ''
+    if (inboundToken && !constantTimeEqual(payloadToken, inboundToken)) {
+      return { ok: false, error: '企业微信 token 校验失败' }
+    }
+    return { ok: true }
+  }
+
+  return { ok: true }
+}
+
+function shouldProcessInbound(incoming) {
+  const key = `${incoming.platformId}:${incoming.messageId}`
+  const now = Date.now()
+  for (const [seenKey, timestamp] of inboundSeen.entries()) {
+    if (now - timestamp > 10 * 60_000) {
+      inboundSeen.delete(seenKey)
+    }
+  }
+  if (inboundSeen.has(key)) {
+    return false
+  }
+  inboundSeen.set(key, now)
+  return true
+}
+
+async function promptPlatformConversation(sessionId, content) {
+  const provider = runtimeConfig.providerID || 'anthropic'
+  const modelId = runtimeConfig.modelID || 'claude-sonnet-4-20250514'
+  const model = getModel(provider, modelId)
+  if (!model) {
+    throw new Error(`Unknown model "${modelId}" for provider "${provider}"`)
+  }
+
+  let wrapper = sessions.get(sessionId)
+  if (!wrapper) {
+    const cwd = runtimeConfig.workspaceDir || process.cwd()
+    const tools = getTools(cwd)
+    const agent = new Agent({
+      initialState: {
+        systemPrompt: 'You are a helpful assistant. Keep external platform replies concise and readable.',
+        model,
+        tools,
+        thinkingLevel: 'off',
+      },
+      sessionId,
+      getApiKey: async () => runtimeConfig.apiKey || '',
+      toolExecution: 'parallel',
+    })
+    wrapper = { agent, emit: null }
+    sessions.set(sessionId, wrapper)
+  } else {
+    wrapper.agent.state.model = model
+    wrapper.agent.state.tools = getTools(runtimeConfig.workspaceDir || process.cwd())
+  }
+
+  const promptPromise = wrapper.agent.prompt(content)
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Platform conversation timed out')), 120_000)
+  })
+  await Promise.race([promptPromise, timeoutPromise])
+  const last = [...wrapper.agent.state.messages].reverse().find((message) => message.role === 'assistant')
+  return extractAssistantText(last)
+}
+
+async function processPlatformInbound(platformId, incoming, options = {}) {
+  recordPlatformMessage(platformId, 'received', incoming.text)
+  recordPlatformInbound(incoming)
+  const sessionId = `${platformId}:${incoming.conversationId}`
+  try {
+    const reply = await promptPlatformConversation(sessionId, incoming.text)
+    if (!reply.trim()) return { ok: true, replied: false }
+    await sendPlatformMessage(platformId, reply, options.sendOptions || {})
+    recordPlatformOutbound({
+      ...incoming,
+      text: reply,
+      replyKey: incoming.messageId,
+    })
+    return { ok: true, replied: true }
+  } catch (err) {
+    console.error(`[pi-server] ${platformId} inbound failed:`, err)
+    const fallback = `S-Loop 处理消息失败：${err?.message || String(err)}`
+    await sendPlatformMessage(platformId, fallback, options.sendOptions || {}).catch(() => {})
+    recordPlatformOutbound({
+      ...incoming,
+      text: fallback,
+      replyKey: `${incoming.messageId}:error`,
+    })
+    return { ok: false, error: err?.message || String(err) }
+  }
+}
+
+async function ensureTelegramMonitorState() {
+  const telegram = getPlatformConfig('telegram')
+  const token = telegram.values.botToken?.trim()
+  await stopTelegramMonitor()
+  if (!telegram.connected || !token) {
+    return
+  }
+
+  await startTelegramMonitor({
+    getToken: async () => getPlatformConfig('telegram').values.botToken?.trim() || '',
+    onMessage: async (incoming) => {
+      await processPlatformInbound('telegram', { ...incoming, platformId: 'telegram' }, {
+        sendOptions: {
+          chatId: incoming.chatId,
+          threadId: incoming.threadId || undefined,
+          replyToMessageId: incoming.messageId,
+        },
+      })
+    },
+    onError: (err) => {
+      console.error('[pi-server] telegram poller error:', err)
+    },
+  })
+}
+
 // ── Cron prompt helper (shared by ticker and HTTP handler) ──
 const createCronPrompt = async (content, options) => {
   try {
@@ -103,6 +426,174 @@ createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+
+  if (req.method === 'POST' && url.pathname === '/runtime/config') {
+    readJsonBody(req).then((data) => {
+      runtimeConfig.providerID = data.providerID || runtimeConfig.providerID
+      runtimeConfig.modelID = data.modelID || runtimeConfig.modelID
+      runtimeConfig.apiKey = data.apiKey ?? runtimeConfig.apiKey
+      runtimeConfig.workspaceDir = data.workspaceDir || undefined
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/platforms/chat-sync') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(getPlatformChatSyncSnapshot()))
+    return
+  }
+
+  const platformInboundMatch = url.pathname.match(/^\/platforms\/inbound\/(feishu|dingtalk|wechat)$/)
+  if (req.method === 'POST' && platformInboundMatch) {
+    const platformId = platformInboundMatch[1]
+    const contentType = String(req.headers['content-type'] || '')
+    if (!contentType.includes('application/json')) {
+      res.writeHead(415, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Content-Type must be application/json' }))
+      return
+    }
+    readRawJsonBody(req).then(async ({ raw, data }) => {
+      const auth = verifyPlatformInbound(platformId, raw, data, req.headers)
+      if (!auth.ok) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: auth.error }))
+        return
+      }
+      const incoming = normalizePlatformInbound(platformId, data)
+      if (!incoming) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, ignored: true }))
+        return
+      }
+      if (incoming.challenge) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ challenge: incoming.challenge }))
+        return
+      }
+      if (!shouldProcessInbound(incoming)) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, duplicate: true }))
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, accepted: true }))
+      void processPlatformInbound(platformId, incoming)
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  // ── Platform endpoints ──
+  if (req.method === 'GET' && url.pathname === '/platforms') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(getPlatformSnapshot()))
+    return
+  }
+
+  if (req.method === 'DELETE' && url.pathname === '/platforms/messages') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(clearPlatformMessages()))
+    return
+  }
+
+  const platformConfigMatch = url.pathname.match(/^\/platforms\/([^/]+)\/config$/)
+  if (req.method === 'POST' && platformConfigMatch) {
+    readJsonBody(req).then((data) => {
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(updatePlatformConfig(platformConfigMatch[1], data.values || {})))
+        if (platformConfigMatch[1] === 'telegram') {
+          void ensureTelegramMonitorState()
+        }
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  const platformConnectMatch = url.pathname.match(/^\/platforms\/([^/]+)\/connect$/)
+  if (req.method === 'POST' && platformConnectMatch) {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const snapshot = await connectPlatform(platformConnectMatch[1], data.values || {})
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(snapshot))
+        if (platformConnectMatch[1] === 'telegram') {
+          void ensureTelegramMonitorState()
+        }
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  const platformDisconnectMatch = url.pathname.match(/^\/platforms\/([^/]+)\/disconnect$/)
+  if (req.method === 'POST' && platformDisconnectMatch) {
+    try {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(disconnectPlatform(platformDisconnectMatch[1])))
+      if (platformDisconnectMatch[1] === 'telegram') {
+        void ensureTelegramMonitorState()
+      }
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    }
+    return
+  }
+
+  const platformSendMatch = url.pathname.match(/^\/platforms\/([^/]+)\/send$/)
+  if (req.method === 'POST' && platformSendMatch) {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const snapshot = await sendPlatformMessage(platformSendMatch[1], data.text || '')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(snapshot))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  const platformTestMatch = url.pathname.match(/^\/platforms\/([^/]+)\/test$/)
+  if (req.method === 'POST' && platformTestMatch) {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const snapshot = await testPlatform(platformTestMatch[1], data.text || '')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(snapshot))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
 
   // ── Task endpoints ──
   if (req.method === 'GET' && url.pathname === '/tasks') {
@@ -310,17 +801,7 @@ createServer((req, res) => {
       }
 
       // Robust text extraction — supports both plain text and extended thinking modes
-      let text = ''
-      if (last?.content) {
-        text = last.content.find(c => c.type === 'text')?.text || ''
-        if (!text) text = last.content.find(c => c.type === 'thinking')?.text || ''
-        if (!text) {
-          for (const c of last.content) {
-            if (typeof c.text === 'string' && c.text) { text = c.text; break }
-          }
-        }
-      }
-      if (!text && last?.errorMessage) text = `Error: ${last.errorMessage}`
+      const text = extractAssistantText(last)
 
       emit('result', { text: text || '' })
       emit('done', {})
@@ -344,6 +825,9 @@ createServer((req, res) => {
 
   // Initialize and start task scheduler
   const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+  initPlatformCenter(sLoopDir)
+  initTelegramMonitor(sLoopDir)
+  initTelegramChatSync(sLoopDir)
   initTasks(sLoopDir)
   startTicker({
     projectDir: sLoopDir,
@@ -352,4 +836,5 @@ createServer((req, res) => {
     defaultModel: 'claude-sonnet-4-20250514',
     prompt: createCronPrompt,
   })
+  void ensureTelegramMonitorState()
 })

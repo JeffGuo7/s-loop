@@ -39,7 +39,7 @@ export function PlatformMessageLog({ messages }: PlatformMessageLogProps) {
           {t('platforms.log.title')} ({messages.length})
         </span>
         <button
-          onClick={clearMessages}
+          onClick={() => { void clearMessages() }}
           className="text-[11px] font-bold text-red-400 hover:text-red-500 uppercase tracking-wider px-4 py-1.5 rounded-xl hover:bg-red-500/5 transition-all"
         >
           {t('platforms.log.clear')}

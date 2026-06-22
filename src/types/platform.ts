@@ -27,6 +27,11 @@ export interface PlatformMessage {
   timestamp: number
 }
 
+export interface PlatformSnapshot {
+  platforms: PlatformConfig[]
+  messages: PlatformMessage[]
+}
+
 export const PLATFORM_PRESETS: PlatformConfig[] = [
   {
     id: 'telegram',
@@ -79,8 +84,10 @@ export const PLATFORM_PRESETS: PlatformConfig[] = [
     connected: false,
     fields: [
       { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...', required: true },
+      { key: 'verificationToken', label: '事件 Token', type: 'password', placeholder: '用于校验飞书回调 token', required: false },
+      { key: 'encryptKey', label: 'Encrypt Key', type: 'password', placeholder: '用于校验 x-lark-signature', required: false },
     ],
-    values: { webhookUrl: '' },
+    values: { webhookUrl: '', verificationToken: '', encryptKey: '' },
   },
   {
     id: 'dingtalk',
@@ -92,8 +99,9 @@ export const PLATFORM_PRESETS: PlatformConfig[] = [
     fields: [
       { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=...', required: true },
       { key: 'secret', label: '加签密钥', type: 'password', placeholder: 'SEC...', required: false },
+      { key: 'inboundToken', label: '回调 Token', type: 'password', placeholder: '用于校验钉钉回调', required: false },
     ],
-    values: { webhookUrl: '', secret: '' },
+    values: { webhookUrl: '', secret: '', inboundToken: '' },
   },
   {
     id: 'wechat',
@@ -104,7 +112,8 @@ export const PLATFORM_PRESETS: PlatformConfig[] = [
     connected: false,
     fields: [
       { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...', required: true },
+      { key: 'inboundToken', label: '回调 Token', type: 'password', placeholder: '用于校验企业微信回调', required: false },
     ],
-    values: { webhookUrl: '' },
+    values: { webhookUrl: '', inboundToken: '' },
   },
 ]
