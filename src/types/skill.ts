@@ -14,3 +14,14 @@ export interface SkillConfig {
   skills: SkillInfo[];
   paths: string[];
 }
+
+export interface RemoteSkillInfo {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  source: 'clawhub' | 'skillhub';
+  owner?: string;
+  downloads?: number;
+  installMode?: string;
+}

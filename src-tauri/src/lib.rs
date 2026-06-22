@@ -5,11 +5,19 @@ mod skill_installer;
 
 use crate::mcp_manager::MCPManager;
 use crate::pi_server::{PiServerProcess, PiServerState};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::Manager;
 
 const PI_SERVER_PORT: u16 = 4096;
 const PI_SERVER_PORT_SEARCH_LIMIT: u16 = 20;
 const PI_SERVER_SERVICE_MARKER: &str = "\"service\":\"s-loop-pi-server\"";
+
+struct AppLifecycleState {
+    exiting: AtomicBool,
+}
 
 #[allow(dead_code)]
 fn check_server_healthy(port: u16) -> bool {
@@ -128,6 +136,74 @@ fn resolve_project_dir() -> String {
     cwd_str.into_owned()
 }
 
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn hide_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+fn toggle_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(true) {
+            let _ = window.hide();
+        } else {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }
+}
+
+fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let show = MenuItem::with_id(app, "tray_show", "打开 S-Loop", true, None::<&str>)?;
+    let hide = MenuItem::with_id(app, "tray_hide", "隐藏到后台", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "tray_quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &hide, &quit])?;
+
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or("missing default window icon")?;
+
+    TrayIconBuilder::with_id("s-loop-tray")
+        .icon(icon)
+        .tooltip("S-Loop")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main_window(&tray.app_handle());
+            }
+        })
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "tray_show" => show_main_window(app),
+            "tray_hide" => hide_main_window(app),
+            "tray_quit" => {
+                if let Some(state) = app.try_state::<AppLifecycleState>() {
+                    state.exiting.store(true, Ordering::Relaxed);
+                }
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
 #[tauri::command]
 fn start_server(state: tauri::State<PiServerState>) -> Result<String, String> {
     let project_dir = resolve_project_dir();
@@ -227,6 +303,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .manage(server_state)
+        .manage(AppLifecycleState {
+            exiting: AtomicBool::new(false),
+        })
         .invoke_handler(tauri::generate_handler![
             start_server,
             stop_server,
@@ -235,6 +314,8 @@ pub fn run() {
             commands::read_text_file,
             commands::scan_skill_files,
             commands::parse_skill_file,
+            commands::search_remote_skills,
+            commands::download_remote_skill_archive,
             skill_installer::extract_skill_zip,
             mcp_connect,
             mcp_disconnect,
@@ -245,7 +326,8 @@ pub fn run() {
             mcp_get_status,
         ])
         .manage(MCPManager::new())
-        .setup(move |_app| {
+        .setup(move |app| {
+            setup_tray(app).map_err(|e| e.to_string())?;
             let state = PiServerState(server_state_arc);
             tauri::async_runtime::spawn(async move {
                 match do_start_server(&state, &project_dir) {
@@ -254,6 +336,16 @@ pub fn run() {
                 }
             });
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if let Some(state) = window.app_handle().try_state::<AppLifecycleState>() {
+                    if !state.exiting.load(Ordering::Relaxed) {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

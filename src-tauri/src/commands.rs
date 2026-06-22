@@ -1,3 +1,5 @@
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -18,6 +20,18 @@ pub struct SkillFileEntry {
     pub path: String,
     pub emoji: String,
     pub version: String,
+}
+
+#[derive(Serialize)]
+pub struct RemoteSkillEntry {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
+    pub description: String,
+    pub source: String,
+    pub owner: Option<String>,
+    pub downloads: Option<u64>,
+    pub install_mode: String,
 }
 
 /// List directory contents, directories first, then alphabetically
@@ -209,4 +223,177 @@ pub fn parse_skill_file(path: String) -> Result<SkillFileEntry, String> {
         emoji,
         version,
     })
+}
+
+#[tauri::command]
+pub async fn search_remote_skills(source: String, query: Option<String>) -> Result<Vec<RemoteSkillEntry>, String> {
+    let source_lower = source.to_lowercase();
+    let query = query.unwrap_or_default().trim().to_string();
+    let client = reqwest::Client::builder()
+        .user_agent("S-Loop/0.1.0")
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    if source_lower == "clawhub" {
+        let url = if query.is_empty() {
+            "https://clawhub.ai/api/v1/skills?limit=24&sort=trending&nonSuspiciousOnly=true".to_string()
+        } else {
+            format!(
+                "https://clawhub.ai/api/v1/search?q={}&nonSuspiciousOnly=true",
+                urlencoding::encode(&query)
+            )
+        };
+
+        let json = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| format!("Remote search failed: {e}"))?
+            .error_for_status()
+            .map_err(|e| format!("Remote search failed: {e}"))?
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|e| format!("Invalid search response: {e}"))?;
+
+        let items = json
+            .get("results")
+            .and_then(|v| v.as_array())
+            .or_else(|| json.get("items").and_then(|v| v.as_array()))
+            .cloned()
+            .unwrap_or_default();
+
+        let results = items
+            .into_iter()
+            .filter_map(|item| {
+                let slug = item.get("slug")?.as_str()?.to_string();
+                let display_name = item
+                    .get("displayName")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&slug)
+                    .to_string();
+                let description = item
+                    .get("summary")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("This remote skill has no summary yet.")
+                    .to_string();
+                let owner = item
+                    .get("ownerHandle")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+                let downloads = item
+                    .get("downloads")
+                    .and_then(|v| v.as_u64())
+                    .or_else(|| item.get("stats").and_then(|stats| stats.get("downloads")).and_then(|v| v.as_u64()));
+
+                Some(RemoteSkillEntry {
+                    id: slug.clone(),
+                    slug,
+                    name: display_name,
+                    description,
+                    source: "clawhub".to_string(),
+                    owner,
+                    downloads,
+                    install_mode: "Package".to_string(),
+                })
+            })
+            .collect();
+
+        return Ok(results);
+    }
+
+    let mut url = "https://api.skillhub.tencent.com/api/skills?page=1&pageSize=24".to_string();
+    if !query.is_empty() {
+        url.push_str("&keyword=");
+        url.push_str(&urlencoding::encode(&query));
+    }
+
+    let json = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Remote search failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("Remote search failed: {e}"))?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("Invalid search response: {e}"))?;
+
+    if json.get("code").and_then(|v| v.as_i64()) != Some(0) {
+        let msg = json
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("SkillHub search returned an error.");
+        return Err(msg.to_string());
+    }
+
+    let items = json
+        .get("data")
+        .and_then(|v| v.get("skills"))
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let results = items
+        .into_iter()
+        .filter_map(|item| {
+            let slug = item.get("slug")?.as_str()?.to_string();
+            let name = item
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&slug)
+                .to_string();
+            let description = item
+                .get("description_zh")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .or_else(|| item.get("description").and_then(|v| v.as_str()))
+                .unwrap_or("This remote skill has no summary yet.")
+                .to_string();
+            let owner = item
+                .get("ownerName")
+                .and_then(|v| v.as_str())
+                .map(|v| v.to_string());
+            let downloads = item
+                .get("downloads")
+                .and_then(|v| v.as_u64())
+                .or_else(|| item.get("installs").and_then(|v| v.as_u64()));
+
+            Some(RemoteSkillEntry {
+                id: slug.clone(),
+                slug,
+                name,
+                description,
+                source: "skillhub".to_string(),
+                owner,
+                downloads,
+                install_mode: "Mirror".to_string(),
+            })
+        })
+        .collect();
+
+    Ok(results)
+}
+
+#[tauri::command]
+pub async fn download_remote_skill_archive(slug: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("S-Loop/0.1.0")
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    let bytes = client
+        .get(format!(
+            "https://clawhub.ai/api/v1/download?slug={}",
+            urlencoding::encode(&slug)
+        ))
+        .send()
+        .await
+        .map_err(|e| format!("Download failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("Download failed: {e}"))?
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read archive bytes: {e}"))?;
+
+    Ok(BASE64_STANDARD.encode(bytes))
 }

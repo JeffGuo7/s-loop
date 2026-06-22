@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import JSZip from 'jszip'
 import { useSkillStore } from '../../stores/skillStore'
 import { FileArchive, Loader2, Check, AlertCircle } from 'lucide-react'
 
 export function SkillDropZone() {
   const { t } = useTranslation()
-  const { addSkill } = useSkillStore()
+  const { installSkillZip } = useSkillStore()
   const [dragging, setDragging] = useState(false)
   const [status, setStatus] = useState<'idle' | 'installing' | 'done' | 'error'>('idle')
   const [statusText, setStatusText] = useState('')
@@ -54,30 +53,8 @@ export function SkillDropZone() {
 
     try {
       const bytes = await zipFile.arrayBuffer()
-      const zip = await JSZip.loadAsync(bytes)
-
-      const skillEntry = Object.entries(zip.files).find(([name]) =>
-        name.toLowerCase().endsWith('skill.md')
-      )
-
-      if (!skillEntry) {
-        setStatus('error')
-        setStatusText(t('skills.zipNoSkill'))
-        setTimeout(reset, 3000)
-        return
-      }
-
-      const [, skillFile] = skillEntry
-      const rawContent = await skillFile.async('string')
-      const { name, description, body } = parseFrontmatter(rawContent)
-
-      addSkill({
-        name: name || 'unnamed-skill',
-        description,
-        content: body,
-        location: 'zip-import',
-        enabled: true,
-      })
+      const zipBase64 = arrayBufferToBase64(bytes)
+      await installSkillZip(zipBase64)
 
       setStatus('done')
       setStatusText(t('skills.installed'))
@@ -87,7 +64,7 @@ export function SkillDropZone() {
       setStatusText(err instanceof Error ? err.message : t('skills.zipParseError'))
       setTimeout(reset, 3000)
     }
-  }, [t, addSkill, reset])
+  }, [t, installSkillZip, reset])
 
   useEffect(() => {
     document.addEventListener('dragover', handleDragOver)
@@ -145,29 +122,15 @@ export function SkillDropZone() {
   )
 }
 
-function parseFrontmatter(content: string): { name: string; description: string; body: string } {
-  let name = ''
-  let description = ''
-  let body = content
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = ''
+  const bytes = new Uint8Array(buffer)
+  const chunkSize = 0x8000
 
-  const trimmed = content.trimStart()
-  if (trimmed.startsWith('---')) {
-    const afterFirst = trimmed.slice(3)
-    const endPos = afterFirst.indexOf('\n---')
-    if (endPos !== -1) {
-      const front = afterFirst.slice(0, endPos).trim()
-      body = afterFirst.slice(endPos + 4).trim()
-      for (const line of front.split('\n')) {
-        const colonPos = line.indexOf(':')
-        if (colonPos !== -1) {
-          const key = line.slice(0, colonPos).trim().toLowerCase()
-          const value = line.slice(colonPos + 1).trim()
-          if (key === 'name') name = value
-          if (key === 'description') description = value
-        }
-      }
-    }
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode(...chunk)
   }
 
-  return { name, description, body }
+  return btoa(binary)
 }

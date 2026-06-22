@@ -36,6 +36,7 @@ interface MCPState {
   // Direct MCP operations (via Tauri)
   connectServer: (name: string) => Promise<void>;
   disconnectServer: (name: string) => Promise<void>;
+  installRemoteServer: (config: MCPServerConfig, autoConnect?: boolean) => Promise<void>;
 }
 
 // Helper to map Rust type to local type
@@ -173,6 +174,19 @@ export const useMCPStore = create<MCPState>()(
           // Ignore disconnect errors
         }
         get().setServerStatus(name, { status: 'disabled', tools: [], resources: [] });
+      },
+
+      installRemoteServer: async (config, autoConnect = true) => {
+        const existing = get().servers.find((server) => server.name === config.name);
+        if (existing) {
+          get().updateServer(config.name, config);
+        } else {
+          get().addServer(config);
+        }
+
+        if (autoConnect && !config.disabled && config.type === 'stdio') {
+          await get().connectServer(config.name);
+        }
       },
 
       refreshServer: async (name) => {

@@ -12,7 +12,11 @@ pub struct InstalledSkillInfo {
 /// Extract a skill ZIP to the target directory and return the parsed SKILL.md info.
 /// The ZIP data is passed as base64 to avoid IPC issues with binary data.
 #[tauri::command]
-pub fn extract_skill_zip(zip_base64: String, target_dir: String) -> Result<InstalledSkillInfo, String> {
+pub fn extract_skill_zip(
+    zip_base64: String,
+    target_dir: String,
+    source_path_hint: Option<String>,
+) -> Result<InstalledSkillInfo, String> {
     let zip_bytes = base64_decode(&zip_base64)?;
 
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&zip_bytes))
@@ -20,13 +24,21 @@ pub fn extract_skill_zip(zip_base64: String, target_dir: String) -> Result<Insta
 
     let mut skill_content: Option<String> = None;
     let mut skill_path_in_zip: Option<String> = None;
+    let hint_normalized = source_path_hint
+        .as_ref()
+        .map(|hint| hint.replace('\\', "/").to_lowercase());
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
         let file_path = file.name().to_string();
-        let lower = file_path.to_lowercase();
+        let lower = file_path.replace('\\', "/").to_lowercase();
 
         if lower.ends_with("skill.md") {
+            if let Some(hint) = hint_normalized.as_ref() {
+                if !lower.contains(hint) {
+                    continue;
+                }
+            }
             let mut content = String::new();
             std::io::Read::read_to_string(&mut file, &mut content)
                 .map_err(|e| format!("Failed to read SKILL.md from ZIP: {}", e))?;
@@ -36,7 +48,13 @@ pub fn extract_skill_zip(zip_base64: String, target_dir: String) -> Result<Insta
         }
     }
 
-    let content = skill_content.ok_or_else(|| "No SKILL.md found in ZIP archive".to_string())?;
+    let content = skill_content.ok_or_else(|| {
+        if let Some(hint) = hint_normalized.as_ref() {
+            format!("No SKILL.md found in ZIP archive for path hint '{}'", hint)
+        } else {
+            "No SKILL.md found in ZIP archive".to_string()
+        }
+    })?;
 
     let (meta, body) = parse_frontmatter(&content);
     let name = meta.get("name").cloned().unwrap_or_else(|| {

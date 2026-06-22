@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
-import type { SkillInfo } from '../types/skill';
+import type { RemoteSkillInfo, SkillInfo } from '../types/skill';
 
 interface SkillFileEntry {
   name: string;
@@ -35,6 +35,18 @@ interface SkillState {
 
   // Discovery
   refreshSkills: () => Promise<void>;
+  installSkillZip: (
+    zipBase64: string,
+    options?: { targetDir?: string; sourcePathHint?: string }
+  ) => Promise<SkillInfo>;
+  searchRemoteSkills: (
+    source: 'clawhub' | 'skillhub',
+    query: string
+  ) => Promise<RemoteSkillInfo[]>;
+  installRemoteSkill: (
+    slug: string,
+    options?: { source?: 'clawhub' | 'skillhub' }
+  ) => Promise<SkillInfo>;
 
   // Scan status actions
   setScanning: (scanning: boolean) => void;
@@ -151,6 +163,51 @@ export const useSkillStore = create<SkillState>()(
         } finally {
           get().setScanning(false);
         }
+      },
+
+      installSkillZip: async (zipBase64, options) => {
+        const targetDir = options?.targetDir || 'managed-skills';
+        const installed = await invoke<{
+          name: string;
+          description: string;
+          content: string;
+          path: string;
+        }>('extract_skill_zip', {
+          zipBase64,
+          targetDir,
+          sourcePathHint: options?.sourcePathHint ?? null,
+        });
+
+        get().addPath(targetDir);
+        get().addSkill({
+          name: installed.name,
+          description: installed.description,
+          content: installed.content,
+          location: installed.path,
+          enabled: true,
+        });
+        await get().refreshSkills();
+
+        const latest = get().skills.find((skill) => skill.name === installed.name);
+        return latest || {
+          name: installed.name,
+          description: installed.description,
+          content: installed.content,
+          location: installed.path,
+          enabled: true,
+        };
+      },
+
+      searchRemoteSkills: async (source, query) => {
+        return invoke<RemoteSkillInfo[]>('search_remote_skills', {
+          source,
+          query: query.trim() || null,
+        });
+      },
+
+      installRemoteSkill: async (slug) => {
+        const zipBase64 = await invoke<string>('download_remote_skill_archive', { slug });
+        return get().installSkillZip(zipBase64);
       },
 
       setScanning: (scanning) => set({ isScanning: scanning }),

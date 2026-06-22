@@ -38,3 +38,9 @@ config.json
 # Kilo CLI runtime
 .kilo/
 .trae/
+
+# Managed skills (remote installations)
+managed-skills/
+
+# Temporary probe files
+tmp_*
