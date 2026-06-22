@@ -1,71 +1,88 @@
-import { useCallback, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FolderOpen, Check, ChevronLeft, Files, ChevronRight } from 'lucide-react'
+import {
+  ChevronRight,
+  Cpu,
+  Sparkles,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
-import { useAppStore } from '../../stores'
-import { FileTree } from './FileTree'
-import { AgentBuilder } from '../agent-builder'
+import { useAgentStore, useAppStore } from '../../stores'
+import { useMCPStore } from '../../stores/mcpStore'
+import { useSkillStore } from '../../stores/skillStore'
 
-/**
- * Detect if running inside Tauri webview
- */
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-}
+const AGENT_VISUAL_SRC = '/pets/cloudling/assets/cloudling-mini-idle.svg'
 
 export function WorkspacePanel() {
   const { t } = useTranslation()
-  const { workspaceDir, setWorkspaceDir, workspaceCollapsed: collapsed, toggleWorkspace } = useAppStore()
-  const [showInput, setShowInput] = useState(false)
-  const [inputValue, setInputValue] = useState('')
-  const hiddenInputRef = useRef<HTMLInputElement>(null)
+  const workspaceDir = useAppStore((s) => s.workspaceDir)
+  const { workspaceCollapsed: collapsed, toggleWorkspace, providerConfigs, activeProvider } = useAppStore()
+  const agents = useAgentStore((s) => s.agents)
+  const activeAgentId = useAgentStore((s) => s.activeAgentId)
+  const skills = useSkillStore((s) => s.skills)
+  const skillMeta = useSkillStore((s) => s.skillMeta)
+  const mcpServers = useMCPStore((s) => s.servers)
+  const mcpStatuses = useMCPStore((s) => s.serverStatuses)
 
-  const applyDir = useCallback((dir: string) => {
-    setWorkspaceDir(dir)
-    setShowInput(false)
-    setInputValue('')
-  }, [setWorkspaceDir])
+  const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null
+  const enabledSkills = skills.filter((skill) => skill.enabled)
+  const connectedServerNames = Object.entries(mcpStatuses)
+    .filter(([, status]) => status?.status === 'connected')
+    .map(([name]) => name)
 
-  const handleSelectDir = useCallback(async () => {
-    // ── Tauri native dialog ──
-    if (isTauri()) {
-      try {
-        const { open } = await import('@tauri-apps/plugin-dialog')
-        const selected = await open({ directory: true, multiple: false })
-        if (!selected) return
-        const dir = typeof selected === 'string' ? selected : (selected as { path?: string }).path || ''
-        if (dir) applyDir(dir)
-      } catch {
-        setShowInput(true)
-      }
-      return
+  const displayAgent = useMemo(() => {
+    if (activeAgent) return activeAgent
+
+    return {
+      id: 'mock-agent',
+      name: 'Snotra Orchestrator',
+      description: t('agentPanel.mockDescription'),
+      avatar: '',
+      instructions: t('agentPanel.mockSoulPrompt'),
+      model: '',
+      skills: enabledSkills.slice(0, 3).map((skill) => skill.name),
+      mcpTools: connectedServerNames.slice(0, 2).map((serverName) => ({
+        serverName,
+        toolName: 'context',
+      })),
+      mcpServers: connectedServerNames.slice(0, 3),
+      accessiblePaths: workspaceDir ? [workspaceDir] : [],
+      permissionMode: 'ask' as const,
+      permissionRules: {},
+      slashCommands: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     }
+  }, [activeAgent, connectedServerNames, enabledSkills, t, workspaceDir])
 
-    // ── Browser: File System Access API (Chrome/Edge) ──
-    try {
-      const handle = await (window as any).showDirectoryPicker()
-      const dirName = handle.name
-      applyDir(`selected://${dirName}`)
-    } catch (err: unknown) {
-      if ((err as DOMException)?.name === 'AbortError' || (err as DOMException)?.name === 'SecurityError') {
-        return
-      }
-      if (hiddenInputRef.current) {
-        hiddenInputRef.current.value = ''
-        hiddenInputRef.current.click()
-      }
-    }
-  }, [applyDir])
-
-  const handleClear = useCallback(() => {
-    setWorkspaceDir(null)
-  }, [setWorkspaceDir])
-
-  const handleInputSubmit = useCallback(() => {
-    if (inputValue.trim()) {
-      applyDir(inputValue.trim())
-    }
-  }, [inputValue, applyDir])
+  const visibleSkillNames = displayAgent.skills.length > 0
+    ? displayAgent.skills
+    : enabledSkills.slice(0, 4).map((skill) => skill.name)
+  const visibleServerNames = displayAgent.mcpServers.length > 0
+    ? displayAgent.mcpServers
+    : connectedServerNames.slice(0, 4)
+  const visibleToolNames = displayAgent.mcpTools.length > 0
+    ? displayAgent.mcpTools.map((tool) => `${tool.serverName}.${tool.toolName}`)
+    : Object.entries(mcpStatuses)
+        .flatMap(([serverName, status]) => (status.tools || []).slice(0, 2).map((tool) => `${serverName}.${tool.name}`))
+        .slice(0, 6)
+  const workspaceEntries = displayAgent.accessiblePaths.length > 0
+    ? displayAgent.accessiblePaths
+    : workspaceDir
+      ? [workspaceDir]
+      : []
+  const providerModel = displayAgent.model || providerConfigs[activeProvider]?.model || t('chat.status.noModel')
+  const agentRoster = agents.length > 0
+    ? agents.slice(0, 4).map((agent) => ({ label: agent.name, active: agent.id === activeAgentId }))
+    : [
+        { label: 'Snotra Orchestrator', active: true },
+        { label: 'Flow Runner', active: false },
+        { label: 'Code Analyst', active: false },
+      ]
+  const moduleStats = [
+    { label: t('agentPanel.skills'), value: String(visibleSkillNames.length) },
+    { label: 'MCP', value: String(Math.max(visibleServerNames.length, mcpServers.length)) },
+    { label: t('agentPanel.workspaceSection'), value: String(workspaceEntries.length) },
+  ]
 
   if (collapsed) {
     return (
@@ -78,9 +95,9 @@ export function WorkspacePanel() {
           whileTap={{ scale: 0.9 }}
           onClick={toggleWorkspace}
           className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-secondary/80 text-accent shadow-lg shadow-accent/5 border border-white/10 backdrop-blur-md transition-all duration-500 hover:shadow-accent/20"
-          title={t('workspace.tooltip')}
+          title={t('agentPanel.tooltip')}
         >
-          <FolderOpen size={16} strokeWidth={2.5} />
+          <img src={AGENT_VISUAL_SRC} alt="" className="h-5 w-5 object-contain" />
         </motion.button>
       </aside>
     )
@@ -91,16 +108,13 @@ export function WorkspacePanel() {
       className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-transparent relative pt-10"
       style={{ width: 'var(--spacing-workspace-panel)' }}
     >
-      {/* Left Edge - Removed for consistency */}
-      
-      {/* Header - Refined & Balanced */}
-      <div className="flex items-start justify-between px-5 pt-6 pb-4 relative z-10">
-        <div className="flex flex-col">
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent opacity-40 mb-0.5">
-            {t('workspace.resource')}
+      <div className="flex items-start justify-between px-5 pt-6 pb-3 relative z-10">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent opacity-40">
+            {t('agentPanel.eyebrow')}
           </span>
           <h2 className="text-[17px] font-black text-text tracking-tighter leading-none">
-            {t('workspace.title')}
+            {t('agentPanel.title')}
           </h2>
         </div>
         <motion.button
@@ -113,138 +127,210 @@ export function WorkspacePanel() {
         </motion.button>
       </div>
 
-      {/* Content - Split: Workspace (upper) + Agent Builder (lower) */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="overflow-y-auto px-5 flex-1 min-h-0 scrollbar-subtle">
-          <div className="pb-1 space-y-5">
-          {workspaceDir ? (
-            <div className="space-y-4 animate-fade-in-up">
-              {/* Directory path display - Refined style */}
-              <div className="group relative rounded-lg border border-border-light bg-white dark:bg-white/5 p-3.5 transition-all duration-500 hover:shadow-md hover:shadow-accent/5 overflow-hidden shadow-xs">
-                <div className="flex items-start gap-2.5 relative z-10">
-                  <div className="p-1.5 rounded-md bg-accent/10 text-accent">
-                    <FolderOpen size={14} strokeWidth={2} />
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 scrollbar-subtle">
+        <div className="space-y-3 pb-4">
+          <div className="rounded-[28px] border border-border-light/70 bg-white/72 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.05)] backdrop-blur-2xl dark:bg-white/5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/8 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-accent">
+                  <Sparkles size={11} strokeWidth={2.2} />
+                  {activeAgent ? t('agentPanel.currentAgent') : t('agentPanel.mockState')}
+                </div>
+
+                <div className="mt-3 flex items-start gap-3">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] border border-accent/15 bg-linear-to-br from-accent/10 to-white/80 shadow-inner shadow-accent/10 dark:to-white/5">
+                    <img src={AGENT_VISUAL_SRC} alt="" className="h-9 w-9 object-contain" />
                   </div>
+
                   <div className="min-w-0 flex-1">
-                    <div className="text-[8px] font-black uppercase tracking-[0.15em] text-accent/60 mb-1">
-                      {t('workspace.environment')}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-[18px] font-black tracking-tight text-text">
+                          {displayAgent.name}
+                        </h3>
+                        <p className="mt-1 text-[11px] leading-relaxed text-text-tertiary">
+                          {displayAgent.description || t('agentPanel.descriptionFallback')}
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 rounded-2xl border border-border-light/70 bg-surface-secondary/70 px-3 py-2">
+                        <div className="text-[9px] font-black uppercase tracking-[0.14em] text-accent/65">
+                          {t('agentPanel.runtime')}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-bold text-text">
+                          <Cpu size={12} className="text-accent" />
+                          <span className="max-w-[110px] truncate">{providerModel}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-surface-secondary/40 p-2 rounded-md border border-black/[0.01] dark:border-white/[0.01] shadow-inner">
-                      <p className="text-[10px] font-mono text-text-secondary break-all leading-relaxed font-semibold">
-                        {workspaceDir}
+
+                    <div className="mt-3 rounded-2xl border border-border-light/70 bg-surface-secondary/55 px-3 py-2.5">
+                      <div className="text-[9px] font-black uppercase tracking-[0.12em] text-accent/65">
+                        {t('agentPanel.soulSection')}
+                      </div>
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-text-secondary">
+                        {displayAgent.instructions || t('agentPanel.soulHint')}
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Actions - Refined buttons */}
-              <div className="flex gap-2 px-0.5">
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSelectDir}
-                  className="flex-1 text-[11px] px-3 py-2 rounded-lg bg-accent text-white font-bold hover:bg-accent-light transition-all duration-500 shadow-lg shadow-accent/10"
-                >
-                  {t('workspace.switch')}
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleClear}
-                  className="text-[11px] px-3 py-2 rounded-lg bg-surface-secondary text-text-secondary hover:text-red-500 hover:bg-red-500/10 border border-border-light transition-all duration-500 font-bold"
-                >
-                  {t('workspace.reset')}
-                </motion.button>
-              </div>
-
-              {/* File Tree */}
-              <div className="pt-1">
-                <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.15em] text-accent mb-2.5 px-0.5 opacity-60">
-                  <Files size={12} />
-                  {t('workspace.explorer')}
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {moduleStats.map((stat) => (
+                <div key={stat.label} className="rounded-2xl border border-border-light/70 bg-surface-secondary/55 px-3 py-2.5">
+                  <div className="text-[9px] font-black uppercase tracking-[0.12em] text-text-tertiary">
+                    {stat.label}
+                  </div>
+                  <div className="mt-1 text-[16px] font-black tracking-tight text-text">
+                    {stat.value}
+                  </div>
                 </div>
-                <div className="-mx-1.5 px-0.5">
-                  <FileTree
-                    rootPath={workspaceDir.startsWith('selected://') ? '' : workspaceDir}
-                  />
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[26px] border border-border-light/70 bg-white/70 p-4 shadow-sm backdrop-blur-xl dark:bg-white/5">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-accent/70">
+                  {t('agentPanel.moduleBoard')}
+                </div>
+                <div className="mt-1 text-[11px] text-text-tertiary">
+                  {t('agentPanel.futureBuilder')}
                 </div>
               </div>
             </div>
-          ) : showInput ? (
-            <div className="space-y-3.5">
-              <button
-                onClick={() => setShowInput(false)}
-                className="flex items-center gap-1.5 text-[10px] font-bold text-text-tertiary hover:text-text transition-all"
-              >
-                <ChevronLeft size={12} />
-                {t('workspace.back')}
-              </button>
-              <p className="text-[12px] font-bold text-text tracking-tight">
-                {t('workspace.enterPath')}
-              </p>
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit()}
-                placeholder={t('workspace.pathPlaceholder')}
-                className="w-full px-3.5 py-2.5 rounded-lg bg-surface border border-border text-[10px] font-mono focus:ring-4 focus:ring-accent-subtle focus:border-accent/40 outline-none transition-all shadow-inner"
-                autoFocus
+
+            <div className="space-y-2.5">
+              <ModuleCard
+                title={t('agentPanel.skillSection')}
+                description={visibleSkillNames.length > 0 ? visibleSkillNames.join(' · ') : t('agentPanel.skillsHint')}
               />
-              <button
-                onClick={handleInputSubmit}
-                disabled={!inputValue.trim()}
-                className="w-full flex items-center justify-center gap-2 text-[11px] px-4 py-2.5 rounded-lg bg-accent text-white font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-xl shadow-accent/20"
-              >
-                <Check size={13} strokeWidth={2.5} />
-                {t('workspace.confirm')}
-              </button>
-            </div>
-          ) : (
-              <div className="flex flex-col items-center text-center py-8 px-4">
-                <motion.div 
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="w-16 h-16 rounded-full bg-surface-secondary/40 border border-border-light flex items-center justify-center mb-6 shadow-sm relative overflow-hidden group/empty"
-                >
-                  <div className="absolute inset-0 bg-linear-to-br from-accent/5 to-transparent opacity-0 group-hover/empty:opacity-100 transition-opacity duration-700" />
-                  <FolderOpen size={24} className="text-accent/30 relative z-10 group-hover/empty:scale-110 transition-transform duration-500" />
-                </motion.div>
-                
-                <h3 className="text-[16px] font-black text-text mb-1.5 tracking-tighter">
-                  {t('workspace.emptyTitle')}
-                </h3>
-                <p className="text-[11px] text-text-tertiary mb-8 max-w-[160px] leading-relaxed font-medium opacity-60">
-                  {t('workspace.emptyDesc')}
-                </p>
-                
-                <div className="w-full space-y-2.5">
-                  <motion.button
-                    whileHover={{ scale: 1.02, y: -1 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleSelectDir}
-                    className="w-full flex items-center justify-center gap-2 text-[11px] px-5 py-3 rounded-lg bg-accent text-white font-black hover:bg-accent-light transition-all duration-500 shadow-xl shadow-accent/10"
-                  >
-                    <FolderOpen size={13} strokeWidth={2.5} />
-                    {t('workspace.openProject')}
-                  </motion.button>
-
-                  <button
-                    onClick={() => setShowInput(true)}
-                    className="w-full text-[10px] text-text-tertiary hover:text-accent font-bold transition-all duration-300 opacity-50 hover:opacity-100 py-1.5"
-                  >
-                    {t('workspace.enterPathManually')}
-                  </button>
-                </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <ModuleCard
+                  title={t('agentPanel.serverSection')}
+                  description={visibleServerNames.length > 0 ? visibleServerNames.join(' · ') : t('agentPanel.mcpHint')}
+                />
+                <ModuleCard
+                  title={t('agentPanel.toolSection')}
+                  description={visibleToolNames.length > 0 ? visibleToolNames.join(' · ') : t('agentPanel.toolHint')}
+                />
               </div>
-            )}
+              <ModuleCard
+                title={t('agentPanel.workspaceSection')}
+                description={workspaceEntries.length > 0 ? workspaceEntries.join(' · ') : t('agentPanel.workspaceHint')}
+                mono
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <TagPanel
+              title={t('agentPanel.skillSection')}
+              items={visibleSkillNames.map((name) => `${skillMeta[name]?.emoji || '✦'} ${name}`)}
+              emptyText={t('agentPanel.skillsHint')}
+            />
+            <TagPanel
+              title={t('agentPanel.toolSection')}
+              items={visibleToolNames}
+              emptyText={t('agentPanel.toolHint')}
+            />
+          </div>
+
+          <div className="rounded-[26px] border border-border-light/70 bg-white/70 p-4 shadow-sm backdrop-blur-xl dark:bg-white/5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-accent/70">
+                  {t('agentPanel.presets')}
+                </p>
+                <p className="mt-1 text-[11px] font-medium text-text-tertiary">
+                  {t('agentPanel.presetHint')}
+                </p>
+              </div>
+              <div className="rounded-full border border-border-light bg-surface-secondary/60 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-text-tertiary">
+                {agents.length > 0 ? `${agents.length} ${t('agentPanel.agentsUnit')}` : t('agentPanel.mockOnly')}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {agentRoster.map((agent) => (
+                <div
+                  key={agent.label}
+                  className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-[11px] font-bold tracking-tight transition-all ${
+                    agent.active
+                      ? 'border-accent/20 bg-accent/10 text-accent shadow-sm'
+                      : 'border-border-light bg-surface-secondary/50 text-text-secondary'
+                  }`}
+                >
+                  <span>{agent.label}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${
+                    agent.active ? 'bg-white/70 text-accent' : 'bg-white/60 text-text-tertiary dark:bg-white/10'
+                  }`}>
+                    {agent.active ? t('agentPanel.liveConfig') : t('agentPanel.mockOnly')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Lower: Agent Builder */}
-      <AgentBuilder />
-    </div>
     </aside>
+  )
+}
+
+function ModuleCard({
+  title,
+  description,
+  mono = false,
+}: {
+  title: string
+  description: string
+  mono?: boolean
+}) {
+  return (
+    <div className="rounded-2xl border border-border-light/70 bg-surface-secondary/45 px-3.5 py-3">
+      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-accent/70">
+        {title}
+      </div>
+      <p className={`mt-2 text-[11px] leading-relaxed text-text-secondary ${mono ? 'font-mono' : 'font-medium'}`}>
+        {description}
+      </p>
+    </div>
+  )
+}
+
+function TagPanel({
+  title,
+  items,
+  emptyText,
+}: {
+  title: string
+  items: string[]
+  emptyText: string
+}) {
+  return (
+    <div className="rounded-[24px] border border-border-light/70 bg-white/70 p-4 shadow-sm backdrop-blur-xl dark:bg-white/5">
+      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-accent/70">
+        {title}
+      </div>
+      {items.length === 0 ? (
+        <p className="mt-2.5 text-[11px] leading-relaxed text-text-tertiary">
+          {emptyText}
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {items.map((item) => (
+            <span
+              key={item}
+              className="inline-flex items-center rounded-full border border-border-light bg-surface-secondary/50 px-3 py-1.5 text-[11px] font-medium text-text-secondary"
+            >
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

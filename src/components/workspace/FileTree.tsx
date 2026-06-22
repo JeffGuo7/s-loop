@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, type DragEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Folder, ChevronRight, ChevronDown, File,
@@ -84,6 +84,12 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
     }
   }, [path, isDir])
 
+  useEffect(() => {
+    if (depth !== 0 || !isDir) return
+    loadChildren()
+    setExpanded(true)
+  }, [depth, isDir, loadChildren])
+
   const handleMouseDown = useCallback(() => {
     draggingRef.current = false
   }, [])
@@ -99,7 +105,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
   }, [isDir, expanded, loadChildren, path, name])
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()
         if (isDir) {
@@ -114,7 +120,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
   )
 
   const handleDragStart = useCallback(
-    (e: React.DragEvent) => {
+    (e: DragEvent) => {
       draggingRef.current = true
       e.dataTransfer.setData('text/plain', path)
       e.dataTransfer.setData('application/x-s-loop-file', JSON.stringify({ path, name, isDir }))
@@ -131,11 +137,11 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
   }, [])
 
   const Icon = getFileIcon(name)
-  const paddingLeft = depth * 16 + 10
+  const paddingLeft = depth * 12 + 6
   const isNodeModules = name === 'node_modules'
 
   return (
-    <div className="mb-0.5">
+    <div className="mb-px">
       <div
         role="button"
         tabIndex={0}
@@ -145,7 +151,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
         onKeyDown={handleKeyDown}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-surface-secondary/60 transition-all duration-300 text-left select-none outline-none focus-visible:ring-2 focus-visible:ring-accent group/tree-item"
+        className="w-full flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-secondary/70 transition-all duration-200 text-left select-none outline-none focus-visible:ring-2 focus-visible:ring-accent/30 group/tree-item"
         style={{ paddingLeft: `${paddingLeft}px` }}
         title={path}
       >
@@ -154,40 +160,40 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
           children !== null && children.length === 0 ? (
             <span className="w-4 shrink-0" />
           ) : (
-            <span className="w-4 shrink-0 text-text-quaternary group-hover/tree-item:text-accent transition-colors">
+            <span className="w-3.5 shrink-0 text-text-quaternary group-hover/tree-item:text-accent transition-colors">
               {loading ? (
-                <span className="inline-block w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <span className="inline-block w-2.5 h-2.5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
               ) : expanded ? (
-                <ChevronDown size={13} strokeWidth={2.5} />
+                <ChevronDown size={11} strokeWidth={2.4} />
               ) : (
-                <ChevronRight size={13} strokeWidth={2.5} />
+                <ChevronRight size={11} strokeWidth={2.4} />
               )}
             </span>
           )
         ) : (
-          <span className="w-4 shrink-0" />
+          <span className="w-3.5 shrink-0" />
         )}
 
         {/* File/folder icon */}
         <span className={`shrink-0 transition-transform duration-500 group-hover/tree-item:scale-110 ${isNodeModules ? 'opacity-30' : ''}`}>
           {isDir ? (
             expanded ? (
-              <Folder size={14} className="text-accent" fill="currentColor" fillOpacity={0.15} strokeWidth={2} />
+              <Folder size={12} className="text-accent" fill="currentColor" fillOpacity={0.12} strokeWidth={1.9} />
             ) : (
-              <Folder size={14} className="text-accent/60" strokeWidth={2} />
+              <Folder size={12} className="text-accent/60" strokeWidth={1.9} />
             )
           ) : (
-            <Icon size={14} className="text-text-quaternary group-hover/tree-item:text-text-secondary" strokeWidth={1.5} />
+            <Icon size={12} className="text-text-quaternary group-hover/tree-item:text-text-secondary" strokeWidth={1.5} />
           )}
         </span>
 
         {/* Name */}
         <span
-          className={`text-[12px] truncate tracking-tight transition-colors duration-300 ${
+          className={`text-[11px] truncate tracking-tight leading-5 transition-colors duration-200 ${
             isNodeModules
               ? 'text-text-quaternary italic'
               : isDir
-                ? 'text-text font-bold'
+                ? 'text-text font-semibold'
                 : 'text-text-secondary group-hover/tree-item:text-text'
           }`}
         >
@@ -201,7 +207,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
           {children.length === 0 ? (
             <div
               className="text-[9px] text-[var(--color-text-quaternary)] italic px-2 py-0.5"
-              style={{ paddingLeft: `${paddingLeft + 16}px` }}
+              style={{ paddingLeft: `${paddingLeft + 12}px` }}
             >
               {t('workspace.empty')}
             </div>

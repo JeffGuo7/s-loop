@@ -29,10 +29,10 @@
   --color-border-light: #f1f0ed;
   --color-border-hover: #dfddd9;
 
-  --spacing-sidebar: 240px;
+  --spacing-sidebar: 272px;
   --spacing-sidebar-collapsed: 64px;
   --spacing-chat-max: 820px;
-  --spacing-workspace-panel: 240px;
+  --spacing-workspace-panel: 320px;
   --spacing-workspace-panel-collapsed: 64px;
 
   --radius-sm: 4px;

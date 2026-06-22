@@ -28,6 +28,7 @@ interface AppState {
   theme: 'light' | 'dark'
   locale: string
   sidebarCollapsed: boolean
+  leftPanelMode: 'sessions' | 'files'
   workspaceCollapsed: boolean
   workspaceDir: string | null
 
@@ -68,6 +69,8 @@ interface AppState {
   setTheme: (theme: 'light' | 'dark') => void
   setLocale: (locale: string) => void
   toggleSidebar: () => void
+  setLeftPanelMode: (mode: 'sessions' | 'files') => void
+  toggleLeftPanelMode: () => void
   toggleWorkspace: () => void
   setWorkspaceDir: (dir: string | null) => void
 
@@ -97,6 +100,7 @@ export const useAppStore = create<AppState>()(
       theme: 'light',
       locale: i18n.language?.startsWith('zh') ? 'zh' : 'en',
       sidebarCollapsed: false,
+      leftPanelMode: 'sessions',
       workspaceCollapsed: false,
       workspaceDir: null,
       companion: null,
@@ -437,6 +441,10 @@ export const useAppStore = create<AppState>()(
       },
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      setLeftPanelMode: (mode) => set({ leftPanelMode: mode }),
+      toggleLeftPanelMode: () => set((state) => ({
+        leftPanelMode: state.leftPanelMode === 'sessions' ? 'files' : 'sessions',
+      })),
       toggleWorkspace: () => set((state) => ({ workspaceCollapsed: !state.workspaceCollapsed })),
       setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
 
@@ -454,6 +462,7 @@ export const useAppStore = create<AppState>()(
         theme: state.theme,
         locale: state.locale,
         companion: state.companion,
+        leftPanelMode: state.leftPanelMode,
         workspaceDir: state.workspaceDir,
       }),
       version: 4,

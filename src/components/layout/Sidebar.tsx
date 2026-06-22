@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   MessageSquare,
@@ -12,11 +12,16 @@ import {
   Moon,
   Sun,
   Clock,
+  FolderOpen,
+  MessagesSquare,
+  FolderTree,
+  RefreshCw,
   type LucideIcon,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores'
 import { MagicButton } from '../ui'
+import { FileTree } from '../workspace/FileTree'
 import type { Page } from '../../App'
 
 interface SidebarProps {
@@ -41,9 +46,15 @@ export function Sidebar({
   const setActiveSession = useAppStore((s) => s.setActiveSession)
   const createSession = useAppStore((s) => s.createSession)
   const deleteSession = useAppStore((s) => s.deleteSession)
+  const leftPanelMode = useAppStore((s) => s.leftPanelMode)
+  const setLeftPanelMode = useAppStore((s) => s.setLeftPanelMode)
+  const workspaceDir = useAppStore((s) => s.workspaceDir)
+  const setWorkspaceDir = useAppStore((s) => s.setWorkspaceDir)
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
   const { t } = useTranslation()
+  const [showPathInput, setShowPathInput] = useState(false)
+  const [pathInput, setPathInput] = useState('')
 
   const handleNewChat = useCallback(() => {
     createSession()
@@ -59,28 +70,71 @@ export function Sidebar({
   )
 
   const handleDelete = useCallback(
-    (e: React.MouseEvent, id: string) => {
+    (e: MouseEvent, id: string) => {
       e.stopPropagation()
       deleteSession(id)
     },
     [deleteSession],
   )
 
+  const applyWorkspaceDir = useCallback((dir: string) => {
+    setWorkspaceDir(dir)
+    setShowPathInput(false)
+    setPathInput('')
+    setLeftPanelMode('files')
+  }, [setLeftPanelMode, setPathInput, setWorkspaceDir])
+
+  const handleSelectDir = useCallback(async () => {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog')
+        const selected = await open({ directory: true, multiple: false })
+        if (!selected) return
+        const dir = typeof selected === 'string' ? selected : (selected as { path?: string }).path || ''
+        if (dir) applyWorkspaceDir(dir)
+        return
+      } catch {
+        setShowPathInput(true)
+        return
+      }
+    }
+
+    try {
+      const handle = await (window as Window & { showDirectoryPicker?: () => Promise<{ name: string }> }).showDirectoryPicker?.()
+      if (handle?.name) {
+        applyWorkspaceDir(`selected://${handle.name}`)
+        return
+      }
+    } catch (err: unknown) {
+      if ((err as DOMException)?.name === 'AbortError' || (err as DOMException)?.name === 'SecurityError') {
+        return
+      }
+    }
+
+    setShowPathInput(true)
+  }, [applyWorkspaceDir])
+
+  const handleSubmitPath = useCallback(() => {
+    if (!pathInput.trim()) return
+    applyWorkspaceDir(pathInput.trim())
+  }, [applyWorkspaceDir, pathInput])
+
+  const handleClearWorkspace = useCallback(() => {
+    setWorkspaceDir(null)
+  }, [setWorkspaceDir])
+
   const width = collapsed ? 'var(--spacing-sidebar-collapsed)' : 'var(--spacing-sidebar)'
+  const isFilesMode = leftPanelMode === 'files'
+  const normalizedWorkspaceDir = workspaceDir?.startsWith('selected://') ? '' : workspaceDir || ''
 
   return (
     <aside
       className={`h-full flex flex-col bg-transparent sidebar-transition shrink-0 z-20 relative group/sidebar ${className}`}
       style={{ width }}
     >
-      {/* Background Layer - Removed for consistency */}
-      
-      {/* Right Edge - No indicator line to keep it seamless */}
-
-      {/* Header: New Chat & Title */}
       <div className="px-4 pt-8 pb-6 relative z-10">
         {!collapsed ? (
-          <div className="space-y-8">
+          <div className="space-y-4">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -95,41 +149,74 @@ export function Sidebar({
               </MagicButton>
             </motion.div>
 
-            <div className="flex items-center justify-between px-1">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent opacity-50">
-                  {t('sidebar.workspace')}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-bold text-text tracking-tight">
-                    {t('sidebar.recent')}
+            <div className="space-y-2 px-1">
+              <div className="flex items-center gap-1.5 rounded-xl border border-border-light/80 bg-white/70 p-1 shadow-sm backdrop-blur-xl dark:bg-white/5">
+                <button
+                  onClick={() => setLeftPanelMode('sessions')}
+                  className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-black tracking-tight transition-all duration-300 ${
+                    !isFilesMode
+                      ? 'bg-accent text-white shadow-lg shadow-accent/15'
+                      : 'text-text-tertiary hover:text-text hover:bg-surface-secondary/70'
+                  }`}
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <MessagesSquare size={12} />
+                    {t('sidebar.panelSessions')}
                   </span>
-                  <button
-                    onClick={() => {
-                      if (window.confirm(t('sidebar.clearConfirm'))) {
-                        useAppStore.getState().clearSessions()
-                      }
-                    }}
-                    className="p-1 rounded-md text-text-quaternary hover:text-red-500 hover:bg-red-500/10 transition-all duration-300 group/clear"
-                    title={t('sidebar.clearTitle')}
+                </button>
+                <button
+                  onClick={() => setLeftPanelMode('files')}
+                  className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-black tracking-tight transition-all duration-300 ${
+                    isFilesMode
+                      ? 'bg-accent text-white shadow-lg shadow-accent/15'
+                      : 'text-text-tertiary hover:text-text hover:bg-surface-secondary/70'
+                  }`}
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <FolderTree size={12} />
+                    {t('sidebar.panelFiles')}
+                  </span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between px-1">
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-[0.18em] text-accent/50">
+                    {isFilesMode ? t('sidebar.fileWorkspace') : t('sidebar.workspace')}
+                  </div>
+                  <div className="mt-0.5 text-[13px] font-bold tracking-tight text-text">
+                    {isFilesMode ? t('sidebar.fileExplorer') : t('sidebar.recent')}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {!isFilesMode && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(t('sidebar.clearConfirm'))) {
+                          useAppStore.getState().clearSessions()
+                        }
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-text-quaternary transition-all duration-300 hover:bg-red-500/10 hover:text-red-500"
+                      title={t('sidebar.clearTitle')}
+                    >
+                      <Trash2 size={11} strokeWidth={2} />
+                    </button>
+                  )}
+                  <motion.button
+                    whileHover={{ scale: 1.05, x: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={onToggleCollapse}
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-surface-secondary/80 text-text-tertiary transition-all duration-300 shadow-sm border border-black/5 hover:text-accent dark:border-white/5"
+                    title={t('sidebar.collapseTitle')}
                   >
-                    <Trash2 size={11} strokeWidth={2} className="group-hover/clear:scale-110 transition-transform" />
-                  </button>
+                    <ChevronLeft size={14} strokeWidth={2.5} />
+                  </motion.button>
                 </div>
               </div>
-              <motion.button
-                whileHover={{ scale: 1.05, x: -2 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onToggleCollapse}
-                className="w-7 h-7 flex items-center justify-center rounded-md bg-surface-secondary/80 text-text-tertiary hover:text-accent transition-all duration-300 shadow-sm border border-black/5 dark:border-white/5"
-                title={t('sidebar.collapseTitle')}
-              >
-                <ChevronLeft size={14} strokeWidth={2.5} />
-              </motion.button>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-6 w-full items-center pt-2">
+          <div className="flex flex-col gap-4 w-full items-center pt-2">
             <motion.div whileHover={{ scale: 1.1, rotate: 10 }} whileTap={{ scale: 0.9 }}>
               <MagicButton
                 onClick={handleNewChat}
@@ -138,6 +225,17 @@ export function Sidebar({
                 <Plus size={22} strokeWidth={3} className="text-white" />
               </MagicButton>
             </motion.div>
+            <button
+              onClick={() => setLeftPanelMode(isFilesMode ? 'sessions' : 'files')}
+              className={`w-10 h-10 rounded-xl border transition-all duration-300 flex items-center justify-center ${
+                isFilesMode
+                  ? 'bg-accent/12 text-accent border-accent/20 shadow-md shadow-accent/10'
+                  : 'bg-surface-secondary/80 text-text-tertiary border-black/5 dark:border-white/5 hover:text-accent'
+              }`}
+              title={isFilesMode ? t('sidebar.backToSessions') : t('sidebar.openFileTree')}
+            >
+              {isFilesMode ? <MessagesSquare size={17} strokeWidth={2.4} /> : <FolderTree size={17} strokeWidth={2.4} />}
+            </button>
             <motion.button
               whileHover={{ scale: 1.05, x: 2 }}
               whileTap={{ scale: 0.95 }}
@@ -151,9 +249,9 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Main Content: Session list */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 scrollbar-subtle space-y-1">
-        {sessions.map((session) => {
+      {!isFilesMode ? (
+        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 scrollbar-subtle space-y-1">
+          {sessions.map((session) => {
           const isActive = session.id === activeSessionId
           const title = session.title || t('sidebar.untitled')
           const isPlatformSession = session.source === 'platform'
@@ -191,20 +289,20 @@ export function Sidebar({
             <button
               key={session.id}
               onClick={() => handleSelect(session.id)}
-              className={`group relative w-full min-h-[44px] rounded-lg transition-all duration-500 flex items-center border pl-3 pr-8 py-2 gap-2.5 ${
+              className={`group relative flex w-full min-h-[44px] items-center gap-2.5 rounded-lg border pl-3 pr-8 py-2 transition-all duration-500 ${
                 isActive
                   ? 'bg-accent/8 dark:bg-accent/15 border-accent/25 shadow-md ring-1 ring-accent/10 cursor-default'
                   : 'bg-transparent border-transparent hover:bg-surface-secondary/70 hover:border-black/5 dark:hover:border-white/5 cursor-pointer'
               }`}
             >
-              <div className={`flex items-center justify-center w-6 h-6 shrink-0 rounded-md transition-all duration-500 ${
+              <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-all duration-500 ${
                 isActive ? 'bg-accent/15 text-accent shadow-sm shadow-accent/10' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
               }`}>
                 <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
               </div>
 
-              <div className="flex-1 min-w-0 text-left">
-                <p className={`text-[13px] truncate tracking-tight transition-all duration-500 ${
+              <div className="min-w-0 flex-1 text-left">
+                <p className={`truncate text-[13px] tracking-tight transition-all duration-500 ${
                   isActive ? 'font-bold text-accent' : 'font-medium text-text-secondary group-hover:text-text'
                 }`}>
                   {title}
@@ -229,18 +327,18 @@ export function Sidebar({
 
               <div
                 onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(e, session.id);
+                  e.stopPropagation()
+                  handleDelete(e, session.id)
                 }}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => {
+                onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
                   if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                    handleDelete(e as unknown as React.MouseEvent, session.id);
+                    e.stopPropagation()
+                    handleDelete(e as unknown as MouseEvent, session.id)
                   }
                 }}
-                className={`p-1 rounded-md transition-all duration-300 cursor-pointer ${
+                className={`cursor-pointer rounded-md p-1 transition-all duration-300 ${
                   isActive
                     ? 'text-accent/60 hover:text-red-500 hover:bg-red-500/10'
                     : 'text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100'
@@ -249,16 +347,111 @@ export function Sidebar({
                 <Trash2 size={12} strokeWidth={1.5} />
               </div>
 
-              {/* Active Indicator Line */}
               {isActive && (
-                <div className="absolute left-0 top-2 bottom-2 w-1 bg-accent rounded-r-full z-20 shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
+                <div className="absolute left-0 top-2 bottom-2 z-20 w-1 rounded-r-full bg-accent shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
               )}
             </button>
           )
-        })}
-      </div>
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-1 min-h-0 flex-col px-4 pb-4">
+          <div className="mb-3 rounded-2xl border border-border-light/70 bg-white/72 p-2.5 shadow-sm backdrop-blur-xl dark:bg-white/5">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-[9px] font-black uppercase tracking-[0.16em] text-accent/55">
+                  {t('sidebar.currentWorkspace')}
+                </div>
+                <div className="mt-1 truncate text-[11px] font-medium text-text-secondary" title={workspaceDir || t('sidebar.noWorkspace')}>
+                  {workspaceDir || t('sidebar.noWorkspace')}
+                </div>
+              </div>
+              <button
+                onClick={handleSelectDir}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white shadow-sm shadow-accent/15 transition-all duration-300 hover:-translate-y-0.5"
+                title={workspaceDir ? t('sidebar.switchWorkspace') : t('sidebar.pickWorkspace')}
+              >
+                <FolderOpen size={14} strokeWidth={2.2} />
+              </button>
+              <button
+                onClick={() => setShowPathInput((prev) => !prev)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-light bg-surface-secondary/70 text-text-tertiary transition-all duration-300 hover:text-accent"
+                title={t('sidebar.enterWorkspacePath')}
+              >
+                <RefreshCw size={13} strokeWidth={2.1} />
+              </button>
+              {workspaceDir && (
+                <button
+                  onClick={handleClearWorkspace}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-light bg-surface-secondary/70 text-text-tertiary transition-all duration-300 hover:bg-red-500/10 hover:text-red-500"
+                  title={t('sidebar.resetWorkspace')}
+                >
+                  <Trash2 size={13} strokeWidth={2.1} />
+                </button>
+              )}
+            </div>
 
-      {/* Footer: Utilities */}
+            {showPathInput && (
+              <div className="mt-2.5 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={pathInput}
+                  onChange={(e) => setPathInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmitPath()}
+                  placeholder={t('workspace.pathPlaceholder')}
+                  className="min-w-0 flex-1 rounded-lg border border-border-light bg-white/90 px-3 py-2 text-[11px] font-mono text-text outline-none transition-all focus:border-accent/30 dark:bg-white/5"
+                />
+                <button
+                  onClick={handleSubmitPath}
+                  disabled={!pathInput.trim()}
+                  className="rounded-lg bg-accent px-3 py-2 text-[11px] font-black text-white disabled:opacity-40"
+                >
+                  {t('workspace.confirm')}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="mb-2 flex items-center justify-between px-1">
+            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-accent/60">
+              {t('sidebar.dragExplorerHint')}
+            </span>
+            {workspaceDir && (
+              <span className="text-[10px] font-medium text-text-tertiary">
+                {t('sidebar.fileTreeReady')}
+              </span>
+            )}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-hidden rounded-[22px] border border-border-light/70 bg-white/68 shadow-sm backdrop-blur-xl dark:bg-white/5">
+            {workspaceDir ? (
+              <div className="h-full overflow-y-auto px-2 py-2 scrollbar-subtle">
+                <FileTree rootPath={normalizedWorkspaceDir} />
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center px-5 text-center">
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                  <FolderTree size={18} strokeWidth={2.1} />
+                </div>
+                <h3 className="text-[15px] font-black tracking-tight text-text">
+                  {t('sidebar.filesEmptyTitle')}
+                </h3>
+                <p className="mt-2 max-w-[180px] text-[11px] leading-relaxed text-text-tertiary">
+                  {t('sidebar.filesEmptyDesc')}
+                </p>
+                <button
+                  onClick={handleSelectDir}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[11px] font-black text-white"
+                >
+                  <FolderOpen size={13} strokeWidth={2.2} />
+                  {t('sidebar.pickWorkspace')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="p-4 pb-6 relative z-10 flex flex-col">
         <div className="absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-border-light to-transparent opacity-50" />
         

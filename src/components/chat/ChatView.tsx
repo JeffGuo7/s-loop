@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore, useAgentStore, useWebSearchStore, usePetStore } from '../../stores'
 import { useSkillStore } from '../../stores/skillStore'
 import { useMCPStore } from '../../stores/mcpStore'
-import { Cpu, Sparkles, Paperclip } from 'lucide-react'
+import { Cpu, Sparkles, Paperclip, FolderTree, MessagesSquare } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import * as Pi from '../../utils/piClient'
@@ -21,6 +21,10 @@ export function ChatView() {
     providerConfigs,
     activeProvider,
     workspaceDir,
+    leftPanelMode,
+    setLeftPanelMode,
+    sidebarCollapsed,
+    toggleSidebar,
     startStreaming,
     appendStreamingDelta,
     finishStreaming,
@@ -92,6 +96,14 @@ export function ChatView() {
   const messages = activeSessionId ? sessionMessages[activeSessionId] || EMPTY_MESSAGES : EMPTY_MESSAGES
   const isEmpty = messages.length === 0
   const isReadOnlySession = !!session?.readOnly
+
+  const handleToggleLeftPanel = useCallback(() => {
+    const nextMode = leftPanelMode === 'sessions' ? 'files' : 'sessions'
+    setLeftPanelMode(nextMode)
+    if (sidebarCollapsed) {
+      toggleSidebar()
+    }
+  }, [leftPanelMode, setLeftPanelMode, sidebarCollapsed, toggleSidebar])
 
   const handleSubmit = useCallback(
     async (content: string) => {
@@ -344,6 +356,15 @@ export function ChatView() {
   if (!activeSessionId) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-transparent relative selection:bg-accent/10">
+        <div className="absolute top-4 right-4 z-20">
+          <button
+            onClick={handleToggleLeftPanel}
+            className="inline-flex items-center gap-2 rounded-full border border-border-light bg-surface/80 px-3.5 py-2 text-[11px] font-black tracking-tight text-text-secondary shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-accent/20 hover:text-accent"
+          >
+            {leftPanelMode === 'files' ? <MessagesSquare size={14} /> : <FolderTree size={14} />}
+            {leftPanelMode === 'files' ? t('chat.layout.backToSessions') : t('chat.layout.openFiles')}
+          </button>
+        </div>
         <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 sm:px-8 max-w-4xl mx-auto h-full">
           <div className="mb-4 sm:mb-8 shrink-0">
             <div className="relative group scale-75 sm:scale-90 transition-transform duration-700">
@@ -379,6 +400,15 @@ export function ChatView() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      <div className="absolute top-4 right-4 z-40">
+        <button
+          onClick={handleToggleLeftPanel}
+          className="inline-flex items-center gap-2 rounded-full border border-border-light bg-surface/82 px-3.5 py-2 text-[11px] font-black tracking-tight text-text-secondary shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-accent/20 hover:text-accent"
+        >
+          {leftPanelMode === 'files' ? <MessagesSquare size={14} /> : <FolderTree size={14} />}
+          {leftPanelMode === 'files' ? t('chat.layout.backToSessions') : t('chat.layout.openFiles')}
+        </button>
+      </div>
       {isDragOver && dragTargetZone === 'message' && (
         <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none rounded-[inherit]">
           <div className="w-full h-full mx-4 my-4 rounded-[28px] border-2 border-dashed border-accent/50 bg-accent/5 backdrop-blur-[2px] flex flex-col items-center justify-center gap-4 animate-fade-in">
