@@ -397,12 +397,19 @@ export function ChatView() {
               <div className="text-center relative z-10 w-full flex flex-col items-center">
                 <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">{t('chat.welcome.subtitle')}</p>
                 <div className="flex justify-center w-full mb-8">
-                  <div className="relative group scale-90">
-                    <div className="absolute inset-0 bg-accent opacity-30 blur-[80px] group-hover:opacity-50 transition-opacity duration-700 rounded-full scale-110" />
-                    <div className="relative w-32 h-32 rounded-[35%_65%_60%_40%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-float overflow-hidden">
+                  <div className="relative group scale-90 transition-transform duration-700">
+                    <div className="absolute inset-0 bg-accent/10 blur-[56px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-125" />
+                    <div className="relative w-32 h-32 rounded-[32%_68%_55%_45%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-liquid overflow-hidden">
                       <Cpu size={48} className="text-accent drop-shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.5)]" />
                       <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
                     </div>
+                    <motion.div
+                      animate={{ y: [0, -8, 0], x: [0, 4, 0] }}
+                      transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+                      className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl"
+                    >
+                      <Sparkles size={20} />
+                    </motion.div>
                   </div>
                 </div>
                 <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">{t('chat.welcome.howCanIHelp')}</h2>
