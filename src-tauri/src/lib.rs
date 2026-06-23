@@ -2,6 +2,7 @@ mod commands;
 mod mcp_manager;
 mod pi_server;
 mod skill_installer;
+mod skills_cli;
 
 use crate::mcp_manager::MCPManager;
 use crate::pi_server::{PiServerProcess, PiServerState};
@@ -317,6 +318,11 @@ pub fn run() {
             commands::parse_skill_file,
             commands::search_remote_skills,
             commands::download_remote_skill_archive,
+            skills_cli::skills_cli_search,
+            skills_cli::skills_cli_install,
+            skills_cli::skills_cli_update,
+            skills_cli::skills_cli_remove,
+            skills_cli::skills_mirror_config,
             skill_installer::extract_skill_zip,
             mcp_connect,
             mcp_disconnect,

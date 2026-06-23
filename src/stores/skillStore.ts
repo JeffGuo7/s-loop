@@ -1,7 +1,23 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
-import type { RemoteSkillInfo, SkillInfo } from '../types/skill';
+import type { SkillInfo } from '../types/skill';
+
+/// Skills CLI search result
+export interface SkillsCLISearchResult {
+  id: string;
+  name: string;
+  source: string;
+  installs: number;
+}
+
+/// Skills CLI install result
+export interface SkillsCLIInstallResult {
+  success: boolean;
+  message: string;
+  skill_name: string | null;
+  skill_path: string | null;
+}
 
 interface SkillFileEntry {
   name: string;
@@ -39,14 +55,12 @@ interface SkillState {
     zipBase64: string,
     options?: { targetDir?: string; sourcePathHint?: string }
   ) => Promise<SkillInfo>;
-  searchRemoteSkills: (
-    source: 'clawhub' | 'skillhub',
-    query: string
-  ) => Promise<RemoteSkillInfo[]>;
-  installRemoteSkill: (
-    slug: string,
-    options?: { source?: 'clawhub' | 'skillhub' }
-  ) => Promise<SkillInfo>;
+
+  // Skills CLI (replaces old ClawHub/SkillHub remote system)
+  skillsCliSearch: (query: string) => Promise<SkillsCLISearchResult[]>;
+  skillsCliInstall: (source: string, skillName?: string) => Promise<SkillsCLIInstallResult>;
+  skillsCliUpdate: () => Promise<void>;
+  skillsCliRemove: (skillName: string) => Promise<void>;
 
   // Scan status actions
   setScanning: (scanning: boolean) => void;
@@ -106,10 +120,8 @@ export const useSkillStore = create<SkillState>()(
       refreshSkills: async () => {
         const { paths, skills: existingSkills, isScanning } = get();
 
-        // Prevent concurrent scans
         if (isScanning) return;
 
-        // No paths configured — nothing to scan, don't error
         if (!paths.length) {
           set({ skills: [], skillMeta: {}, lastScanTime: Date.now(), scanError: null });
           return;
@@ -122,7 +134,6 @@ export const useSkillStore = create<SkillState>()(
           try {
             discovered = await invoke<SkillFileEntry[]>('scan_skill_files', { paths });
           } catch {
-            // Tauri command not available (e.g., running in browser dev mode)
             set({
               scanError: 'Tauri command scan_skill_files not available — are you running in the desktop app?',
             });
@@ -144,7 +155,6 @@ export const useSkillStore = create<SkillState>()(
             } as SkillInfo;
           });
 
-          // Populate metadata for UI display
           const meta: Record<string, { emoji: string; version: string }> = {};
           for (const file of discovered) {
             meta[file.name] = { emoji: file.emoji || '📋', version: file.version || '' };
@@ -198,16 +208,44 @@ export const useSkillStore = create<SkillState>()(
         };
       },
 
-      searchRemoteSkills: async (source, query) => {
-        return invoke<RemoteSkillInfo[]>('search_remote_skills', {
-          source,
-          query: query.trim() || null,
-        });
+      // Skills CLI: search via skills.sh API
+      skillsCliSearch: async (query: string) => {
+        return invoke<SkillsCLISearchResult[]>('skills_cli_search', { query });
       },
 
-      installRemoteSkill: async (slug) => {
-        const zipBase64 = await invoke<string>('download_remote_skill_archive', { slug });
-        return get().installSkillZip(zipBase64);
+      // Skills CLI: install via npx skills add
+      skillsCliInstall: async (
+        source: string,
+        skillName?: string
+      ): Promise<SkillsCLIInstallResult> => {
+        const result = await invoke<SkillsCLIInstallResult>('skills_cli_install', {
+          source,
+          skillName: skillName ?? null,
+        });
+
+        if (result.success) {
+          // Add Pi's global skills path to scan paths for S-Loop
+          const homePath = result.skill_path;
+          if (homePath) {
+            const parentDir = homePath.split('/').slice(0, -1).join('/');
+            get().addPath(parentDir);
+          }
+          await get().refreshSkills();
+        }
+
+        return result;
+      },
+
+      // Skills CLI: update installed skills
+      skillsCliUpdate: async () => {
+        await invoke<string>('skills_cli_update');
+        await get().refreshSkills();
+      },
+
+      // Skills CLI: remove a skill
+      skillsCliRemove: async (skillName: string) => {
+        await invoke<string>('skills_cli_remove', { skillName });
+        await get().refreshSkills();
       },
 
       setScanning: (scanning) => set({ isScanning: scanning }),

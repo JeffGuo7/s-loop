@@ -20,17 +20,13 @@ export function WorkspacePanel() {
   const [showDetailAdvanced, setShowDetailAdvanced] = useState(false)
   const [confirmDeleteAgentId, setConfirmDeleteAgentId] = useState<string | null>(null)
   const [busyInstallKey, setBusyInstallKey] = useState<string | null>(null)
-  const [remoteSkillSource, setRemoteSkillSource] = useState<'clawhub' | 'skillhub'>('skillhub')
   const [remoteSkillsLoading, setRemoteSkillsLoading] = useState(false)
   const [remoteSkillsError, setRemoteSkillsError] = useState<string | null>(null)
   const [remoteSkills, setRemoteSkills] = useState<Array<{
     id: string
-    slug: string
+    source: string
     name: string
     description: string
-    source: string
-    type: string
-    installMode: string
     owner?: string
     downloads?: number
   }>>([])
@@ -56,8 +52,8 @@ export function WorkspacePanel() {
   const removeAccessiblePath = useAgentStore((s) => s.removeAccessiblePath)
   const skills = useSkillStore((s) => s.skills)
   const skillMeta = useSkillStore((s) => s.skillMeta)
-  const searchRemoteSkills = useSkillStore((s) => s.searchRemoteSkills)
-  const installRemoteSkill = useSkillStore((s) => s.installRemoteSkill)
+  const skillsCliSearch = useSkillStore((s) => s.skillsCliSearch)
+  const skillsCliInstall = useSkillStore((s) => s.skillsCliInstall)
   const mcpServers = useMCPStore((s) => s.servers)
   const installRemoteServer = useMCPStore((s) => s.installRemoteServer)
 
@@ -178,18 +174,22 @@ export function WorkspacePanel() {
 
   async function handleRemoteInstallSkill(item: {
     id: string
-    slug: string
+    source: string
     name: string
   }) {
     setBusyInstallKey(item.id)
     try {
-      const installed = await installRemoteSkill(item.slug, { source: remoteSkillSource })
+      const result = await skillsCliInstall(item.source || item.id, item.name)
 
-      const target = ensureAgentTarget()
-      addSkillToAgent(target.id, installed.name)
-      setActiveAgent(target.id)
-      setFeedback(t('agentStudio.feedback.remoteInstalled', { name: installed.name }))
-      setShowSkillPicker(false)
+      if (result.success) {
+        const target = ensureAgentTarget()
+        addSkillToAgent(target.id, result.skill_name || item.name)
+        setActiveAgent(target.id)
+        setFeedback(t('agentStudio.feedback.remoteInstalled', { name: result.skill_name || item.name }))
+        setShowSkillPicker(false)
+      } else {
+        setFeedback(result.message)
+      }
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : t('agentStudio.feedback.remoteComingSoon'))
     } finally {
@@ -197,22 +197,19 @@ export function WorkspacePanel() {
     }
   }
 
-  async function fetchRemoteSkills(query: string, source: 'clawhub' | 'skillhub' = remoteSkillSource) {
+  async function fetchRemoteSkills(query: string) {
     setRemoteSkillsLoading(true)
     setRemoteSkillsError(null)
 
     try {
-      const list = await searchRemoteSkills(source, query)
+      const list = await skillsCliSearch(query)
       setRemoteSkills(list.map((item) => ({
         id: item.id,
-        slug: item.slug,
+        source: item.source || item.id,
         name: item.name,
-        description: item.description || t('agentStudio.library.remoteNoDescription'),
-        source: item.source === 'skillhub' ? 'SkillHub' : 'ClawHub',
-        type: 'Skill',
-        installMode: item.installMode || (item.source === 'skillhub' ? 'Mirror' : 'Package'),
-        owner: item.owner,
-        downloads: item.downloads,
+        description: `${item.source || item.id}${item.installs > 0 ? ` · ${item.installs >= 1000 ? (item.installs / 1000).toFixed(1) + 'K' : item.installs} installs` : ''}`,
+        owner: item.source?.split('/')[0],
+        downloads: item.installs,
       })))
     } catch (error) {
       setRemoteSkills([])
@@ -648,29 +645,17 @@ export function WorkspacePanel() {
             actionLabel: t('agentStudio.library.remoteInstall'),
             onClick: () => void handleRemoteInstallSkill(skill),
             badges: [
-              skill.source,
-              skill.type,
-              skill.installMode,
+              'skills.sh',
               ...(skill.owner ? [skill.owner] : []),
-              ...(typeof skill.downloads === 'number' ? [`${skill.downloads} dl`] : []),
+              ...(typeof skill.downloads === 'number' ? [`${skill.downloads >= 1000 ? (skill.downloads / 1000).toFixed(1) + 'K' : skill.downloads} installs`] : []),
             ],
             busy: busyInstallKey === skill.id,
           }))}
           discoverLoading={remoteSkillsLoading}
           discoverError={remoteSkillsError}
           discoverEmptyText={t('agentStudio.library.remoteEmpty')}
-          discoverSources={[
-            { key: 'skillhub', label: t('agentStudio.library.sourceSkillHub') },
-            { key: 'clawhub', label: t('agentStudio.library.sourceClawHub') },
-          ]}
-          activeDiscoverSource={remoteSkillSource}
-          onDiscoverSourceChange={(value) => {
-            setRemoteSkillSource(value as 'clawhub' | 'skillhub')
-            setRemoteSkills([])
-            setRemoteSkillsError(null)
-          }}
           onDiscoverSearch={(value) => {
-            void fetchRemoteSkills(value, remoteSkillSource)
+            void fetchRemoteSkills(value)
           }}
         />
       )}

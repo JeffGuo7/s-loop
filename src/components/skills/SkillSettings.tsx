@@ -16,6 +16,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useSkillStore } from '../../stores';
+import type { SkillsCLISearchResult } from '../../stores/skillStore';
 import type { SkillInfo } from '../../types/skill';
 import { CopyButton } from '../chat/shared/CopyButton';
 
@@ -331,24 +332,14 @@ interface AddSkillModalProps {
 
 function AddSkillModal({ onClose }: AddSkillModalProps) {
   const { t } = useTranslation();
-  const { addSkill, searchRemoteSkills, installRemoteSkill } = useSkillStore();
+  const { addSkill, skillsCliSearch, skillsCliInstall } = useSkillStore();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
-  const [remoteSource, setRemoteSource] = useState<'skillhub' | 'clawhub'>('skillhub');
   const [remoteQuery, setRemoteQuery] = useState('');
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
-  const [remoteResults, setRemoteResults] = useState<Array<{
-    id: string;
-    slug: string;
-    name: string;
-    description: string;
-    source: 'clawhub' | 'skillhub';
-    owner?: string;
-    downloads?: number;
-    installMode?: string;
-  }>>([]);
+  const [remoteResults, setRemoteResults] = useState<SkillsCLISearchResult[]>([]);
   const [busySlug, setBusySlug] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -366,11 +357,11 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
     onClose();
   };
 
-  const handleRemoteSearch = async (query: string, source = remoteSource) => {
+  const handleRemoteSearch = async (query: string) => {
     setRemoteLoading(true);
     setRemoteError(null);
     try {
-      const list = await searchRemoteSkills(source, query);
+      const list = await skillsCliSearch(query);
       setRemoteResults(list);
     } catch (error) {
       setRemoteResults([]);
@@ -380,12 +371,16 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
     }
   };
 
-  const handleRemoteInstall = async (slug: string) => {
-    setBusySlug(slug);
+  const handleRemoteInstall = async (source: string, skillName: string) => {
+    setBusySlug(skillName);
     setRemoteError(null);
     try {
-      await installRemoteSkill(slug, { source: remoteSource });
-      onClose();
+      const result = await skillsCliInstall(source, skillName);
+      if (!result.success) {
+        setRemoteError(result.message);
+      } else {
+        onClose();
+      }
     } catch (error) {
       setRemoteError(error instanceof Error ? error.message : t('skills.remoteInstallError'));
     } finally {
@@ -408,22 +403,14 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
                 <div className="text-sm font-bold text-[var(--color-text)]">{t('skills.remoteTitle')}</div>
                 <div className="text-xs text-[var(--color-text-secondary)] mt-1">{t('skills.remoteDesc')}</div>
               </div>
-              <div className="flex gap-1 rounded-xl bg-[var(--color-surface)] p-1 border border-[var(--color-border)]">
-                <button
-                  type="button"
-                  onClick={() => setRemoteSource('skillhub')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${remoteSource === 'skillhub' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-secondary)]'}`}
-                >
-                  SkillHub
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRemoteSource('clawhub')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${remoteSource === 'clawhub' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-secondary)]'}`}
-                >
-                  ClawHub
-                </button>
-              </div>
+              <a
+                href="https://skills.sh"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 text-[11px] font-bold text-[var(--color-accent)] hover:underline rounded-lg"
+              >
+                skills.sh ↗
+              </a>
             </div>
 
             <div className="mt-4 flex gap-2">
@@ -458,36 +445,36 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
                 </div>
               ) : (
                 remoteResults.map((item) => (
-                  <div key={`${item.source}-${item.slug}`} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+                  <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-bold text-[var(--color-text)] truncate">{item.name}</div>
                         <div className="text-xs text-[var(--color-text-secondary)] mt-1 leading-relaxed line-clamp-2">
-                          {item.description || t('skills.noDescription')}
+                          {item.source || item.id}
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-accent-muted)] text-[var(--color-accent)]">
-                            {item.source === 'skillhub' ? 'SkillHub' : 'ClawHub'}
+                            skills.sh
                           </span>
-                          {item.owner && (
-                            <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]">
-                              {item.owner}
+                          {item.source && (
+                            <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] truncate max-w-[180px]">
+                              {item.source}
                             </span>
                           )}
-                          {typeof item.downloads === 'number' && (
+                          {typeof item.installs === 'number' && item.installs > 0 && (
                             <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]">
-                              {item.downloads} dl
+                              {item.installs >= 1000 ? `${(item.installs / 1000).toFixed(1)}K` : item.installs} installs
                             </span>
                           )}
                         </div>
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleRemoteInstall(item.slug)}
-                        disabled={busySlug === item.slug}
+                        onClick={() => handleRemoteInstall(item.source || item.id, item.name)}
+                        disabled={busySlug === item.name}
                         className="btn-primary shrink-0 px-4 py-2 text-xs disabled:opacity-60"
                       >
-                        {busySlug === item.slug ? t('skills.installing') : t('skills.install')}
+                        {busySlug === item.name ? t('skills.installing') : t('skills.install')}
                       </button>
                     </div>
                   </div>
