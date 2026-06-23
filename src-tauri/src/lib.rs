@@ -312,6 +312,7 @@ pub fn run() {
             server_status,
             commands::list_directory,
             commands::read_text_file,
+            commands::read_file_base64,
             commands::scan_skill_files,
             commands::parse_skill_file,
             commands::search_remote_skills,

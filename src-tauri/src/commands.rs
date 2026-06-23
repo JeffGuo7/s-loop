@@ -82,6 +82,13 @@ pub fn read_text_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {e}"))
 }
 
+/// Read a binary file and return its contents as base64
+#[tauri::command]
+pub fn read_file_base64(path: String) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read file: {e}"))?;
+    Ok(BASE64_STANDARD.encode(bytes))
+}
+
 fn parse_frontmatter(content: &str) -> (HashMap<String, String>, String) {
     let mut meta = HashMap::new();
     let trimmed = content.trim_start();

@@ -710,6 +710,12 @@ const en = {
     deny: 'Deny',
     clear: 'Clear',
   },
+  filePreview: {
+    loading: 'Loading file...',
+    binaryTitle: 'Cannot preview this file',
+    binaryDesc: 'This is a binary file and cannot be previewed. You can drag it to the chat to let AI analyze it.',
+    imageLoadError: 'Failed to load image',
+  },
   settingsLocale: {
     language: 'Language',
     english: 'English',

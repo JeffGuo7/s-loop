@@ -6,6 +6,7 @@ import {
   Archive, Code,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useFilePreviewStore } from '../../stores/filePreviewStore'
 
 interface FileEntry {
   name: string
@@ -34,12 +35,8 @@ function getFileIcon(name: string): LucideIcon {
   return File
 }
 
-function attachFileByEvent(path: string, name: string) {
-  window.dispatchEvent(
-    new CustomEvent('s-loop-file-attach', {
-      detail: { path, name },
-    }),
-  )
+function openFilePreview(path: string, name: string) {
+  useFilePreviewStore.getState().openFile(path, name)
 }
 
 export function FileTree({ rootPath }: FileTreeProps) {
@@ -100,7 +97,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
       if (!expanded && !loadedRef.current) loadChildren()
       setExpanded((prev) => !prev)
     } else {
-      attachFileByEvent(path, name)
+      openFilePreview(path, name)
     }
   }, [isDir, expanded, loadChildren, path, name])
 
@@ -112,7 +109,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
           if (!expanded && !loadedRef.current) loadChildren()
           setExpanded((prev) => !prev)
         } else {
-          attachFileByEvent(path, name)
+          openFilePreview(path, name)
         }
       }
     },
@@ -206,7 +203,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
         <div>
           {children.length === 0 ? (
             <div
-              className="text-[9px] text-[var(--color-text-quaternary)] italic px-2 py-0.5"
+              className="text-[9px] text-text-quaternary italic px-2 py-0.5"
               style={{ paddingLeft: `${paddingLeft + 12}px` }}
             >
               {t('workspace.empty')}

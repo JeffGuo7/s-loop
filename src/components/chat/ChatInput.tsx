@@ -36,21 +36,8 @@ export function ChatInput({
     setAttachments((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
-  // Listen for file-attach events from the file tree (click / mobile)
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as FileAttachment
-      if (detail?.path) {
-        setAttachments((prev) => {
-          // Avoid duplicates
-          if (prev.some((a) => a.path === detail.path)) return prev
-          return [...prev, detail]
-        })
-      }
-    }
-    window.addEventListener('s-loop-file-attach', handler)
-    return () => window.removeEventListener('s-loop-file-attach', handler)
-  }, [])
+  // File attachments are now added via drag-and-drop only
+  // (clicking files opens the preview panel instead)
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()

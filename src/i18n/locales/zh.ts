@@ -749,6 +749,12 @@ const zh = {
     deny: '拒绝',
     clear: '清空',
   },
+  filePreview: {
+    loading: '正在加载文件...',
+    binaryTitle: '无法预览此文件',
+    binaryDesc: '这是一个二进制文件，不支持在预览面板中打开。您可以通过拖拽将它发送给 AI 分析。',
+    imageLoadError: '图片加载失败',
+  },
   settingsLocale: {
     language: '语言',
     english: 'English',

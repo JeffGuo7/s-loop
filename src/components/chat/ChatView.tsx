@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore, useAgentStore, useWebSearchStore, usePetStore } from '../../stores'
 import { useSkillStore } from '../../stores/skillStore'
 import { useMCPStore } from '../../stores/mcpStore'
+import { useFilePreviewStore } from '../../stores/filePreviewStore'
 import { Cpu, Sparkles, Paperclip, FolderTree, MessagesSquare } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
+import { FilePreviewPanel } from '../preview'
 import * as Pi from '../../utils/piClient'
 import type { KiloMessage } from '../../types'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -353,6 +355,8 @@ export function ChatView() {
   const streamingMessage = activeSessionId ? streamingMessages[activeSessionId] : EMPTY_STREAMING
   const isStreaming = streamingMessage?.isStreaming ?? false
 
+  const filePreview = useFilePreviewStore((s) => s.preview)
+
   if (!activeSessionId) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-transparent relative selection:bg-accent/10">
@@ -395,120 +399,139 @@ export function ChatView() {
   return (
     <div
       ref={containerRef}
-      className="flex-1 flex flex-col bg-transparent h-full w-full overflow-hidden relative"
+      className="flex-1 flex h-full w-full overflow-hidden relative"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="absolute top-4 right-4 z-40">
-        <button
-          onClick={handleToggleLeftPanel}
-          className="inline-flex items-center gap-2 rounded-full border border-border-light bg-surface/82 px-3.5 py-2 text-[11px] font-black tracking-tight text-text-secondary shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-accent/20 hover:text-accent"
-        >
-          {leftPanelMode === 'files' ? <MessagesSquare size={14} /> : <FolderTree size={14} />}
-          {leftPanelMode === 'files' ? t('chat.layout.backToSessions') : t('chat.layout.openFiles')}
-        </button>
-      </div>
-      {isDragOver && dragTargetZone === 'message' && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none rounded-[inherit]">
-          <div className="w-full h-full mx-4 my-4 rounded-[28px] border-2 border-dashed border-accent/50 bg-accent/5 backdrop-blur-[2px] flex flex-col items-center justify-center gap-4 animate-fade-in">
-            <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
-              <Paperclip size={28} className="text-accent" />
-            </div>
-            <p className="text-lg font-bold text-accent tracking-tight">释放文件/文件夹到此处直接发送</p>
-            <p className="text-sm text-text-tertiary font-medium">文件将立即发送给 AI 分析处理</p>
-          </div>
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col bg-transparent h-full overflow-hidden relative min-w-0">
+        <div className="absolute top-4 right-4 z-40">
+          <button
+            onClick={handleToggleLeftPanel}
+            className="inline-flex items-center gap-2 rounded-full border border-border-light bg-surface/82 px-3.5 py-2 text-[11px] font-black tracking-tight text-text-secondary shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-accent/20 hover:text-accent"
+          >
+            {leftPanelMode === 'files' ? <MessagesSquare size={14} /> : <FolderTree size={14} />}
+            {leftPanelMode === 'files' ? t('chat.layout.backToSessions') : t('chat.layout.openFiles')}
+          </button>
         </div>
-      )}
-      <div className="flex-1 min-h-0 relative bg-transparent">
-        <AnimatePresence mode="wait">
-          {isEmpty ? (
-            <motion.div key="empty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full flex flex-col items-center justify-center px-16 relative pb-48">
-              <div className="text-center relative z-10 w-full flex flex-col items-center">
-                <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">{t('chat.welcome.subtitle')}</p>
-                <div className="flex justify-center w-full mb-8">
-                  <div className="relative group scale-90 transition-transform duration-700">
-                    <div className="absolute inset-0 bg-accent/10 blur-[56px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-125" />
-                    <div className="relative w-32 h-32 rounded-[32%_68%_55%_45%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-liquid overflow-hidden">
-                      <Cpu size={48} className="text-accent drop-shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.5)]" />
-                      <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
-                    </div>
-                    <motion.div
-                      animate={{ y: [0, -8, 0], x: [0, 4, 0] }}
-                      transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-                      className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl"
-                    >
-                      <Sparkles size={20} />
-                    </motion.div>
-                  </div>
-                </div>
-                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">{t('chat.welcome.howCanIHelp')}</h2>
-                <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">{t('chat.welcome.emptyDesc')}</p>
+        {isDragOver && dragTargetZone === 'message' && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none rounded-[inherit]">
+            <div className="w-full h-full mx-4 my-4 rounded-[28px] border-2 border-dashed border-accent/50 bg-accent/5 backdrop-blur-[2px] flex flex-col items-center justify-center gap-4 animate-fade-in">
+              <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
+                <Paperclip size={28} className="text-accent" />
               </div>
-            </motion.div>
-          ) : (
-            <motion.div key={activeSessionId} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3, ease: 'easeOut' }} className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden">
-              {session && (session.sourceLabel || session.readOnly) && (
-                <div className="sticky top-0 z-10 px-4 pt-4">
-                  <div className="rounded-[20px] border border-border-light bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13px] font-bold tracking-tight text-text">{session.title}</span>
-                      {session.sourceLabel && (
-                        <span className="inline-flex items-center rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-accent">
-                          {session.sourceLabel}
-                        </span>
-                      )}
+              <p className="text-lg font-bold text-accent tracking-tight">释放文件/文件夹到此处直接发送</p>
+              <p className="text-sm text-text-tertiary font-medium">文件将立即发送给 AI 分析处理</p>
+            </div>
+          </div>
+        )}
+        <div className="flex-1 min-h-0 relative bg-transparent">
+          <AnimatePresence mode="wait">
+            {isEmpty ? (
+              <motion.div key="empty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full flex flex-col items-center justify-center px-16 relative pb-48">
+                <div className="text-center relative z-10 w-full flex flex-col items-center">
+                  <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">{t('chat.welcome.subtitle')}</p>
+                  <div className="flex justify-center w-full mb-8">
+                    <div className="relative group scale-90 transition-transform duration-700">
+                      <div className="absolute inset-0 bg-accent/10 blur-[56px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-125" />
+                      <div className="relative w-32 h-32 rounded-[32%_68%_55%_45%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-liquid overflow-hidden">
+                        <Cpu size={48} className="text-accent drop-shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.5)]" />
+                        <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
+                      </div>
+                      <motion.div
+                        animate={{ y: [0, -8, 0], x: [0, 4, 0] }}
+                        transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+                        className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl"
+                      >
+                        <Sparkles size={20} />
+                      </motion.div>
+                    </div>
+                  </div>
+                  <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">{t('chat.welcome.howCanIHelp')}</h2>
+                  <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">{t('chat.welcome.emptyDesc')}</p>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div key={activeSessionId} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3, ease: 'easeOut' }} className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden">
+                {session && (session.sourceLabel || session.readOnly) && (
+                  <div className="sticky top-0 z-10 px-4 pt-4">
+                    <div className="rounded-[20px] border border-border-light bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-bold tracking-tight text-text">{session.title}</span>
+                        {session.sourceLabel && (
+                          <span className="inline-flex items-center rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-accent">
+                            {session.sourceLabel}
+                          </span>
+                        )}
+                        {session.readOnly && (
+                          <span className="inline-flex items-center rounded-full border border-border-light bg-surface-secondary/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-text-tertiary">
+                            {t('chat.session.readOnly')}
+                          </span>
+                        )}
+                      </div>
                       {session.readOnly && (
-                        <span className="inline-flex items-center rounded-full border border-border-light bg-surface-secondary/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-text-tertiary">
-                          {t('chat.session.readOnly')}
-                        </span>
+                        <p className="mt-2 text-[12px] font-medium text-text-tertiary">
+                          {t('chat.session.readOnlyHint')}
+                        </p>
                       )}
                     </div>
-                    {session.readOnly && (
-                      <p className="mt-2 text-[12px] font-medium text-text-tertiary">
-                        {t('chat.session.readOnlyHint')}
-                      </p>
-                    )}
                   </div>
-                </div>
-              )}
-              <MessageList sessionId={activeSessionId!} />
-              {error && (
-                <div className="absolute top-8 left-4 right-4 z-20 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm backdrop-blur-md">
-                  <span>{error}</span>
-                  <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]">{t('chat.errors.dismiss')}</button>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                )}
+                <MessageList sessionId={activeSessionId!} />
+                {error && (
+                  <div className="absolute top-8 left-4 right-4 z-20 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm backdrop-blur-md">
+                    <span>{error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]">{t('chat.errors.dismiss')}</button>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
-          <div className="bg-linear-to-t from-bg via-bg/95 to-transparent pt-12 pb-2 pointer-events-auto">
-            <div className="w-full max-w-(--spacing-chat-max) mx-auto relative px-4">
-              <ChatInput
-                onSubmit={handleSubmit}
-                onAbort={abort}
-                isStreaming={isStreaming}
-                disabled={isReadOnlySession}
-                placeholder={isReadOnlySession ? t('chat.session.readOnlyPlaceholder') : t('chat.input.placeholder')}
-              />
-              <div className="mt-2 pb-2 text-[10px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
-                <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
-                  <Cpu size={12} className="text-accent/60" />
-                  <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || t('chat.status.noModel')}</span>
-                  <span className="opacity-10 px-1">|</span>
-                  <span className="font-bold uppercase tracking-[0.2em]">{activeProvider}</span>
-                  {(() => {
-                    const agent = useAgentStore.getState().activeAgentId ? useAgentStore.getState().agents.find(a => a.id === useAgentStore.getState().activeAgentId) : null
-                    return agent ? <><span className="opacity-10 px-1">|</span><span className="font-bold">{agent.avatar} {agent.name}</span></> : null
-                  })()}
+          <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
+            <div className="bg-linear-to-t from-bg via-bg/95 to-transparent pt-12 pb-2 pointer-events-auto">
+              <div className="w-full max-w-(--spacing-chat-max) mx-auto relative px-4">
+                <ChatInput
+                  onSubmit={handleSubmit}
+                  onAbort={abort}
+                  isStreaming={isStreaming}
+                  disabled={isReadOnlySession}
+                  placeholder={isReadOnlySession ? t('chat.session.readOnlyPlaceholder') : t('chat.input.placeholder')}
+                />
+                <div className="mt-2 pb-2 text-[10px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
+                  <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
+                    <Cpu size={12} className="text-accent/60" />
+                    <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || t('chat.status.noModel')}</span>
+                    <span className="opacity-10 px-1">|</span>
+                    <span className="font-bold uppercase tracking-[0.2em]">{activeProvider}</span>
+                    {(() => {
+                      const agent = useAgentStore.getState().activeAgentId ? useAgentStore.getState().agents.find(a => a.id === useAgentStore.getState().activeAgentId) : null
+                      return agent ? <><span className="opacity-10 px-1">|</span><span className="font-bold">{agent.avatar} {agent.name}</span></> : null
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* File preview panel */}
+      <AnimatePresence>
+        {filePreview && (
+          <motion.div
+            key="file-preview"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 480, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="h-full overflow-hidden shrink-0"
+          >
+            <FilePreviewPanel />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
