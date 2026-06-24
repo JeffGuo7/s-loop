@@ -26,6 +26,7 @@ import {
   recordPlatformInbound,
   recordPlatformOutbound,
 } from './telegram-chat-sync.mjs'
+import { withRetry } from './retry.js'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
@@ -1061,10 +1062,39 @@ createServer((req, res) => {
       }
 
       wrapper.emit = emit
-      const ac = new AbortController()
-      const promptPromise = wrapper.agent.prompt(content)
-      const timeout = setTimeout(() => { ac.abort(); wrapper.agent.abort(); console.log('[pi-server] Timed out') }, 120_000)
-      try { await promptPromise } finally { clearTimeout(timeout) }
+
+      // ── Prompt with retry for transient network errors ──
+      const totalAc = new AbortController()
+      const totalTimeout = setTimeout(() => {
+        totalAc.abort()
+        console.log('[pi-server] Total timeout (120s) — stopping retries')
+      }, 120_000)
+
+      try {
+        await withRetry(
+          () => wrapper.agent.prompt(content),
+          {
+            maxRetries: 3,
+            signal: totalAc.signal,
+            onRetry: (status) => {
+              console.log(
+                `[pi-server] Retry ${status.attempt}/${status.maxRetries} ` +
+                `after ${Math.round(status.delayMs / 1000)}s — ${status.error}`
+              )
+              emit('status', {
+                type: 'retry',
+                attempt: status.attempt,
+                maxRetries: status.maxRetries,
+                delayMs: status.delayMs,
+                error: status.error,
+              })
+            },
+          },
+        )
+      } finally {
+        clearTimeout(totalTimeout)
+        totalAc.abort() // Ensure sleep() in retry loop is released
+      }
 
       const msgs = wrapper.agent.state.messages
       const last = [...msgs].reverse().find(m => m.role === 'assistant')
@@ -1090,7 +1120,11 @@ createServer((req, res) => {
       emit('result', { text: text || '' })
       emit('done', {})
     } catch (err) {
-      try { emit('error', { message: err.message || String(err) }); emit('done', {}) } catch {}
+      console.error('[pi-server] prompt failed:', err.message, err.stack?.slice(0, 300))
+      const userMsg = err.message === 'Request was aborted'
+        ? 'Request was aborted — this usually means the AI provider connection was interrupted. Check your network and API key configuration.'
+        : (err.message || String(err))
+      try { emit('error', { message: userMsg }); emit('done', {}) } catch {}
     }
     if (wrapper) wrapper.emit = null
     try { res.end() } catch {}

@@ -130,4 +130,121 @@ textarea[data-slot="input"] {
   word-break: break-word !important;
 }
 
+/* ── Button Styles ── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.375rem;
+  border-radius: var(--radius-xl);
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  transition: all 0.3s var(--ease-out);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(var(--color-accent-rgb), 0.2);
+  white-space: nowrap;
+}
+
+.btn-primary:hover {
+  background: var(--color-accent-light);
+  box-shadow: 0 8px 24px rgba(var(--color-accent-rgb), 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(var(--color-accent-rgb), 0.15);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.375rem;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  transition: all 0.3s var(--ease-out);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background: var(--color-surface-tertiary);
+  color: var(--color-text);
+  border-color: var(--color-border-hover);
+}
+
+.btn-secondary:active {
+  background: var(--color-surface-hover);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-xl);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  line-height: 1;
+  transition: all 0.25s var(--ease-out);
+  border: none;
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  background: var(--color-surface-secondary);
+  color: var(--color-text);
+}
+
+.btn-ghost-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-xl);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  line-height: 1;
+  transition: all 0.25s var(--ease-out);
+  border: none;
+  cursor: pointer;
+}
+
+.btn-ghost-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
 

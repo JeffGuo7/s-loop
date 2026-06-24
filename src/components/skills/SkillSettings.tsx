@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
@@ -254,7 +254,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
                 e.stopPropagation();
                 onRemove();
               }}
-              className="p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-bg)] rounded-lg transition-all"
+              className="btn-ghost-danger"
               title={t('skills.remove')}
             >
               <Trash2 className="w-4 h-4" />
@@ -341,6 +341,7 @@ function AddSkillView({ onBack }: { onBack: () => void }) {
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [remoteResults, setRemoteResults] = useState<SkillsCLISearchResult[]>([]);
   const [busySlug, setBusySlug] = useState<string | null>(null);
+  const installingRef = useRef(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -363,28 +364,45 @@ function AddSkillView({ onBack }: { onBack: () => void }) {
     try {
       const list = await skillsCliSearch(query);
       setRemoteResults(list);
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error('[SkillSettings] Remote search failed:', error);
       setRemoteResults([]);
-      setRemoteError(error instanceof Error ? error.message : t('skills.remoteSearchError'));
+      const msg = (error instanceof Error)
+        ? error.message
+        : (typeof error === 'string' ? error : JSON.stringify(error));
+      setRemoteError(msg || t('skills.remoteSearchError'));
     } finally {
       setRemoteLoading(false);
     }
   };
 
   const handleRemoteInstall = async (source: string, skillName: string) => {
+    if (installingRef.current) return;
+    installingRef.current = true;
     setBusySlug(skillName);
     setRemoteError(null);
     try {
       const result = await skillsCliInstall(source, skillName);
       if (!result.success) {
-        setRemoteError(result.message);
+        setRemoteError(result.message || t('skills.remoteInstallError'));
       } else {
         onBack();
       }
-    } catch (error) {
-      setRemoteError(error instanceof Error ? error.message : t('skills.remoteInstallError'));
+    } catch (error: unknown) {
+      console.error('[SkillSettings] Remote install failed:', error);
+      const msg = (error instanceof Error)
+        ? error.message
+        : (typeof error === 'string' ? error : JSON.stringify(error));
+      if (!msg || msg === t('skills.remoteInstallError')) {
+        setRemoteError(t('skills.remoteInstallError'));
+      } else if (msg.includes('Is Node.js installed')) {
+        setRemoteError(`${t('skills.remoteInstallError')}: Node.js / npx 未安装，请先安装 Node.js。`);
+      } else {
+        setRemoteError(`${t('skills.remoteInstallError')}: ${msg}`);
+      }
     } finally {
       setBusySlug(null);
+      installingRef.current = false;
     }
   };
 
@@ -606,7 +624,7 @@ function SkillPathsView({ paths, addPath, removePath, onBack }: { paths: string[
               </div>
               <button
                 onClick={() => removePath(path)}
-                className="p-1.5 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-bg)] rounded-lg transition-all"
+                className="btn-ghost-danger"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

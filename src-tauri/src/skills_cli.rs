@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 /// Search result from skills.sh API
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -36,10 +40,11 @@ fn get_github_mirror_url() -> Option<String> {
     std::env::var("S_LOOP_GITHUB_MIRROR").ok()
 }
 
-fn dirs_home() -> String {
+fn dirs_home() -> PathBuf {
     std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| ".".to_string())
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."))
 }
 
 fn percent_encode(query: &str) -> String {
@@ -53,6 +58,185 @@ fn percent_encode(query: &str) -> String {
         }
     }
     result
+}
+
+// ─── ANSI escape code stripping ───
+
+/// Strip ANSI escape sequences and cursor movement codes from CLI output.
+/// Leaves plain text that can be displayed in a UI error message.
+fn strip_ansi(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            // Skip escape sequences: ESC [ ... m (SGR), ESC [ ... J/K/h/l (cursor), etc.
+            if chars.peek() == Some(&'[') {
+                chars.next(); // skip '['
+                // Consume parameter bytes (digits, semicolons)
+                while let Some(&c) = chars.peek() {
+                    if c.is_ascii_digit() || c == ';' || c == '?' {
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                // Consume final byte (letter: m, J, K, h, l, A, B, C, D, etc.)
+                chars.next();
+            }
+            // Also skip ESC ] (OSC sequences)
+            else if chars.peek() == Some(&']') {
+                chars.next(); // skip ']'
+                while let Some(&c) = chars.peek() {
+                    if c == '\x07' || c == '\x1b' {
+                        break;
+                    }
+                    chars.next();
+                }
+                if chars.peek() == Some(&'\x07') {
+                    chars.next();
+                }
+            }
+        }
+        // Skip cursor movement codes: \r, and the 999D pattern (move cursor back 999 columns)
+        else if ch == '\r' {
+            // Skip carriage return — often followed by cursor-back sequences
+            continue;
+        }
+        // Skip the "move cursor back N columns" escape (999D without ESC prefix caused by double-strip)
+        else if ch == '[' && result.ends_with('\n') {
+            // This is likely a residual CSI without ESC — skip until letter
+            continue;
+        }
+        else {
+            result.push(ch);
+        }
+    }
+
+    result
+}
+
+/// Extract the meaningful error lines from CLI stderr/stdout, stripping ANSI and spinners
+fn clean_cli_output(raw: &str) -> String {
+    let stripped = strip_ansi(raw);
+    let lines: Vec<&str> = stripped
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| {
+            !l.is_empty()
+                && !l.starts_with('|')
+                && !l.starts_with("◇")
+                && !l.starts_with("●")
+                && !l.starts_with("○")
+                && !l.starts_with("■")
+                && !l.starts_with("▲")
+                && !l.starts_with("◒")
+                && !l.starts_with("◐")
+                && !l.starts_with("◓")
+                && !l.starts_with("◑")
+                && !l.starts_with("—")
+                && !l.starts_with("└")
+                && !l.starts_with("├")
+                && !l.starts_with("│")
+        })
+        .collect();
+
+    if lines.is_empty() {
+        return stripped.chars().take(500).collect();
+    }
+
+    lines.join("\n").chars().take(800).collect()
+}
+
+// ─── npx resolution (cross-platform — GUI apps may not inherit user PATH) ───
+
+/// Find the npx executable by searching common installation paths.
+/// GUI apps on all platforms may not inherit shell-configured PATH.
+fn find_npx_cmd() -> Option<PathBuf> {
+    let npx_name = if cfg!(target_os = "windows") {
+        "npx.cmd"
+    } else {
+        "npx"
+    };
+
+    // 1. Try the system's command locator
+    let locator = if cfg!(target_os = "windows") { "where" } else { "which" };
+    if let Ok(output) = Command::new(locator).arg(npx_name).output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Some(line) = stdout.lines().next() {
+            let p = line.trim();
+            if !p.is_empty() && std::path::Path::new(p).exists() {
+                return Some(PathBuf::from(p));
+            }
+        }
+    }
+
+    // 2. Search common Node.js install directories (cross-platform)
+    let home = dirs_home();
+    let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+        vec![
+            r"C:\Program Files\nodejs\npx.cmd".into(),
+            r"C:\Program Files (x86)\nodejs\npx.cmd".into(),
+            home.join("AppData").join("Roaming").join("npm").join("npx.cmd"),
+        ]
+    } else {
+        vec![
+            // Homebrew (Intel Mac)
+            "/usr/local/bin/npx".into(),
+            // Homebrew (Apple Silicon Mac)
+            "/opt/homebrew/bin/npx".into(),
+            // System
+            "/usr/bin/npx".into(),
+            // Volta (cross-platform version manager)
+            home.join(".volta").join("bin").join("npx"),
+            // fnm (cross-platform version manager)
+            home.join(".local").join("share").join("fnm").join("node-versions"),
+        ]
+    };
+
+    for candidate in &candidates {
+        if candidate.exists() {
+            return Some(candidate.clone());
+        }
+    }
+
+    // 3. Search for node and derive npx path
+    if let Ok(output) = Command::new(locator).arg(if cfg!(target_os = "windows") { "node.exe" } else { "node" }).output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            let node_path = PathBuf::from(line.trim());
+            if let Some(parent) = node_path.parent() {
+                let npx = parent.join(npx_name);
+                if npx.exists() {
+                    return Some(npx);
+                }
+            }
+        }
+    }
+
+    // 4. nvm: search ~/.nvm/versions/node/*/bin/npx
+    let nvm_versions = home.join(".nvm").join("versions").join("node");
+    if nvm_versions.exists() {
+        if let Ok(entries) = std::fs::read_dir(&nvm_versions) {
+            for entry in entries.flatten() {
+                let npx = entry.path().join("bin").join("npx");
+                if npx.exists() {
+                    return Some(npx);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Build a Command for npx, using resolved path when available
+fn npx_command() -> Command {
+    if let Some(npx_path) = find_npx_cmd() {
+        Command::new(npx_path)
+    } else {
+        Command::new("npx")
+    }
 }
 
 // ─── Skills CLI commands ───
@@ -90,7 +274,6 @@ pub async fn skills_cli_search(query: String) -> Result<Vec<SkillsSearchResult>,
 fn build_source_arg(source: &str) -> String {
     if let Some(mirror) = get_github_mirror_url() {
         let mirror = mirror.trim_end_matches('/');
-        // If source is owner/repo shorthand, prepend mirror
         if source.contains('/') && !source.starts_with("http") && !source.starts_with("git@") {
             format!("{}/{}", mirror, source)
         } else {
@@ -124,28 +307,35 @@ pub async fn skills_cli_install(
         args.push(name.clone());
     }
 
-    // Pass mirror API URL via env if configured
+    // Run npx with a 120s timeout
     let api_url = get_skills_api_url();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = npx_command()
+            .args(&args)
+            .env("SKILLS_API_URL", &api_url)
+            .output();
+        let _ = tx.send(result);
+    });
 
-    let output = Command::new("npx")
-        .args(&args)
-        .env("SKILLS_API_URL", &api_url)
-        .output()
-        .map_err(|e| {
-            format!("Failed to run npx skills: {e}. Is Node.js installed?")
-        })?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let output = rx
+        .recv_timeout(Duration::from_secs(120))
+        .map_err(|_| "npx skills timed out after 120s. Check network or try again.".to_string())?
+        .map_err(|e| format!("Failed to run npx skills: {e}. Is Node.js installed?"))?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let cleaned = clean_cli_output(&format!("{}\n{}", stderr, stdout));
         return Ok(SkillInstallResult {
             success: false,
-            message: format!("Installation failed\n---\n{}\n{}", stderr, stdout),
+            message: cleaned,
             skill_name: None,
             skill_path: None,
         });
     }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
     let extracted_name = skill_name.clone().or_else(|| {
         for line in stdout.lines() {
@@ -161,12 +351,14 @@ pub async fn skills_cli_install(
 
     let home = dirs_home();
     let skill_path = extracted_name.as_ref().map(|n| {
-        format!("{}/.pi/agent/skills/{}", home, n)
+        home.join(".pi").join("agent").join("skills").join(n)
+            .to_string_lossy()
+            .to_string()
     });
 
     Ok(SkillInstallResult {
         success: true,
-        message: stdout,
+        message: clean_cli_output(&stdout),
         skill_name: extracted_name,
         skill_path,
     })
@@ -181,7 +373,7 @@ pub async fn skills_cli_list(global: Option<bool>) -> Result<String, String> {
         args.push("-g".to_string());
     }
 
-    let output = Command::new("npx")
+    let output = npx_command()
         .args(&args)
         .output()
         .map_err(|e| format!("Failed to run npx skills list: {e}"))?;
@@ -201,7 +393,7 @@ pub async fn skills_cli_list(global: Option<bool>) -> Result<String, String> {
 pub async fn skills_cli_update() -> Result<String, String> {
     let api_url = get_skills_api_url();
 
-    let output = Command::new("npx")
+    let output = npx_command()
         .args(["skills", "update", "-y"])
         .env("SKILLS_API_URL", &api_url)
         .output()
@@ -220,7 +412,7 @@ pub async fn skills_cli_update() -> Result<String, String> {
 /// Remove a skill via npx skills CLI
 #[tauri::command]
 pub async fn skills_cli_remove(skill_name: String) -> Result<String, String> {
-    let output = Command::new("npx")
+    let output = npx_command()
         .args([
             "skills",
             "remove",
