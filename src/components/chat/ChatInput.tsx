@@ -88,13 +88,9 @@ export function ChatInput({
 
     const parts: string[] = []
 
-    // File references — just the path, no content embedded
+    // File references — rendered as styled chips via Markdown
     for (const att of attachments) {
-      if (att.path) {
-        parts.push(`[File: ${att.name}](${att.path})`)
-      } else {
-        parts.push(`[File: ${att.name}]`)
-      }
+      parts.push(`[File: ${att.name}](${att.path || '#'})`)
     }
 
     const userText = input.trim()

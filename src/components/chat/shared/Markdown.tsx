@@ -19,6 +19,7 @@ import { PlantUMLBlock } from './PlantUMLBlock'
 import { CodeEditorBlock } from './CodeEditorBlock'
 import { Hyperlink } from './Hyperlink'
 import { CitationTooltip } from './CitationTooltip'
+import { FileChip, parseFileLink } from './FileChip'
 import { highlightInWorker } from './shikiWorker'
 import * as XLSX from 'xlsx'
 import { rehypeHeadingIds, remarkDisableConstructs, rehypeScalableSvg } from './plugins'
@@ -362,6 +363,15 @@ function MarkdownInner({ children, className = '', variant = 'default' }: Markdo
     },
 
     a({ href, children }) {
+      // Render file/folder links as nice chips
+      const textContent = React.Children.toArray(children)
+        .map((c: any) => (typeof c === 'string' ? c : ''))
+        .join('')
+      const fileLink = parseFileLink(textContent)
+      if (fileLink) {
+        return <FileChip name={fileLink.name} path={href} isFolder={fileLink.isFolder} />
+      }
+
       const childrenArray = React.Children.toArray(children)
       const hasSup = childrenArray.some(
         (child: any) => child?.type === 'sup'

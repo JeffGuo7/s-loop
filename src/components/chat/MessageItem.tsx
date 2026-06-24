@@ -4,6 +4,7 @@ import { StackBlock, MainTextBlock } from './blocks'
 import { MessageActionBar } from './shared/MessageActionBar'
 import { StreamingIndicator } from './shared/StreamingIndicator'
 import { shouldUseDocumentLayout } from './shared/Markdown'
+import { FileChip } from './shared/FileChip'
 import { User, Cpu } from 'lucide-react'
 
 import type { KiloMessage, MessagePart, TextPart } from '../../types'
@@ -54,11 +55,21 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
             <div
               className="bg-accent text-accent-foreground px-6 py-5 text-[15px] leading-relaxed wrap-break-word shadow-xl shadow-accent/10 rounded-[28px] rounded-tr-[4px] group-hover:shadow-accent/20 transition-all duration-500 font-medium"
             >
-              {message.parts.map((part, idx) => (
-                <div key={part.id || idx} className="text-accent-foreground">
-                  {part.type === 'text' ? part.text.trim() : null}
-                </div>
-              ))}
+              {message.parts.map((part, idx) => {
+                if (part.type !== 'text') return null
+                const segments = parseUserText(part.text)
+                return (
+                  <div key={part.id || idx} className="text-accent-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    {segments.map((seg, si) =>
+                      seg.type === 'chip' ? (
+                        <FileChip key={si} name={seg.name} path={seg.path} isFolder={seg.isFolder} onDark />
+                      ) : (
+                        <span key={si} className="whitespace-pre-wrap">{seg.text.trim() ? seg.text : null}</span>
+                      ),
+                    )}
+                  </div>
+                )
+              })}
             </div>
             <div className="opacity-0 group-hover:opacity-100 transition-all duration-700">
               <MessageActionBar
@@ -168,4 +179,45 @@ function groupPartsIntoBlocks(parts: MessagePart[]): MessageBlock[] {
   }
 
   return blocks
+}
+
+// Split user message text into segments: plain text and FileChip components
+const FILE_LINK_RE = /\[(File|Folder):\s+(.+?)\]\((.+?)\)/g
+
+interface TextSegment {
+  type: 'text'
+  text: string
+}
+interface ChipSegment {
+  type: 'chip'
+  name: string
+  path: string
+  isFolder: boolean
+}
+type Segment = TextSegment | ChipSegment
+
+function parseUserText(text: string): Segment[] {
+  const segments: Segment[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  FILE_LINK_RE.lastIndex = 0
+  while ((match = FILE_LINK_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: 'text', text: text.slice(lastIndex, match.index) })
+    }
+    segments.push({
+      type: 'chip',
+      name: match[2].trim(),
+      path: match[3],
+      isFolder: match[1] === 'Folder',
+    })
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', text: text.slice(lastIndex) })
+  }
+
+  return segments
 }
