@@ -4,6 +4,7 @@ import i18n from '../i18n'
 import type { Session, ProviderConfig, Companion, ProviderInfo, KiloMessage, MessagePart, MessageInfo } from '../types'
 import * as db from '../utils/database'
 import { enrichSession } from '../utils/sessionMeta'
+import { DEFAULT_COLOR_SCHEME } from '../themes'
 
 interface AppState {
   // Sessions (cached from DB)
@@ -26,6 +27,7 @@ interface AppState {
 
   // UI
   theme: 'light' | 'dark'
+  colorScheme: string
   locale: string
   sidebarCollapsed: boolean
   leftPanelMode: 'sessions' | 'files'
@@ -67,6 +69,7 @@ interface AppState {
 
   // Actions - UI
   setTheme: (theme: 'light' | 'dark') => void
+  setColorScheme: (scheme: string) => void
   setLocale: (locale: string) => void
   toggleSidebar: () => void
   setLeftPanelMode: (mode: 'sessions' | 'files') => void
@@ -98,6 +101,7 @@ export const useAppStore = create<AppState>()(
       providerList: [],
 
       theme: 'light',
+      colorScheme: DEFAULT_COLOR_SCHEME,
       locale: i18n.language?.startsWith('zh') ? 'zh' : 'en',
       sidebarCollapsed: false,
       leftPanelMode: 'sessions',
@@ -435,6 +439,8 @@ export const useAppStore = create<AppState>()(
         document.documentElement.classList.toggle('dark', theme === 'dark')
       },
 
+      setColorScheme: (scheme) => set({ colorScheme: scheme }),
+
       setLocale: (locale) => {
         set({ locale })
         i18n.changeLanguage(locale)
@@ -460,6 +466,7 @@ export const useAppStore = create<AppState>()(
         activeProvider: state.activeProvider,
         providerConfigs: state.providerConfigs,
         theme: state.theme,
+        colorScheme: state.colorScheme,
         locale: state.locale,
         companion: state.companion,
         leftPanelMode: state.leftPanelMode,

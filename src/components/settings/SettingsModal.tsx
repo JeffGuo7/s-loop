@@ -10,6 +10,7 @@ import { SkillSettings } from '../skills'
 import { WebSearchSettings } from '../websearch'
 import { ScrollShadow } from "@heroui/react"
 import i18n from '../../i18n'
+import { COLOR_SCHEMES } from '../../themes'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -55,6 +56,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setProviderList,
     theme,
     setTheme,
+    colorScheme,
+    setColorScheme,
     locale,
     setLocale,
   } = useAppStore()
@@ -484,6 +487,65 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           </div>
                         </button>
                       ))}
+                    </div>
+
+                    {/* Color Scheme Picker */}
+                    <div className="mt-12 pt-12 border-t border-border-light">
+                      <div className="flex flex-col mb-8">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.3em] text-accent mb-4 opacity-60">Color Palette</span>
+                        <h4 className="text-2xl font-bold text-text tracking-tighter">{t('settings.appearance.colorScheme')}</h4>
+                        <p className="text-[13px] text-text-tertiary mt-1 font-medium opacity-70">{t('settings.appearance.colorSchemeDesc')}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-5">
+                        {COLOR_SCHEMES.map((scheme) => (
+                          <button
+                            key={scheme.id}
+                            onClick={() => setColorScheme(scheme.id)}
+                            className={`group relative flex flex-col items-center gap-5 p-8 rounded-[32px] border-2 transition-all duration-500 ${
+                              colorScheme === scheme.id
+                                ? 'border-accent bg-accent-subtle shadow-[0_16px_48px_rgba(var(--color-accent-rgb),0.12)] -translate-y-1'
+                                : 'border-border-light hover:border-border-hover bg-surface hover:-translate-y-0.5 shadow-sm'
+                            }`}
+                          >
+                            {/* Color swatch preview */}
+                            <div className={`p-6 rounded-[20px] transition-all duration-500 border-2 ${
+                              colorScheme === scheme.id
+                                ? 'border-accent/30 shadow-xl'
+                                : 'border-transparent group-hover:shadow-md'
+                            }`}
+                              style={{ backgroundColor: scheme.previewColor + '15' }}
+                            >
+                              <div className="flex gap-2">
+                                <div
+                                  className="w-8 h-8 rounded-full shadow-lg ring-2 ring-white/20"
+                                  style={{ backgroundColor: scheme.previewColor }}
+                                />
+                                <div
+                                  className="w-8 h-8 rounded-full opacity-50 shadow-lg"
+                                  style={{ backgroundColor: scheme.previewColor }}
+                                />
+                                <div
+                                  className="w-8 h-8 rounded-full opacity-25 shadow-lg"
+                                  style={{ backgroundColor: scheme.previewColor }}
+                                />
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <span className={`text-[16px] font-bold tracking-tight block ${
+                                colorScheme === scheme.id ? 'text-accent' : 'text-text'
+                              }`}>
+                                {locale.startsWith('zh') ? scheme.nameZh : scheme.name}
+                              </span>
+                              <span className="text-[11px] text-text-tertiary font-medium tracking-wide mt-1 block opacity-50">
+                                {scheme.name}
+                              </span>
+                            </div>
+                            {colorScheme === scheme.id && (
+                              <CheckCircle size={18} className="absolute top-4 right-4 text-accent animate-fade-in" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="mt-12 pt-12 border-t border-border-light">

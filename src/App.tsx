@@ -14,6 +14,7 @@ import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
 import { setBaseUrl, syncRuntimeConfig } from './utils/piClient'
+import { getActiveTokens } from './themes'
 
 export type Page = 'chat' | 'tasks' | 'platforms' | 'pet'
 
@@ -21,7 +22,7 @@ const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const APP_STORAGE_KEY = 'snotra-storage'
 
 function App() {
-  const { theme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, workspaceDir } = useAppStore()
+  const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, workspaceDir } = useAppStore()
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
 
@@ -64,6 +65,15 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
+
+  // Apply color scheme CSS variables
+  useEffect(() => {
+    const tokens = getActiveTokens(colorScheme || 'terracotta', theme)
+    const root = document.documentElement
+    for (const [key, value] of Object.entries(tokens)) {
+      root.style.setProperty(key, value)
+    }
+  }, [colorScheme, theme])
 
   useEffect(() => {
     if (!inTauri) return

@@ -173,6 +173,7 @@ pub async fn skills_cli_install(
 }
 
 /// List installed skills via npx skills CLI
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn skills_cli_list(global: Option<bool>) -> Result<String, String> {
     let mut args = vec!["skills".to_string(), "list".to_string()];

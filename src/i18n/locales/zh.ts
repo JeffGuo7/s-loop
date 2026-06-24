@@ -170,6 +170,10 @@ const zh = {
       cleanCrisp: '清爽明晰',
       deepFocused: '深邃专注',
     },
+    appearance: {
+      colorScheme: '配色方案',
+      colorSchemeDesc: '为界面选择一套配色',
+    },
     buttons: {
       cancel: '取消',
       applySave: '应用并保存',

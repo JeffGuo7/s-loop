@@ -171,6 +171,10 @@ const en = {
       cleanCrisp: 'Clean & Crisp',
       deepFocused: 'Deep & Focused',
     },
+    appearance: {
+      colorScheme: 'Color Scheme',
+      colorSchemeDesc: 'Choose a color palette for the interface',
+    },
     buttons: {
       cancel: 'Cancel',
       applySave: 'Apply & Save',
