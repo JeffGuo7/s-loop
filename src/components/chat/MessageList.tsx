@@ -64,6 +64,7 @@ export function MessageList({ sessionId }: MessageListProps) {
         data={groupedMessages}
         followOutput="smooth"
         alignToBottom
+        initialTopMostItemIndex={groupedMessages.length - 1}
         className="flex-1 h-full chat-scroll-area"
         components={{
           Footer: () => <div className="h-48" />

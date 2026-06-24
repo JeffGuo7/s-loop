@@ -80,6 +80,7 @@ const en = {
       thinking: 'Thinking',
       running: 'Running',
       working: 'Working',
+      clickToExpand: 'Click to expand',
       file: 'File',
       tokens: 'tokens',
       liveOrchestration: 'Live Orchestration',

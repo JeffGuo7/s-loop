@@ -11,7 +11,7 @@ interface StackBlockProps {
 
 export function StackBlock({ parts, isStreaming }: StackBlockProps) {
   const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(isStreaming)
+  const [expanded, setExpanded] = useState(false)
   const [elapsed, setElapsed] = useState(0)
 
   const toolParts = parts.filter((p): p is ToolPart => p.type === 'tool')
@@ -22,10 +22,8 @@ export function StackBlock({ parts, isStreaming }: StackBlockProps) {
   useEffect(() => {
     if (!isStreaming) {
       setElapsed(0)
-      const timer = setTimeout(() => setExpanded(false), 800)
-      return () => clearTimeout(timer)
+      return
     }
-    setExpanded(true)
     const start = Date.now()
     const interval = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
     return () => clearInterval(interval)

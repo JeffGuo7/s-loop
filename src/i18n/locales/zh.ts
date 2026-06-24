@@ -80,6 +80,7 @@ const zh = {
       thinking: '思考中',
       running: '运行中',
       working: '处理中',
+      clickToExpand: '点击展开',
       file: '文件',
       tokens: '个令牌',
       liveOrchestration: '实时编排',

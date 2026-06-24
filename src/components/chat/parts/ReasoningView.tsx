@@ -1,28 +1,16 @@
 import { useTranslation } from 'react-i18next'
 import { Brain, Sparkles } from 'lucide-react'
 import { Collapsible } from '../shared/Collapsible'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 interface ReasoningViewProps {
   text: string
   isActive?: boolean
 }
 
-
 export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
   const { t } = useTranslation()
-  const [isExpanded, setIsExpanded] = useState(isActive)
-
-  // Auto-collapse when active state ends
-  useEffect(() => {
-    if (isActive) {
-      setIsExpanded(true)
-    } else {
-      // Small delay for smooth transition after completion
-      const timer = setTimeout(() => setIsExpanded(false), 500)
-      return () => clearTimeout(timer)
-    }
-  }, [isActive])
+  const [isExpanded, setIsExpanded] = useState(false)
 
   // Don't render anything if there's no text and it's not active
   if (!text && !isActive) return null
@@ -33,6 +21,7 @@ export function ReasoningView({ text, isActive = false }: ReasoningViewProps) {
         <Sparkles size={16} className="text-accent animate-spin-slow" />
       </div>
       <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-accent">{t('chat.parts.thinking')}</span>
+      <span className="text-[11px] text-text-tertiary font-medium ml-auto">{t('chat.parts.clickToExpand')}</span>
     </span>
   ) : (
     <span className="flex items-center gap-6">
