@@ -175,6 +175,8 @@ export interface ProviderInfo {
   name: string
   source?: string
   env?: string | string[]
+  api?: string
+  isCustom?: boolean
   models?: Record<string, { id: string; name: string }>
 }
 

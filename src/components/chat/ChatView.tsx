@@ -4,6 +4,7 @@ import { useAppStore, useAgentStore, useWebSearchStore, usePetStore } from '../.
 import { useSkillStore } from '../../stores/skillStore'
 import { useMCPStore } from '../../stores/mcpStore'
 import { useFilePreviewStore } from '../../stores/filePreviewStore'
+import { invoke } from '@tauri-apps/api/core'
 import { Cpu, Sparkles, Paperclip, FolderTree, MessagesSquare } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
@@ -33,6 +34,7 @@ export function ChatView() {
     commitStreamingMessage,
     addMessage,
     updateSessionTitle,
+    providerList,
   } = useAppStore()
 
   const [error, setError] = useState<string | null>(null)
@@ -84,6 +86,18 @@ export function ChatView() {
           state: { status: 'completed' as const, output: JSON.stringify((result as any)?.content?.[0]?.text || result) },
           sessionID: sid, messageID: sm.messageID,
         } as any)
+      },
+      onMcpToolRequest: async (request) => {
+        try {
+          const result = await invoke('mcp_call_tool', {
+            name: request.serverName,
+            tool_name: request.toolName,
+            arguments: request.arguments,
+          })
+          await Pi.sendMcpToolResponse(piSessionId, request.requestId, result)
+        } catch (err) {
+          await Pi.sendMcpToolResponse(piSessionId, request.requestId, null, err instanceof Error ? err.message : String(err))
+        }
       },
       onDone: () => {
         unsubscribe()
@@ -204,6 +218,14 @@ export function ChatView() {
         blocks.push('## Available MCP Tools\nThe following MCP tools are available for use:\n' + listings.join('\n'))
       }
 
+      const mcpToolDefs: Pi.McpToolDef[] = connectedMCPTools
+        .map(({ serverName, toolName }) => {
+          const st = mcpStore.serverStatuses[serverName]
+          const tool = st?.status === 'connected' ? st.tools?.find(t => t.name === toolName) : undefined
+          return tool ? { serverName, name: tool.name, description: tool.description, inputSchema: tool.inputSchema } : null
+        })
+        .filter(Boolean) as Pi.McpToolDef[]
+
       if (activeAgent?.instructions) blocks.unshift(`## System Instructions\n${activeAgent.instructions}`)
 
       if (blocks.length > 0) {
@@ -219,6 +241,8 @@ export function ChatView() {
 
       usePetStore.getState().onThinking()
 
+      const providerInfo = providerList.find((p) => p.id === activeProvider)
+
       const result = await Pi.prompt(pid!, enrichedContent, {
         systemPrompt: activeAgent?.instructions || undefined,
         providerID: effectiveModel?.providerID,
@@ -227,6 +251,13 @@ export function ChatView() {
         apiKey: providerConfig?.apiKey,
         workspaceDir: workspaceDir ?? undefined,
         webSearchConfig: useWebSearchStore.getState().getActiveConfig(),
+        tools: mcpToolDefs,
+        permissionMode: activeAgent?.permissionMode,
+        permissionRules: activeAgent?.permissionRules,
+        providerAPI: providerInfo?.api,
+        providerConfig: providerInfo?.api
+          ? { api: providerInfo.api, baseUrl: providerConfig?.baseUrl }
+          : undefined,
       })
 
       if (result.error) {
@@ -265,7 +296,7 @@ export function ChatView() {
       commitStreamingMessage(sid, completedMessage)
       usePetStore.getState().onResponded()
     },
-    [activeSessionId, activeProvider, providerConfigs, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream, isReadOnlySession],
+    [activeSessionId, activeProvider, providerConfigs, providerList, session, t, startStreaming, finishStreaming, commitStreamingMessage, addMessage, updateSessionTitle, appendStreamingDelta, subscribeStream, isReadOnlySession],
   )
 
   const activePiSessionId = activeSessionId

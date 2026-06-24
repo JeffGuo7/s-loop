@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores'
-import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle, Globe } from 'lucide-react'
+import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle, Globe, Plus, Trash2 } from 'lucide-react'
 import type { ProviderConfig, ProviderInfo } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
@@ -54,6 +54,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setProviderConfig,
     providerList,
     setProviderList,
+    customProviders,
+    addCustomProvider,
+    updateCustomProvider,
+    removeCustomProvider,
     theme,
     setTheme,
     colorScheme,
@@ -75,10 +79,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [missingModelWarning, setMissingModelWarning] = useState(false)
   const [providerModels, setProviderModels] = useState<Record<string, string[]>>({})
 
-  // Set provider list
+  // Custom provider local state
+  const [customName, setCustomName] = useState('')
+  const [customAPI, setCustomAPI] = useState('openai-completions')
+
+  // Set provider list (built-ins merged with custom registry)
   useEffect(() => {
     setProviderList(BUILT_IN_PROVIDERS)
-  }, [setProviderList])
+  }, [setProviderList, customProviders])
 
   // Sync local configs from store on open
   useEffect(() => {
@@ -96,6 +104,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     if (info?.source && (!cfg || !cfg.baseUrl)) {
       handleConfigChange(expandedProvider, 'baseUrl', info.source)
     }
+    if (info?.isCustom) {
+      setCustomName(info.name || '')
+      setCustomAPI(info.api || 'openai-completions')
+    } else {
+      setCustomName('')
+      setCustomAPI('openai-completions')
+    }
   }, [expandedProvider])
 
   const handleConfigChange = (id: string, field: string, value: string) => {
@@ -108,6 +123,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const handleSave = async () => {
     for (const [id, cfg] of Object.entries(localConfigs)) {
       setProviderConfig(id, cfg)
+    }
+    if (provider?.isCustom && expandedProvider) {
+      updateCustomProvider(expandedProvider, { name: customName, api: customAPI, source: localConfigs[expandedProvider]?.baseUrl || provider.source })
     }
     setActiveProvider(expandedProvider || activeProvider)
 
@@ -273,32 +291,88 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                               </button>
                             )
                           })}
+                          <button
+                            onClick={() => {
+                              const id = `custom-${Math.random().toString(36).substring(2, 6)}`
+                              addCustomProvider({ id, name: 'Custom Provider', api: 'openai-completions', isCustom: true })
+                              setExpandedProvider(id)
+                            }}
+                            className="group relative p-8 rounded-[32px] bg-accent/5 dark:bg-accent/5 border border-dashed border-accent/30 hover:border-accent/60 hover:bg-accent-subtle transition-all duration-500 text-left shadow-sm hover:shadow-xl hover:-translate-y-1 flex flex-col items-center justify-center gap-4"
+                          >
+                            <div className="p-4 rounded-2xl bg-accent/10 text-accent group-hover:bg-accent group-hover:text-white transition-all duration-500 shadow-sm">
+                              <Plus size={24} />
+                            </div>
+                            <div className="text-center">
+                              <h5 className="text-[17px] font-bold text-text tracking-tight mb-1">Add Custom Provider</h5>
+                              <p className="text-[11px] text-text-tertiary font-bold uppercase tracking-widest opacity-50">OpenAI-compatible</p>
+                            </div>
+                          </button>
                         </div>
                       </div>
                     ) : provider && cfg ? (
                       /* Focused Provider Configuration */
                       <div className="space-y-12 animate-fade-in-up">
                         <div className="flex items-center justify-between">
-                          <button 
+                          <button
                             onClick={() => setExpandedProvider(null)}
                             className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.2em] text-text-tertiary hover:text-accent transition-colors"
                           >
                             <RefreshCw size={14} className="rotate-180" />
                             {t('settings.provider.backToList')}
                           </button>
+                          {provider.isCustom && (
+                            <button
+                              onClick={() => {
+                                removeCustomProvider(provider.id)
+                                setExpandedProvider(null)
+                              }}
+                              className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.2em] text-red-500/70 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                              Delete
+                            </button>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-8">
                           <div className="p-8 rounded-[32px] bg-accent text-accent-foreground shadow-2xl shadow-accent/20">
                             <Cpu size={48} />
                           </div>
-                          <div>
-                            <h2 className="text-5xl font-bold text-text tracking-tighter leading-tight">{provider.name}</h2>
-                            <div className="flex items-center gap-3 mt-2">
-                              <span className="px-4 py-1.5 rounded-full bg-accent-muted text-accent text-[11px] font-black uppercase tracking-widest border border-accent/10">
-                                {provider.id}
-                              </span>
-                            </div>
+                          <div className="flex-1">
+                            {provider.isCustom ? (
+                              <div className="space-y-3">
+                                <input
+                                  value={customName}
+                                  onChange={(e) => setCustomName(e.target.value)}
+                                  placeholder="Provider Name"
+                                  className="w-full text-3xl font-bold text-text tracking-tighter bg-transparent border-b border-border-light outline-none placeholder:text-text-tertiary/30"
+                                />
+                                <div className="flex items-center gap-3">
+                                  <code className="px-3 py-1 rounded-lg bg-surface-secondary text-[12px] font-mono text-text-secondary border border-border-light">{provider.id}</code>
+                                  <select
+                                    value={customAPI}
+                                    onChange={(e) => setCustomAPI(e.target.value)}
+                                    className="px-3 py-1.5 rounded-xl bg-surface-secondary border border-border-light text-[12px] font-bold text-text-secondary outline-none"
+                                  >
+                                    <option value="openai-completions">openai-completions</option>
+                                    <option value="openai-responses">openai-responses</option>
+                                    <option value="openai-codex-responses">openai-codex-responses</option>
+                                    <option value="anthropic-messages">anthropic-messages</option>
+                                    <option value="mistral-conversations">mistral-conversations</option>
+                                    <option value="google-generative-ai">google-generative-ai</option>
+                                  </select>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <h2 className="text-5xl font-bold text-text tracking-tighter leading-tight">{provider.name}</h2>
+                                <div className="flex items-center gap-3 mt-2">
+                                  <span className="px-4 py-1.5 rounded-full bg-accent-muted text-accent text-[11px] font-black uppercase tracking-widest border border-accent/10">
+                                    {provider.id}
+                                  </span>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -336,7 +410,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                                   if (!expandedProvider) return
                                   const cfg = localConfigs[expandedProvider]
                                   const list = await import('../../utils/piClient').then(m =>
-                                    m.fetchModels(expandedProvider, cfg?.apiKey, cfg?.baseUrl))
+                                    m.fetchModels(expandedProvider, cfg?.apiKey, cfg?.baseUrl, provider?.api))
                                   if (list.length > 0) {
                                     setProviderModels(prev => ({ ...prev, [expandedProvider]: list.map(m => m.id) }))
                                   }

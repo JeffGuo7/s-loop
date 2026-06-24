@@ -24,6 +24,7 @@ interface AppState {
   activeProvider: string
   providerConfigs: Record<string, ProviderConfig>
   providerList: ProviderInfo[]
+  customProviders: ProviderInfo[]
 
   // UI
   theme: 'light' | 'dark'
@@ -66,6 +67,9 @@ interface AppState {
   setActiveProvider: (id: string) => void
   setProviderConfig: (id: string, config: Partial<ProviderConfig>) => void
   setProviderList: (list: ProviderInfo[]) => void
+  addCustomProvider: (provider: ProviderInfo) => void
+  updateCustomProvider: (id: string, updates: Partial<ProviderInfo>) => void
+  removeCustomProvider: (id: string) => void
 
   // Actions - UI
   setTheme: (theme: 'light' | 'dark') => void
@@ -86,6 +90,12 @@ const DEFAULT_CONFIGS: Record<string, ProviderConfig> = {
   openai: { apiKey: '', model: 'gpt-4o', baseUrl: '' },
 }
 
+function mergeProviderList(currentList: ProviderInfo[], customProviders: ProviderInfo[]) {
+  const customIds = new Set(customProviders.map((p) => p.id))
+  const builtIn = currentList.filter((p) => !customIds.has(p.id))
+  return [...builtIn, ...customProviders]
+}
+
 const generateId = () => Math.random().toString(36).substring(2, 15)
 
 export const useAppStore = create<AppState>()(
@@ -99,6 +109,7 @@ export const useAppStore = create<AppState>()(
       activeProvider: 'anthropic',
       providerConfigs: DEFAULT_CONFIGS,
       providerList: [],
+      customProviders: [],
 
       theme: 'light',
       colorScheme: DEFAULT_COLOR_SCHEME,
@@ -430,7 +441,29 @@ export const useAppStore = create<AppState>()(
         }))
       },
 
-      setProviderList: (list) => set({ providerList: list }),
+      setProviderList: (list) => set((state) => ({ providerList: mergeProviderList(list, state.customProviders) })),
+
+      addCustomProvider: (provider) => {
+        set((state) => {
+          if (state.customProviders.some((p) => p.id === provider.id)) return state
+          const custom = [...state.customProviders, provider]
+          return { customProviders: custom, providerList: mergeProviderList(state.providerList, custom) }
+        })
+      },
+
+      updateCustomProvider: (id, updates) => {
+        set((state) => {
+          const custom = state.customProviders.map((p) => (p.id === id ? { ...p, ...updates } : p))
+          return { customProviders: custom, providerList: mergeProviderList(state.providerList, custom) }
+        })
+      },
+
+      removeCustomProvider: (id) => {
+        set((state) => {
+          const custom = state.customProviders.filter((p) => p.id !== id)
+          return { customProviders: custom, providerList: mergeProviderList(state.providerList, custom) }
+        })
+      },
 
       // ---- UI actions ----
 
@@ -462,9 +495,9 @@ export const useAppStore = create<AppState>()(
       name: 'snotra-storage',
       partialize: (state) => ({
         sessions: state.sessions,
-        sessionMessages: state.sessionMessages,
         activeProvider: state.activeProvider,
         providerConfigs: state.providerConfigs,
+        customProviders: state.customProviders,
         theme: state.theme,
         colorScheme: state.colorScheme,
         locale: state.locale,
@@ -472,7 +505,7 @@ export const useAppStore = create<AppState>()(
         leftPanelMode: state.leftPanelMode,
         workspaceDir: state.workspaceDir,
       }),
-      version: 4,
+      version: 5,
       migrate: (persistedState, version) => {
         if (version < 4) {
           return {
@@ -480,6 +513,13 @@ export const useAppStore = create<AppState>()(
             sessions: [],
             sessionMessages: {},
             streamingMessage: {},
+          }
+        }
+        if (version < 5) {
+          // Messages are loaded from SQLite; do not keep full chat history in localStorage.
+          return {
+            ...(persistedState as any),
+            sessionMessages: {},
           }
         }
         return persistedState as any

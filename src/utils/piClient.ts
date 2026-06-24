@@ -1,3 +1,5 @@
+import type { PermissionAction, PermissionRule } from '../types/agent'
+
 const DEFAULT_BASE = 'http://127.0.0.1:4096'
 let _base = DEFAULT_BASE
 
@@ -9,11 +11,19 @@ export function getBaseUrl() {
   return _base
 }
 
+export interface McpToolRequest {
+  requestId: string
+  serverName: string
+  toolName: string
+  arguments: Record<string, unknown>
+}
+
 export interface PiStreamCallbacks {
   onText: (pid: string, delta: string) => void
   onThinking: (delta: string) => void
   onToolCall: (id: string, name: string, args: any) => void
   onToolResult: (id: string, name: string, result: any) => void
+  onMcpToolRequest?: (request: McpToolRequest) => void
   onDone: () => void
   onResult?: (text: string) => void
   onError?: (msg: string) => void
@@ -38,11 +48,12 @@ interface StreamState {
 
 const _streams = new Map<string, StreamState>()
 
-export async function fetchModels(provider: string, apiKey?: string, baseUrl?: string): Promise<Array<{ id: string; name: string }>> {
+export async function fetchModels(provider: string, apiKey?: string, baseUrl?: string, api?: string): Promise<Array<{ id: string; name: string }>> {
   try {
     let url = `${_base}/models?provider=${encodeURIComponent(provider)}`
     if (apiKey) url += `&apiKey=${encodeURIComponent(apiKey)}`
     if (baseUrl) url += `&baseUrl=${encodeURIComponent(baseUrl)}`
+    if (api) url += `&api=${encodeURIComponent(api)}`
     const res = await fetch(url)
     if (!res.ok) return []
     return await res.json()
@@ -80,6 +91,7 @@ export async function syncRuntimeConfig(config: {
   modelID: string
   apiKey?: string
   workspaceDir?: string
+  providerConfig?: { api?: string; baseUrl?: string }
 }): Promise<void> {
   await fetch(`${_base}/runtime/config`, {
     method: 'POST',
@@ -123,6 +135,10 @@ export async function prompt(
       apiUrl?: string
       limit?: number
     }
+    permissionMode?: PermissionAction
+    permissionRules?: PermissionRule
+    providerAPI?: string
+    providerConfig?: { api?: string; baseUrl?: string }
   },
 ): Promise<PromptResult> {
   const controller = new AbortController()
@@ -139,6 +155,10 @@ export async function prompt(
     if (options?.tools && options.tools.length > 0) body.tools = options.tools
     if (options?.workspaceDir) body.workspaceDir = options.workspaceDir
     if (options?.webSearchConfig) body.webSearchConfig = options.webSearchConfig
+    if (options?.permissionMode) body.permissionMode = options.permissionMode
+    if (options?.permissionRules) body.permissionRules = options.permissionRules
+    if (options?.providerAPI) body.providerAPI = options.providerAPI
+    if (options?.providerConfig) body.providerConfig = options.providerConfig
 
     const res = await fetch(`${_base}/session/${sessionId}/message`, {
       method: 'POST',
@@ -199,6 +219,9 @@ export async function prompt(
                 case 'tool_execution_end':
                   cb?.onToolResult(data.id, data.name, data.result)
                   break
+                case 'mcp_tool_request':
+                  cb?.onMcpToolRequest?.(data)
+                  break
                 case 'result':
                   resultText = data.text || ''
                   cb?.onResult?.(resultText)
@@ -251,4 +274,17 @@ export function abortSession(sessionId?: string): void {
   } else {
     _streams.delete(sessionId)
   }
+}
+
+export async function sendMcpToolResponse(
+  sessionId: string,
+  requestId: string,
+  result?: unknown,
+  error?: string,
+): Promise<void> {
+  await fetch(`${_base}/session/${sessionId}/mcp-response`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId, result, error }),
+  })
 }

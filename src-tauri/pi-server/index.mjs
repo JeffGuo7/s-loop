@@ -4,6 +4,8 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, getModels } from '@earendil-works/pi-ai'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 import { webSearch, fetchUrl } from './searchProviders.mjs'
+import { createDefaultEngine, calculateContextTokens, truncateContent } from './context-engine/index.mjs'
+import { createSessionRepo, findSession } from './session-store.mjs'
 import { init as initTasks, loadTasks, getTask, createTask, updateTask, removeTask, getTaskOutputs, runTask, startTicker } from './task-scheduler.mjs'
 import {
   clearPlatformMessages,
@@ -26,6 +28,8 @@ import {
 } from './telegram-chat-sync.mjs'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
+const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+const sessionRepo = createSessionRepo(DATA_DIR)
 const sessions = new Map()
 const inboundSeen = new Map()
 const runtimeConfig = {
@@ -33,6 +37,50 @@ const runtimeConfig = {
   modelID: 'claude-sonnet-4-20250514',
   apiKey: process.env.PI_API_KEY || '',
   workspaceDir: undefined,
+  providerConfig: {},
+}
+
+function createCustomModel(providerID, modelID, providerConfig = {}) {
+  const api = providerConfig.api || 'openai-completions'
+  const baseUrl = providerConfig.baseUrl || ''
+  return {
+    id: modelID,
+    name: modelID,
+    api,
+    provider: providerID,
+    baseUrl,
+    reasoning: false,
+    input: ['text'],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128000,
+    contextLength: 128000,
+    maxTokens: 4096,
+  }
+}
+
+function resolveModel(providerID, modelID, providerConfig = {}) {
+  const builtIn = getModel(providerID, modelID)
+  if (builtIn) return builtIn
+  if (providerConfig?.api || providerConfig?.baseUrl) {
+    return createCustomModel(providerID, modelID, providerConfig)
+  }
+  return null
+}
+
+async function fetchOpenAiCompatibleModels(baseUrl, apiKey) {
+  const url = new URL('/models', baseUrl.replace(/\/$/, ''))
+  const headers = {}
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+  try {
+    const res = await fetch(url.toString(), { headers })
+    if (!res.ok) return []
+    const data = await res.json()
+    const models = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
+    return models.map((m) => ({ id: m.id, name: m.id })).filter((m) => m.id)
+  } catch (err) {
+    console.warn('[pi-server] failed to fetch custom provider models:', err)
+    return []
+  }
 }
 
 function createSSE(event, data) {
@@ -106,6 +154,128 @@ function extractAssistantText(last) {
   }
   if (!text && last?.errorMessage) text = `Error: ${last.errorMessage}`
   return text || ''
+}
+
+async function getOrCreateWrapper(sessionId, autoCreate = false) {
+  let wrapper = sessions.get(sessionId)
+  if (wrapper) return wrapper
+
+  const metadata = await findSession(sessionRepo, sessionId)
+  if (metadata) {
+    const session = await sessionRepo.open(metadata)
+    wrapper = { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() }
+    sessions.set(sessionId, wrapper)
+    return wrapper
+  }
+
+  if (!autoCreate) return null
+
+  const session = await sessionRepo.create({ cwd: DATA_DIR, id: sessionId })
+  wrapper = { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() }
+  sessions.set(sessionId, wrapper)
+  return wrapper
+}
+
+async function persistAgentMessages(wrapper) {
+  if (!wrapper?.agent || !wrapper?.session) return
+  const previousCount = wrapper.previousMessageCount || 0
+  const messages = wrapper.agent.state.messages.slice(previousCount)
+  for (const message of messages) {
+    await wrapper.session.appendMessage(message)
+  }
+  wrapper.previousMessageCount = wrapper.agent.state.messages.length
+}
+
+function createMcpToolDefinition(tool, wrapper, sessionId) {
+  return {
+    name: tool.name,
+    label: `${tool.serverName}/${tool.name}`,
+    description: tool.description || `MCP tool ${tool.name}`,
+    parameters: tool.inputSchema || { type: 'object', properties: {} },
+    executionMode: 'parallel',
+    execute: async (_toolCallId, params, signal) => callMcpTool(wrapper, sessionId, tool.serverName, tool.name, params, signal),
+  }
+}
+
+function rejectPendingMcpRequests(wrapper, reason) {
+  if (!wrapper?.mcpToolRequests) return
+  for (const [requestId, resolver] of wrapper.mcpToolRequests.entries()) {
+    resolver(undefined, reason || 'Session ended')
+  }
+  wrapper.mcpToolRequests.clear()
+}
+
+async function callMcpTool(wrapper, sessionId, serverName, toolName, args, signal) {
+  if (!wrapper.mcpToolRequests) wrapper.mcpToolRequests = new Map()
+  const requestId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  let resolve, reject
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+  const timeout = setTimeout(() => {
+    wrapper.mcpToolRequests.delete(requestId)
+    reject(new Error(`MCP tool call timed out: ${serverName}/${toolName}`))
+  }, 60_000)
+  let onAbort
+  if (signal) {
+    onAbort = () => {
+      wrapper.mcpToolRequests.delete(requestId)
+      clearTimeout(timeout)
+      reject(new Error('aborted'))
+    }
+    if (signal.aborted) {
+      onAbort()
+      return promise
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  }
+  wrapper.mcpToolRequests.set(requestId, (result, error) => {
+    if (signal) signal.removeEventListener('abort', onAbort)
+    clearTimeout(timeout)
+    wrapper.mcpToolRequests.delete(requestId)
+    if (error) reject(new Error(error))
+    else resolve(result)
+  })
+  try {
+    const emit = wrapper.emit
+    if (!emit) throw new Error('No active stream to forward MCP tool request')
+    emit('mcp_tool_request', { requestId, serverName, toolName, arguments: args })
+  } catch (err) {
+    if (signal) signal.removeEventListener('abort', onAbort)
+    wrapper.mcpToolRequests.delete(requestId)
+    clearTimeout(timeout)
+    throw err
+  }
+  const result = await promise
+  return {
+    content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result) }],
+    details: result,
+  }
+}
+
+const DANGEROUS_CATEGORIES = new Set(['bash', 'edit', 'write', 'delete', 'remove', 'execute', 'shell'])
+
+function getToolCategory(toolName) {
+  const lower = toolName.toLowerCase()
+  if (lower.includes('bash') || lower.includes('shell') || lower.includes('exec')) return 'bash'
+  if (lower.includes('edit') || lower.includes('write') || lower.includes('delete') || lower.includes('remove')) return 'edit'
+  if (lower.includes('grep')) return 'grep'
+  if (lower.includes('find') || lower.includes('glob')) return 'glob'
+  if (lower.includes('ls') || lower.includes('list')) return 'list'
+  if (lower.includes('web_search')) return 'websearch'
+  if (lower.includes('web_fetch')) return 'webfetch'
+  if (lower.includes('read')) return 'read'
+  if (lower.includes('skill')) return 'skill'
+  return toolName
+}
+
+function checkToolPermission(toolName, rules = {}, mode = 'ask') {
+  if (mode === 'allow') return { allowed: true }
+  if (mode === 'deny') return { allowed: false, reason: 'Permission denied: agent policy is deny-all' }
+  const category = getToolCategory(toolName)
+  const action = rules[toolName] ?? rules[category]
+  if (action === 'deny') return { allowed: false, reason: `Permission denied: ${toolName} is blocked by agent rules` }
+  if (action === 'allow') return { allowed: true }
+  if (DANGEROUS_CATEGORIES.has(category)) return { allowed: false, reason: `Permission denied: ${toolName} requires explicit approval` }
+  return { allowed: true }
 }
 
 async function readJsonBody(req) {
@@ -299,28 +469,30 @@ function shouldProcessInbound(incoming) {
 async function promptPlatformConversation(sessionId, content) {
   const provider = runtimeConfig.providerID || 'anthropic'
   const modelId = runtimeConfig.modelID || 'claude-sonnet-4-20250514'
-  const model = getModel(provider, modelId)
+  const model = resolveModel(provider, modelId, runtimeConfig.providerConfig)
   if (!model) {
     throw new Error(`Unknown model "${modelId}" for provider "${provider}"`)
   }
 
-  let wrapper = sessions.get(sessionId)
-  if (!wrapper) {
+  const wrapper = await getOrCreateWrapper(sessionId, true)
+  const ctx = wrapper.agent ? null : await wrapper.session.buildContext()
+  const initialMessages = ctx?.messages || []
+  if (!wrapper.agent) {
     const cwd = runtimeConfig.workspaceDir || process.cwd()
     const tools = getTools(cwd)
-    const agent = new Agent({
+    wrapper.agent = new Agent({
       initialState: {
         systemPrompt: 'You are a helpful assistant. Keep external platform replies concise and readable.',
         model,
         tools,
         thinkingLevel: 'off',
+        messages: initialMessages,
       },
       sessionId,
       getApiKey: async () => runtimeConfig.apiKey || '',
       toolExecution: 'parallel',
     })
-    wrapper = { agent, emit: null }
-    sessions.set(sessionId, wrapper)
+    wrapper.previousMessageCount = initialMessages.length
   } else {
     wrapper.agent.state.model = model
     wrapper.agent.state.tools = getTools(runtimeConfig.workspaceDir || process.cwd())
@@ -331,6 +503,11 @@ async function promptPlatformConversation(sessionId, content) {
     setTimeout(() => reject(new Error('Platform conversation timed out')), 120_000)
   })
   await Promise.race([promptPromise, timeoutPromise])
+  try {
+    await persistAgentMessages(wrapper)
+  } catch (persistErr) {
+    console.error('[pi-server] failed to persist platform session messages:', persistErr)
+  }
   const last = [...wrapper.agent.state.messages].reverse().find((message) => message.role === 'assistant')
   return extractAssistantText(last)
 }
@@ -390,7 +567,7 @@ async function ensureTelegramMonitorState() {
 // ── Cron prompt helper (shared by ticker and HTTP handler) ──
 const createCronPrompt = async (content, options) => {
   try {
-    const model = getModel(options.providerID, options.modelID)
+    const model = resolveModel(options.providerID, options.modelID, options.providerConfig)
     if (!model) return { text: '', error: 'Model not found' }
     const cwd = options.workspaceDir || process.cwd()
     const tools = getTools(cwd, options.webSearchConfig)
@@ -433,6 +610,7 @@ createServer((req, res) => {
       runtimeConfig.modelID = data.modelID || runtimeConfig.modelID
       runtimeConfig.apiKey = data.apiKey ?? runtimeConfig.apiKey
       runtimeConfig.workspaceDir = data.workspaceDir || undefined
+      if (data.providerConfig) runtimeConfig.providerConfig = data.providerConfig
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ ok: true }))
     }).catch((e) => {
@@ -700,30 +878,79 @@ createServer((req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/models') {
-    const provider = url.searchParams.get('provider') || 'anthropic'
-    try { const list = getModels(provider).map(m => ({ id: m.id, name: m.name })); res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(list)) }
-    catch { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify([])) }
+    (async () => {
+      const provider = url.searchParams.get('provider') || 'anthropic'
+      const apiKey = url.searchParams.get('apiKey') || ''
+      const baseUrl = url.searchParams.get('baseUrl') || ''
+      let list = []
+      try {
+        const builtIn = getModels(provider).map(m => ({ id: m.id, name: m.name }))
+        if (builtIn.length > 0) {
+          list = builtIn
+        } else if (baseUrl) {
+          list = await fetchOpenAiCompatibleModels(baseUrl, apiKey)
+        }
+      } catch { }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(list))
+    })().catch((e) => {
+      console.error('[pi-server] /models error:', e)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify([]))
+    })
     return
   }
 
   if (req.method === 'POST' && url.pathname === '/session') {
-    const id = randomUUID()
-    sessions.set(id, null)
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ id })); return
+    (async () => {
+      const id = randomUUID()
+      const session = await sessionRepo.create({ cwd: DATA_DIR, id })
+      const metadata = await session.getMetadata()
+      sessions.set(metadata.id, { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() })
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ id: metadata.id }))
+    })().catch((e) => {
+      console.error('[pi-server] failed to create session:', e)
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message || 'Failed to create session' }))
+    })
+    return
+  }
+
+  const mcpResponseMatch = url.pathname.match(/^\/session\/([^/]+)\/mcp-response$/)
+  if (req.method === 'POST' && mcpResponseMatch) {
+    const mcpSessionId = mcpResponseMatch[1]
+    readJsonBody(req).then(({ requestId, result, error }) => {
+      const mcpWrapper = sessions.get(mcpSessionId)
+      const resolver = mcpWrapper?.mcpToolRequests?.get(requestId)
+      if (!resolver) {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'MCP request not found' }))
+        return
+      }
+      mcpWrapper.mcpToolRequests.delete(requestId)
+      resolver(result, error)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+    }).catch((e) => {
+      console.error('[pi-server] failed to handle MCP response:', e)
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message || 'Bad request' }))
+    })
+    return
   }
 
   const m = url.pathname.match(/^\/session\/([^/]+)\/message$/)
   if (req.method !== 'POST' || !m) { res.writeHead(404); res.end('Not found'); return }
 
   const sessionId = m[1]
-  let wrapper = sessions.get(sessionId)
-  if (wrapper === undefined) { res.writeHead(404); res.end('Session not found'); return }
 
   let body = ''
   req.on('data', chunk => body += chunk)
   req.on('end', async () => {
-    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, webSearchConfig } = JSON.parse(body)
+    const wrapper = await getOrCreateWrapper(sessionId)
+    if (!wrapper) { res.writeHead(404); res.end('Session not found'); return }
+    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
     const emit = (event, data) => { try { res.write(createSSE(event, data)) } catch {} }
@@ -733,17 +960,26 @@ createServer((req, res) => {
       const modelId = modelID || 'claude-sonnet-4-20250514'
       console.log('[pi-server] Received prompt:', { provider, modelId, contentLen: content?.length })
 
-      const model = getModel(provider, modelId)
+      const effectiveProviderConfig = promptProviderConfig || (providerAPI ? { api: providerAPI } : {}) || runtimeConfig.providerConfig || {}
+      const model = resolveModel(provider, modelId, effectiveProviderConfig)
       if (!model) {
         emit('error', { message: `Unknown model "${modelId}" for provider "${provider}". Click Settings → Fetch Models to see available models.` })
         emit('done', {}); res.end(); return
       }
 
-      if (!wrapper) {
+      const ctx = wrapper.agent ? null : await wrapper.session.buildContext()
+      const initialMessages = ctx?.messages || []
+      if (!wrapper.agent) {
         const cwd = workspaceDir || process.cwd()
-        const tools = getTools(cwd, webSearchConfig)
+        const baseTools = getTools(cwd, webSearchConfig)
+        const mcpToolDefs = Array.isArray(mcpTools)
+          ? mcpTools.map((t) => createMcpToolDefinition(t, wrapper, sessionId))
+          : []
+        const tools = [...baseTools, ...mcpToolDefs]
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
+        const contextEngine = createDefaultEngine(model, { contextLength: model?.contextLength })
+        wrapper.apiKey = apiKey
 
         const agent = new Agent({
           initialState: {
@@ -751,11 +987,32 @@ createServer((req, res) => {
             model,
             tools,
             thinkingLevel: model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off',
+            messages: initialMessages,
           },
           sessionId,
-          getApiKey: async () => apiKey,
+          getApiKey: async () => wrapper.apiKey,
+          transformContext: async (messages, signal) => {
+            const currentTokens = contextEngine.lastTotalTokens || calculateContextTokens(messages)
+            if (!contextEngine.shouldCompress(currentTokens)) return messages
+            return await contextEngine.compress(messages, {
+              model: agent.state.model,
+              apiKey: wrapper.apiKey,
+              onStatus: (s) => emit('status', s),
+            })
+          },
           beforeToolCall: async ({ toolCall }) => {
             emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments || {} })
+            const permission = checkToolPermission(toolCall.name, wrapper.config?.permissionRules, wrapper.config?.permissionMode)
+            if (!permission.allowed) {
+              return { block: true, reason: permission.reason }
+            }
+            return undefined
+          },
+          afterToolCall: async ({ result }) => {
+            const truncated = truncateContent(result.content)
+            if (truncated !== result.content) {
+              return { content: truncated }
+            }
             return undefined
           },
           toolExecution: 'parallel',
@@ -777,12 +1034,24 @@ createServer((req, res) => {
           }
         })
 
-        wrapper = { agent, emit: null }
+        wrapper.agent = agent
+        wrapper.contextEngine = contextEngine
+        wrapper.previousMessageCount = initialMessages.length
+        wrapper.config = { workspaceDir, webSearchConfig, permissionMode, permissionRules, providerConfig: effectiveProviderConfig }
         sessions.set(sessionId, wrapper)
         console.log('[pi-server] Tools:', tools.length, '| Provider:', provider, '| Model:', modelId)
       } else {
+        const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
+        const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
         if (model) wrapper.agent.state.model = model
-        wrapper.agent.state.tools = getTools(workspaceDir || process.cwd(), webSearchConfig)
+        const baseTools = getTools(workspaceDir || process.cwd(), webSearchConfig)
+        const mcpToolDefs = Array.isArray(mcpTools)
+          ? mcpTools.map((t) => createMcpToolDefinition(t, wrapper, sessionId))
+          : []
+        wrapper.agent.state.tools = [...baseTools, ...mcpToolDefs]
+        if (wrapper.agent.state.systemPrompt !== fullPrompt) wrapper.agent.state.systemPrompt = fullPrompt
+        if (apiKey) wrapper.apiKey = apiKey
+        wrapper.config = { workspaceDir, webSearchConfig, permissionMode, permissionRules, providerConfig: effectiveProviderConfig }
       }
 
       wrapper.emit = emit
@@ -798,6 +1067,15 @@ createServer((req, res) => {
       if (last?.content) {
         const types = last.content.map(c => c.type).join(', ')
         console.log('[pi-server] Message content types:', types)
+      }
+
+      if (last?.usage) {
+        wrapper.contextEngine.updateFromResponse(last.usage)
+      }
+      try {
+        await persistAgentMessages(wrapper)
+      } catch (persistErr) {
+        console.error('[pi-server] failed to persist session messages:', persistErr)
       }
 
       // Robust text extraction — supports both plain text and extended thinking modes
