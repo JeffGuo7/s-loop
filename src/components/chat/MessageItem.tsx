@@ -71,7 +71,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
                 )
               })}
             </div>
-            <div className="opacity-0 group-hover:opacity-100 transition-all duration-700">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150">
               <MessageActionBar
                 content={allText}
                 timestamp={message.info.time.created}
@@ -129,7 +129,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all duration-700 px-1">
+          <div className="mt-2 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-150 px-1">
             <div className="flex items-center gap-6">
               <MessageActionBar
                 content={allText}

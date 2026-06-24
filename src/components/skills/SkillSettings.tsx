@@ -14,11 +14,14 @@ import {
   Loader2,
   Upload,
   Check,
+  ArrowLeft,
 } from 'lucide-react';
 import { useSkillStore } from '../../stores';
 import type { SkillsCLISearchResult } from '../../stores/skillStore';
 import type { SkillInfo } from '../../types/skill';
 import { CopyButton } from '../chat/shared/CopyButton';
+
+type SkillView = 'list' | 'add' | 'paths';
 
 export function SkillSettings() {
   const { t } = useTranslation();
@@ -36,8 +39,7 @@ export function SkillSettings() {
     clearScanError,
     installSkillZip,
   } = useSkillStore();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showPathModal, setShowPathModal] = useState(false);
+  const [currentView, setCurrentView] = useState<SkillView>('list');
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
   const [dropInstalling, setDropInstalling] = useState(false);
   const [dropInstalled, setDropInstalled] = useState(false);
@@ -47,6 +49,8 @@ export function SkillSettings() {
 
   return (
     <div className="space-y-8 animate-slide-up">
+      {currentView === 'list' && (
+      <>
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">{t('skills.title')}</h3>
@@ -67,7 +71,7 @@ export function SkillSettings() {
         </div>
         <div className="flex gap-3">
           <button
-            onClick={() => setShowPathModal(true)}
+            onClick={() => setCurrentView('paths')}
             className="btn-secondary flex items-center gap-2 text-sm"
           >
             <FolderOpen className="w-4 h-4" />
@@ -91,7 +95,7 @@ export function SkillSettings() {
             {t('skills.installFromZip')}
           </button>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => setCurrentView('add')}
             className="btn-primary flex items-center gap-2 text-sm"
           >
             <Plus className="w-4 h-4" />
@@ -169,11 +173,11 @@ export function SkillSettings() {
           ))}
         </div>
       )}
-
-      {showAddModal && <AddSkillModal onClose={() => setShowAddModal(false)} />}
-      {showPathModal && (
-        <SkillPathsModal paths={paths} addPath={addPath} removePath={removePath} onClose={() => setShowPathModal(false)} />
+      </>
       )}
+
+      {currentView === 'add' && <AddSkillView onBack={() => setCurrentView('list')} />}
+      {currentView === 'paths' && <SkillPathsView paths={paths} addPath={addPath} removePath={removePath} onBack={() => setCurrentView('list')} />}
     </div>
   );
 }
@@ -190,10 +194,10 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
   const { t } = useTranslation();
   const skillMeta = useSkillStore((s) => s.skillMeta);
   return (
-    <div 
+    <div
       className={`group transition-all duration-300 border ${
-        expanded 
-          ? 'border-[var(--color-accent)] shadow-md' 
+        expanded
+          ? 'border-[var(--color-accent)] shadow-md'
           : 'border-[var(--color-border)] hover:border-[var(--color-accent-light)]'
       } rounded-[var(--radius-md)] overflow-hidden bg-[var(--color-surface)]`}
     >
@@ -230,8 +234,8 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
               onToggle();
             }}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-              skill.enabled 
-                ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20' 
+              skill.enabled
+                ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20'
                 : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-tertiary)]'
             }`}
           >
@@ -241,9 +245,9 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
               <><PowerOff className="w-3.5 h-3.5" /> {t('skills.disabled')}</>
             )}
           </button>
-          
+
           <div className="w-[1px] h-6 bg-[var(--color-border)]" />
-          
+
           {skill.location !== 'builtin' && (
             <button
               onClick={(e) => {
@@ -256,7 +260,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
               <Trash2 className="w-4 h-4" />
             </button>
           )}
-          
+
           <div className={`transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}>
             <ChevronDown className="w-4 h-4 text-[var(--color-text-tertiary)]" />
           </div>
@@ -326,11 +330,7 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
   );
 }
 
-interface AddSkillModalProps {
-  onClose: () => void;
-}
-
-function AddSkillModal({ onClose }: AddSkillModalProps) {
+function AddSkillView({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation();
   const { addSkill, skillsCliSearch, skillsCliInstall } = useSkillStore();
   const [name, setName] = useState('');
@@ -354,7 +354,7 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
     };
 
     addSkill(skill);
-    onClose();
+    onBack();
   };
 
   const handleRemoteSearch = async (query: string) => {
@@ -379,7 +379,7 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
       if (!result.success) {
         setRemoteError(result.message);
       } else {
-        onClose();
+        onBack();
       }
     } catch (error) {
       setRemoteError(error instanceof Error ? error.message : t('skills.remoteInstallError'));
@@ -389,164 +389,161 @@ function AddSkillModal({ onClose }: AddSkillModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl w-full max-w-2xl overflow-hidden animate-slide-up">
-        <div className="px-8 pt-8 pb-6">
-          <h3 className="text-2xl font-bold text-[var(--color-text)]">{t('skills.newSkill')}</h3>
-          <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t('skills.newSkillDesc')}</p>
+    <div className="space-y-8 animate-fade-in">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.2em] text-[var(--color-text-tertiary)] hover:text-[var(--color-accent)] transition-colors"
+      >
+        <ArrowLeft size={14} />
+        {t('skills.backToList')}
+      </button>
+
+      <div>
+        <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">{t('skills.newSkill')}</h3>
+        <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t('skills.newSkillDesc')}</p>
+      </div>
+
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/60 p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-[var(--color-text)]">{t('skills.remoteTitle')}</div>
+            <div className="text-xs text-[var(--color-text-secondary)] mt-1">{t('skills.remoteDesc')}</div>
+          </div>
+          <a
+            href="https://skills.sh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 text-[11px] font-bold text-[var(--color-accent)] hover:underline rounded-lg"
+          >
+            skills.sh ↗
+          </a>
         </div>
 
-        <div className="px-8 pb-4">
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/60 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-bold text-[var(--color-text)]">{t('skills.remoteTitle')}</div>
-                <div className="text-xs text-[var(--color-text-secondary)] mt-1">{t('skills.remoteDesc')}</div>
-              </div>
-              <a
-                href="https://skills.sh"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 text-[11px] font-bold text-[var(--color-accent)] hover:underline rounded-lg"
-              >
-                skills.sh ↗
-              </a>
-            </div>
+        <div className="mt-4 flex gap-2">
+          <input
+            type="text"
+            value={remoteQuery}
+            onChange={(e) => setRemoteQuery(e.target.value)}
+            className="flex-1 px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none text-sm"
+            placeholder={t('skills.remoteSearchPlaceholder')}
+          />
+          <button
+            type="button"
+            onClick={() => handleRemoteSearch(remoteQuery)}
+            className="btn-primary px-5"
+          >
+            {t('common.search')}
+          </button>
+        </div>
 
-            <div className="mt-4 flex gap-2">
-              <input
-                type="text"
-                value={remoteQuery}
-                onChange={(e) => setRemoteQuery(e.target.value)}
-                className="flex-1 px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none text-sm"
-                placeholder={t('skills.remoteSearchPlaceholder')}
-              />
-              <button
-                type="button"
-                onClick={() => handleRemoteSearch(remoteQuery)}
-                className="btn-primary px-5"
-              >
-                {t('common.search')}
-              </button>
+        <div className="mt-4 space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-subtle">
+          {remoteLoading ? (
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
+              {t('skills.remoteLoading')}
             </div>
-
-            <div className="mt-4 space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-subtle">
-              {remoteLoading ? (
-                <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
-                  {t('skills.remoteLoading')}
-                </div>
-              ) : remoteError ? (
-                <div className="rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-bg)] px-4 py-5 text-center text-sm text-[var(--color-error)]">
-                  {remoteError}
-                </div>
-              ) : remoteResults.length === 0 ? (
-                <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
-                  {t('skills.remoteEmpty')}
-                </div>
-              ) : (
-                remoteResults.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-bold text-[var(--color-text)] truncate">{item.name}</div>
-                        <div className="text-xs text-[var(--color-text-secondary)] mt-1 leading-relaxed line-clamp-2">
-                          {item.source || item.id}
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-accent-muted)] text-[var(--color-accent)]">
-                            skills.sh
-                          </span>
-                          {item.source && (
-                            <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] truncate max-w-[180px]">
-                              {item.source}
-                            </span>
-                          )}
-                          {typeof item.installs === 'number' && item.installs > 0 && (
-                            <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]">
-                              {item.installs >= 1000 ? `${(item.installs / 1000).toFixed(1)}K` : item.installs} installs
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoteInstall(item.source || item.id, item.name)}
-                        disabled={busySlug === item.name}
-                        className="btn-primary shrink-0 px-4 py-2 text-xs disabled:opacity-60"
-                      >
-                        {busySlug === item.name ? t('skills.installing') : t('skills.install')}
-                      </button>
+          ) : remoteError ? (
+            <div className="rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-bg)] px-4 py-5 text-center text-sm text-[var(--color-error)]">
+              {remoteError}
+            </div>
+          ) : remoteResults.length === 0 ? (
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
+              {t('skills.remoteEmpty')}
+            </div>
+          ) : (
+            remoteResults.map((item) => (
+              <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-bold text-[var(--color-text)] truncate">{item.name}</div>
+                    <div className="text-xs text-[var(--color-text-secondary)] mt-1 leading-relaxed line-clamp-2">
+                      {item.source || item.id}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-accent-muted)] text-[var(--color-accent)]">
+                        skills.sh
+                      </span>
+                      {item.source && (
+                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] truncate max-w-[180px]">
+                          {item.source}
+                        </span>
+                      )}
+                      {typeof item.installs === 'number' && item.installs > 0 && (
+                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]">
+                          {item.installs >= 1000 ? `${(item.installs / 1000).toFixed(1)}K` : item.installs} installs
+                        </span>
+                      )}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoteInstall(item.source || item.id, item.name)}
+                    disabled={busySlug === item.name}
+                    className="btn-primary shrink-0 px-4 py-2 text-xs disabled:opacity-60"
+                  >
+                    {busySlug === item.name ? t('skills.installing') : t('skills.install')}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.skillName')}</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none text-sm"
+            placeholder={t('skills.skillPlaceholder')}
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.skillName')}</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none text-sm"
-              placeholder={t('skills.skillPlaceholder')}
-              required
-            />
-          </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.descriptionLabel')}</label>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none text-sm"
+            placeholder={t('skills.descPlaceholder')}
+            required
+          />
+        </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.descriptionLabel')}</label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none text-sm"
-              placeholder={t('skills.descPlaceholder')}
-              required
-            />
-          </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.systemInstructions')}</label>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none font-mono text-sm leading-relaxed"
+            rows={6}
+            placeholder={t('skills.instructionsPlaceholder')}
+            required
+          />
+        </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('skills.systemInstructions')}</label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] transition-all outline-none font-mono text-sm leading-relaxed"
-              rows={6}
-              placeholder={t('skills.instructionsPlaceholder')}
-              required
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-2.5 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
-            >
-              {t('skills.cancel')}
-            </button>
-            <button
-              type="submit"
-              className="btn-primary px-8"
-            >
-              {t('skills.createSkill')}
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-6 py-2.5 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
+          >
+            {t('skills.cancel')}
+          </button>
+          <button
+            type="submit"
+            className="btn-primary px-8"
+          >
+            {t('skills.createSkill')}
+          </button>
+        </div>
+      </form>
     </div>
   );
-}
-
-interface SkillPathsModalProps {
-  paths: string[];
-  addPath: (path: string) => void;
-  removePath: (path: string) => void;
-  onClose: () => void;
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -562,7 +559,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModalProps) {
+function SkillPathsView({ paths, addPath, removePath, onBack }: { paths: string[]; addPath: (path: string) => void; removePath: (path: string) => void; onBack: () => void }) {
   const { t } = useTranslation();
   const [newPath, setNewPath] = useState('');
 
@@ -575,102 +572,101 @@ function SkillPathsModal({ paths, addPath, removePath, onClose }: SkillPathsModa
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
-        <div className="px-8 pt-8 pb-6">
-          <h3 className="text-2xl font-bold text-[var(--color-text)]">{t('skills.skillPaths')}</h3>
-          <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t('skills.skillPathsDesc')}</p>
-        </div>
+    <div className="space-y-8 animate-fade-in">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-[12px] font-black uppercase tracking-[0.2em] text-[var(--color-text-tertiary)] hover:text-[var(--color-accent)] transition-colors"
+      >
+        <ArrowLeft size={14} />
+        {t('skills.backToList')}
+      </button>
 
-        <div className="px-8 pb-4">
-          <div className="space-y-3 max-h-60 overflow-y-auto pr-2 scrollbar-subtle">
-            {paths.length === 0 ? (
-              <div className="text-center py-8 bg-[var(--color-surface-secondary)] rounded-xl border border-dashed border-[var(--color-border)]">
-                <FolderOpen className="w-8 h-8 text-[var(--color-text-tertiary)] mx-auto mb-2 opacity-50" />
-                <p className="text-sm text-[var(--color-text-tertiary)]">{t('skills.noPaths')}</p>
-              </div>
-            ) : (
-              paths.map((path: string) => (
-                <div
-                  key={path}
-                  className="flex items-center justify-between p-3 bg-[var(--color-surface-secondary)] rounded-xl border border-[var(--color-border)] group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-1.5 bg-[var(--color-surface)] rounded-lg shadow-sm">
-                      <FileCode className="w-4 h-4 text-[var(--color-accent)]" />
-                    </div>
-                    <span className="text-sm font-mono text-[var(--color-text-secondary)] truncate">{path}</span>
-                  </div>
-                  <button
-                    onClick={() => removePath(path)}
-                    className="p-1.5 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-bg)] rounded-lg transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+      <div>
+        <h3 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">{t('skills.skillPaths')}</h3>
+        <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t('skills.skillPathsDesc')}</p>
+      </div>
+
+      <div className="space-y-3 max-h-60 overflow-y-auto pr-2 scrollbar-subtle">
+        {paths.length === 0 ? (
+          <div className="text-center py-8 bg-[var(--color-surface-secondary)] rounded-xl border border-dashed border-[var(--color-border)]">
+            <FolderOpen className="w-8 h-8 text-[var(--color-text-tertiary)] mx-auto mb-2 opacity-50" />
+            <p className="text-sm text-[var(--color-text-tertiary)]">{t('skills.noPaths')}</p>
+          </div>
+        ) : (
+          paths.map((path: string) => (
+            <div
+              key={path}
+              className="flex items-center justify-between p-3 bg-[var(--color-surface-secondary)] rounded-xl border border-[var(--color-border)] group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-1.5 bg-[var(--color-surface)] rounded-lg shadow-sm">
+                  <FileCode className="w-4 h-4 text-[var(--color-accent)]" />
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+                <span className="text-sm font-mono text-[var(--color-text-secondary)] truncate">{path}</span>
+              </div>
+              <button
+                onClick={() => removePath(path)}
+                className="p-1.5 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-bg)] rounded-lg transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
 
-        <div className="px-8 pb-8 space-y-6">
-          {/* Browse button - primary method */}
-          <button
-            onClick={async () => {
-              try {
-                const selected = await open({
-                  directory: true,
-                  multiple: false,
-                  title: t('skills.selectFolder'),
-                });
-                if (selected) {
-                  addPath(selected);
-                }
-              } catch {
-                // Tauri dialog not available — user can type manually
-              }
-            }}
-            className="w-full flex items-center justify-center gap-3 py-4 bg-[var(--color-surface-secondary)] border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-accent)] rounded-xl text-sm font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] transition-all"
-          >
-            <FolderOpen className="w-5 h-5" />
-            {t('skills.browseFolder')}
-          </button>
+      <button
+        onClick={async () => {
+          try {
+            const selected = await open({
+              directory: true,
+              multiple: false,
+              title: t('skills.selectFolder'),
+            });
+            if (selected) {
+              addPath(selected);
+            }
+          } catch {
+            // Tauri dialog not available — user can type manually
+          }
+        }}
+        className="w-full flex items-center justify-center gap-3 py-4 bg-[var(--color-surface-secondary)] border-2 border-dashed border-[var(--color-border)] hover:border-[var(--color-accent)] rounded-xl text-sm font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] transition-all"
+      >
+        <FolderOpen className="w-5 h-5" />
+        {t('skills.browseFolder')}
+      </button>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-[var(--color-border)]" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] opacity-50">
-              {t('skills.orManual')}
-            </span>
-            <div className="flex-1 h-px bg-[var(--color-border)]" />
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-[var(--color-border)]" />
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] opacity-50">
+          {t('skills.orManual')}
+        </span>
+        <div className="flex-1 h-px bg-[var(--color-border)]" />
+      </div>
 
-          {/* Manual path input - secondary / fallback */}
-          <form onSubmit={handleAddPath} className="flex gap-2">
-            <input
-              type="text"
-              value={newPath}
-              onChange={(e) => setNewPath(e.target.value)}
-              className="flex-1 px-4 py-2.5 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
-              placeholder={t('skills.pathPlaceholder')}
-            />
-            <button
-              type="submit"
-              className="btn-primary"
-            >
-              {t('skills.add')}
-            </button>
-          </form>
+      <form onSubmit={handleAddPath} className="flex gap-2">
+        <input
+          type="text"
+          value={newPath}
+          onChange={(e) => setNewPath(e.target.value)}
+          className="flex-1 px-4 py-2.5 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+          placeholder={t('skills.pathPlaceholder')}
+        />
+        <button
+          type="submit"
+          className="btn-primary"
+        >
+          {t('skills.add')}
+        </button>
+      </form>
 
-          <div className="flex justify-end">
-            <button
-              onClick={onClose}
-              className="btn-secondary w-full"
-            >
-              {t('skills.done')}
-            </button>
-          </div>
-        </div>
+      <div className="flex justify-end">
+        <button
+          onClick={onBack}
+          className="btn-secondary w-full"
+        >
+          {t('skills.done')}
+        </button>
       </div>
     </div>
   );

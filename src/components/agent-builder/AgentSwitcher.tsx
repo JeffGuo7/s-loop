@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X, Trash2, Copy } from 'lucide-react'
+import { Plus, X, Trash2, Copy, Bot } from 'lucide-react'
 import { useAgentStore } from '../../stores'
 
 export function AgentSwitcher() {
@@ -40,7 +40,7 @@ export function AgentSwitcher() {
                 : 'bg-surface-secondary/40 text-text-tertiary hover:text-text-secondary hover:bg-surface-secondary/60'
             }`}
           >
-            <span className="text-[11px]">{agent.avatar}</span>
+            <Bot size={13} strokeWidth={2.5} />
             <span className="truncate max-w-[60px]">{agent.name}</span>
             {agents.length > 1 && (
               <div className="flex gap-0.5 ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity">

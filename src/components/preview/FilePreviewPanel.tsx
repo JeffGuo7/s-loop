@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, FileText, FileCode, FileImage, FileSpreadsheet, Loader2 } from 'lucide-react'
 import { useFilePreviewStore } from '../../stores/filePreviewStore'

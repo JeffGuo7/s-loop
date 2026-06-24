@@ -617,6 +617,7 @@ const en = {
     remoteEmpty: 'No remote results yet. Enter a keyword and search.',
     remoteSearchError: 'Remote skill search failed. Please try again later.',
     remoteInstallError: 'Remote skill install failed. Please try again later.',
+    backToList: 'Back to skills',
   },
   mcp: {
     title: 'MCP Servers',

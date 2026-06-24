@@ -94,7 +94,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     const ep = activeProvider || null
     setExpandedProvider(ep && providerList.some(p => p.id === ep) ? ep : null)
     setModelSearchQuery('')
-  }, [activeProvider, providerConfigs, providerList])
+  }, [activeProvider, providerConfigs])
 
   // Auto-fill default base URL when expanding a provider
   useEffect(() => {

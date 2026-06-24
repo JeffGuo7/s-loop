@@ -34,6 +34,7 @@ interface AppState {
   leftPanelMode: 'sessions' | 'files'
   workspaceCollapsed: boolean
   workspaceDir: string | null
+  fileTreeVersion: number
 
   // Companion (pet)
   companion: Companion | null
@@ -80,6 +81,7 @@ interface AppState {
   toggleLeftPanelMode: () => void
   toggleWorkspace: () => void
   setWorkspaceDir: (dir: string | null) => void
+  incrementFileTreeVersion: () => void
 
   // Actions - Companion
   setCompanion: (companion: Companion | null) => void
@@ -118,6 +120,7 @@ export const useAppStore = create<AppState>()(
       leftPanelMode: 'sessions',
       workspaceCollapsed: false,
       workspaceDir: null,
+      fileTreeVersion: 0,
       companion: null,
 
       // ---- Database actions ----
@@ -486,6 +489,7 @@ export const useAppStore = create<AppState>()(
       })),
       toggleWorkspace: () => set((state) => ({ workspaceCollapsed: !state.workspaceCollapsed })),
       setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
+      incrementFileTreeVersion: () => set((state) => ({ fileTreeVersion: state.fileTreeVersion + 1 })),
 
       // ---- Companion actions ----
 

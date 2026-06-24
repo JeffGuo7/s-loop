@@ -656,6 +656,7 @@ const zh = {
     remoteEmpty: '还没有远程结果，输入关键词后点击搜索。',
     remoteSearchError: '远程技能搜索失败，请稍后重试。',
     remoteInstallError: '远程技能安装失败，请稍后重试。',
+    backToList: '返回技能列表',
   },
   mcp: {
     title: 'MCP 服务器',

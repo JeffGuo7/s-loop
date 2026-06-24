@@ -595,17 +595,6 @@ export function WorkspacePanel() {
                             placeholder={t('agentStudio.advanced.modelPlaceholder')}
                             className="w-full rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] text-text-secondary outline-none transition-all focus:border-accent/30"
                           />
-                          <select
-                            value={activeAgent.permissionMode}
-                            onChange={(e) => updateAgent(activeAgent.id, {
-                              permissionMode: e.target.value as 'ask' | 'allow' | 'deny',
-                            })}
-                            className="w-full rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] font-semibold text-text outline-none transition-all focus:border-accent/30"
-                          >
-                            <option value="ask">{t('common.ask')}</option>
-                            <option value="allow">{t('common.allow')}</option>
-                            <option value="deny">{t('common.deny')}</option>
-                          </select>
                         </div>
                       )}
                     </div>

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { detectFileCategory, type FileCategory, type FilePreviewState } from '../types/filePreview'
+import { detectFileCategory, type FilePreviewState } from '../types/filePreview'
 
 interface FilePreviewStore {
   preview: FilePreviewState | null

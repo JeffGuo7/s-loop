@@ -50,6 +50,7 @@ export function Sidebar({
   const setLeftPanelMode = useAppStore((s) => s.setLeftPanelMode)
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const setWorkspaceDir = useAppStore((s) => s.setWorkspaceDir)
+  const fileTreeVersion = useAppStore((s) => s.fileTreeVersion)
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
   const { t } = useTranslation()
@@ -426,7 +427,7 @@ export function Sidebar({
           <div className="min-h-0 flex-1 overflow-hidden rounded-[22px] border border-border-light/70 bg-white/68 shadow-sm backdrop-blur-xl dark:bg-white/5">
             {workspaceDir ? (
               <div className="h-full overflow-y-auto px-2 py-2 scrollbar-subtle">
-                <FileTree rootPath={normalizedWorkspaceDir} />
+                <FileTree rootPath={normalizedWorkspaceDir} key={fileTreeVersion} />
               </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center px-5 text-center">

@@ -268,10 +268,12 @@ function getToolCategory(toolName) {
 }
 
 function checkToolPermission(toolName, rules = {}, mode = 'ask') {
+  console.log('[pi-server] checkToolPermission:', { toolName, mode, rules })
   if (mode === 'allow') return { allowed: true }
   if (mode === 'deny') return { allowed: false, reason: 'Permission denied: agent policy is deny-all' }
   const category = getToolCategory(toolName)
   const action = rules[toolName] ?? rules[category]
+  console.log('[pi-server] checkToolPermission category:', category, 'action:', action, 'isDangerous:', DANGEROUS_CATEGORIES.has(category))
   if (action === 'deny') return { allowed: false, reason: `Permission denied: ${toolName} is blocked by agent rules` }
   if (action === 'allow') return { allowed: true }
   if (DANGEROUS_CATEGORIES.has(category)) return { allowed: false, reason: `Permission denied: ${toolName} requires explicit approval` }
@@ -951,6 +953,7 @@ createServer((req, res) => {
     const wrapper = await getOrCreateWrapper(sessionId)
     if (!wrapper) { res.writeHead(404); res.end('Session not found'); return }
     const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
+    console.log('[pi-server] session message — permissionMode:', permissionMode, 'permissionRules:', JSON.stringify(permissionRules))
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
     const emit = (event, data) => { try { res.write(createSSE(event, data)) } catch {} }
@@ -1002,8 +1005,11 @@ createServer((req, res) => {
           },
           beforeToolCall: async ({ toolCall }) => {
             emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments || {} })
+            console.log('[pi-server] beforeToolCall:', toolCall.name, 'config.mode:', wrapper.config?.permissionMode, 'config.rules:', JSON.stringify(wrapper.config?.permissionRules || {}))
             const permission = checkToolPermission(toolCall.name, wrapper.config?.permissionRules, wrapper.config?.permissionMode)
+            console.log('[pi-server] beforeToolCall result:', JSON.stringify(permission))
             if (!permission.allowed) {
+              console.log('[pi-server] BLOCKING tool:', toolCall.name, 'reason:', permission.reason)
               return { block: true, reason: permission.reason }
             }
             return undefined
