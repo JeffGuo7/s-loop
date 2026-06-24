@@ -9,10 +9,10 @@ interface StreamingIndicatorProps {
 }
 
 function formatElapsed(seconds: number, t: TFunction): string {
-  if (seconds < 60) return t('chat.parts.seconds', { n: seconds })
+  if (seconds < 60) return t('chat.streaming.seconds', { n: seconds })
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
-  return t('chat.parts.minutesSeconds', { m, s })
+  return t('chat.streaming.minutesSeconds', { n: m, n2: s })
 }
 
 export function StreamingIndicator({
