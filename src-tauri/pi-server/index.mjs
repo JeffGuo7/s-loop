@@ -96,12 +96,11 @@ function getTools(dir, webSearchConfig) {
     const providerName = webSearchConfig?.provider || 'bing'
     tools.push({
       name: 'web_search', label: 'Web Search',
-      description: `Search the web and return results with URLs, titles, and snippets.
-
-CRITICAL RULE: The query must be one continuous, natural phrase — no space-separated keywords. Instead of "塞尔达传说时之笛 最新资讯 2024", write "塞尔达传说时之笛最新资讯". Never split Chinese text into individual words or characters.`,
-      parameters: { type: 'object', properties: { query: { type: 'string', description: 'One continuous phrase — no spaces between Chinese words, no standalone dates or keywords. Write like natural human writing.' } }, required: ['query'] },
+      description: `Search the web and return results with URLs, titles, and snippets.`,
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query.' } }, required: ['query'] },
       execute: async (_id, params) => {
         const query = params.query
+        console.log(`[webSearch] query: ${JSON.stringify(query)}`)
         if (/^[\u4e00-\u9fff]{1,2}$/.test(query.trim())) {
           return { content: [{ type: 'text', text: `Search query "${query}" is too short. Use a complete phrase.` }], details: {} }
         }
@@ -130,6 +129,22 @@ CRITICAL RULE: The query must be one continuous, natural phrase — no space-sep
           return { content: [{ type: 'text', text: `Fetch failed: ${result.error}` }], details: {} }
         }
         return { content: [{ type: 'text', text: result.content }], details: {} }
+      },
+    })
+  }
+  if (!seen.has('get_current_time')) {
+    tools.push({
+      name: 'get_current_time', label: 'Get Current Time',
+      description: 'Get the current date, time, and timezone. Use this when you need to know the actual current time.',
+      parameters: { type: 'object', properties: {} },
+      execute: async () => {
+        const now = new Date()
+        const text = now.toLocaleString('zh-CN', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          weekday: 'long', timeZoneName: 'short',
+        })
+        return { content: [{ type: 'text', text: `Current time: ${text}\nISO: ${now.toISOString()}` }], details: {} }
       },
     })
   }
