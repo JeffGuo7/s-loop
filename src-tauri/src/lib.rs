@@ -323,6 +323,7 @@ pub fn run() {
             skills_cli::skills_cli_update,
             skills_cli::skills_cli_remove,
             skills_cli::delete_skill_files,
+            skills_cli::create_skill_file,
             skills_cli::skills_mirror_config,
             skill_installer::extract_skill_zip,
             mcp_connect,

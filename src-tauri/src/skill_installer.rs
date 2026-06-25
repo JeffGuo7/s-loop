@@ -17,6 +17,19 @@ pub fn extract_skill_zip(
     target_dir: String,
     source_path_hint: Option<String>,
 ) -> Result<InstalledSkillInfo, String> {
+    // Expand ~ to home directory
+    let target_dir = if target_dir.starts_with('~') {
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_default();
+        std::path::Path::new(&home)
+            .join(&target_dir[1..].trim_start_matches(|c: char| c == '/' || c == '\\'))
+            .to_string_lossy()
+            .to_string()
+    } else {
+        target_dir
+    };
+
     let zip_bytes = base64_decode(&zip_base64)?;
 
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&zip_bytes))

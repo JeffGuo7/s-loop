@@ -376,16 +376,7 @@ function AddSkillView({ onBack }: { onBack: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const skill: SkillInfo = {
-      name,
-      description,
-      content,
-      location: 'manual',
-      enabled: true,
-    };
-
-    addSkill(skill);
+    addSkill(name, description, content);
     onBack();
   };
 

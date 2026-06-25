@@ -187,14 +187,42 @@ fn walk_skill_files(dir: &std::path::Path, entries: &mut Vec<SkillFileEntry>, vi
 #[tauri::command]
 pub async fn scan_skill_files(paths: Vec<String>) -> Result<Vec<SkillFileEntry>, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_default();
+        let default_skills = std::path::Path::new(&home).join(".pi").join("agent").join("skills");
+
         let mut results = Vec::new();
+        let mut scanned = std::collections::HashSet::new();
+
+        // Always scan the default skills directory
+        if default_skills.is_dir() {
+            let mut visited = Vec::new();
+            walk_skill_files(&default_skills, &mut results, &mut visited, 0);
+            scanned.insert(default_skills);
+        }
+
         for path_str in &paths {
-            let path = std::path::Path::new(path_str);
-            if !path.is_dir() {
+            // Expand ~ to home directory
+            let resolved = if path_str.starts_with('~') {
+                std::path::Path::new(&home).join(&path_str[1..].trim_start_matches(|c| c == '/' || c == '\\'))
+            } else {
+                std::path::Path::new(path_str).to_path_buf()
+            };
+
+            if !resolved.is_dir() {
                 continue;
             }
+            // Skip if already scanned (e.g. user added the default dir explicitly)
+            if let Ok(canon) = resolved.canonicalize() {
+                if scanned.contains(&canon) {
+                    continue;
+                }
+                scanned.insert(canon);
+            }
+
             let mut visited = Vec::new();
-            walk_skill_files(path, &mut results, &mut visited, 0);
+            walk_skill_files(&resolved, &mut results, &mut visited, 0);
         }
         Ok(results)
     })

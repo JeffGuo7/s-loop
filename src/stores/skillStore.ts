@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import type { SkillInfo } from '../types/skill';
+import { useAgentStore } from './agentStore';
 
 /// Skills CLI search result
 export interface SkillsCLISearchResult {
@@ -43,42 +44,43 @@ interface SkillFileEntry {
   version: string;
 }
 
-interface SkillState {
-  skills: SkillInfo[];
-  paths: string[];
-  skillMeta: Record<string, { emoji: string; version: string }>;
+interface SkillPrefs {
+  enabled: boolean;
+  hooks?: { pre?: string[]; post?: string[] };
+}
 
-  // Scan status
+const SKILLS_BASE = '~/.pi/agent/skills';
+
+interface SkillState {
+  // From disk scan — never persisted
+  skills: SkillInfo[];
+  skillMeta: Record<string, { emoji: string; version: string }>;
   isScanning: boolean;
   lastScanTime: number | null;
   scanError: string | null;
 
-  // Actions
-  addSkill: (skill: SkillInfo) => void;
-  updateSkill: (name: string, updates: Partial<SkillInfo>) => void;
-  removeSkill: (name: string) => void;
-  toggleSkill: (name: string) => void;
+  // Persisted
+  paths: string[];
+  skillPrefs: Record<string, SkillPrefs>;
 
-  // Paths
+  // Actions
+  addSkill: (name: string, description: string, content: string) => Promise<void>;
+  updateSkill: (name: string, updates: Partial<SkillInfo>) => void;
+  removeSkill: (name: string) => Promise<void>;
+  toggleSkill: (name: string) => void;
   addPath: (path: string) => void;
   removePath: (path: string) => void;
-
-  // Discovery
   refreshSkills: () => Promise<void>;
   installSkillZip: (
     zipBase64: string,
     options?: { targetDir?: string; sourcePathHint?: string }
   ) => Promise<SkillInfo>;
-
-  // Skills CLI (replaces old ClawHub/SkillHub remote system)
   skillsCliSearch: (query: string) => Promise<SkillsCLISearchResult[]>;
   skillsCliInstall: (slug: string, skillName?: string) => Promise<SkillsCLIInstallResult>;
   clawhubSearch: (query: string) => Promise<ClawHubSkillEntry[]>;
   clawhubInstall: (slug: string, skillName?: string) => Promise<SkillsCLIInstallResult>;
   skillsCliUpdate: () => Promise<void>;
   skillsCliRemove: (skillName: string) => Promise<void>;
-
-  // Scan status actions
   setScanning: (scanning: boolean) => void;
   clearScanError: () => void;
 }
@@ -87,19 +89,30 @@ export const useSkillStore = create<SkillState>()(
   persist(
     (set, get) => ({
       skills: [],
-      paths: [],
       skillMeta: {},
       isScanning: false,
       lastScanTime: null,
       scanError: null,
 
-      addSkill: (skill) => {
-        set((state) => ({
-          skills: [...state.skills.filter((s) => s.name !== skill.name), skill],
-        }));
+      paths: [],
+      skillPrefs: {},
+
+      /// Write a manual skill to ~/.pi/agent/skills/{name}/SKILL.md, then rescan.
+      addSkill: async (name, description, content) => {
+        await invoke<string>('create_skill_file', { name, description, content });
+        await get().refreshSkills();
       },
 
       updateSkill: (name, updates) => {
+        if (updates.hooks) {
+          set((state) => ({
+            skillPrefs: {
+              ...state.skillPrefs,
+              [name]: { ...state.skillPrefs[name], hooks: updates.hooks },
+            },
+          }));
+        }
+        // Reflect in-memory immediately for responsive UI
         set((state) => ({
           skills: state.skills.map((s) =>
             s.name === name ? { ...s, ...updates } : s
@@ -107,18 +120,38 @@ export const useSkillStore = create<SkillState>()(
         }));
       },
 
-      removeSkill: (name) => {
-        set((state) => ({
-          skills: state.skills.filter((s) => s.name !== name),
-        }));
-        // Also delete skill files from disk (fire and forget)
-        invoke('delete_skill_files', { skillName: name }).catch(() => {});
+      /// Delete skill from disk, then rescan. Agents referencing it are cleaned up.
+      removeSkill: async (name) => {
+        const skill = get().skills.find((s) => s.name === name);
+        // Clean up stale agent references first
+        try {
+          const agentStore = useAgentStore.getState();
+          for (const agent of agentStore.agents) {
+            if (agent.skills.includes(name)) {
+              agentStore.removeSkillFromAgent(agent.id, name);
+            }
+          }
+        } catch { /* agent store may not be loaded yet */ }
+        // Await disk deletion, then rescan
+        await invoke('delete_skill_files', {
+          skillName: name,
+          skillPath: skill?.location ?? null,
+        });
+        await get().refreshSkills();
       },
 
       toggleSkill: (name) => {
+        const current = get().skills.find((s) => s.name === name);
+        const newEnabled = !current?.enabled;
+        // Update pref
         set((state) => ({
+          skillPrefs: {
+            ...state.skillPrefs,
+            [name]: { ...state.skillPrefs[name], enabled: newEnabled },
+          },
+          // Also update in-memory for responsive UI
           skills: state.skills.map((s) =>
-            s.name === name ? { ...s, enabled: !s.enabled } : s
+            s.name === name ? { ...s, enabled: newEnabled } : s
           ),
         }));
       },
@@ -135,15 +168,10 @@ export const useSkillStore = create<SkillState>()(
         }));
       },
 
+      /// Rescan all paths. Rust always includes the default skills dir automatically.
       refreshSkills: async () => {
-        const { paths, skills: existingSkills, isScanning } = get();
-
+        const { paths, isScanning, skillPrefs } = get();
         if (isScanning) return;
-
-        if (!paths.length) {
-          set({ skills: [], skillMeta: {}, lastScanTime: Date.now(), scanError: null });
-          return;
-        }
 
         get().setScanning(true);
 
@@ -158,29 +186,42 @@ export const useSkillStore = create<SkillState>()(
             return;
           }
 
-          const newSkills = discovered.map((file) => {
-            const existing = existingSkills.find(
-              (s) => s.name === file.name || s.location === file.path
-            );
+          const seen = new Set<string>();
+          const newSkills: SkillInfo[] = [];
+          for (const file of discovered) {
+            if (seen.has(file.name)) continue;
+            seen.add(file.name);
 
-            return {
+            const prefs = skillPrefs[file.name];
+            newSkills.push({
               name: file.name,
               description: file.description,
               content: file.body || file.content,
               location: file.path,
-              enabled: existing?.enabled ?? true,
-              hooks: existing?.hooks,
-            } as SkillInfo;
-          });
+              enabled: prefs?.enabled ?? true,
+              hooks: prefs?.hooks,
+            } as SkillInfo);
+          }
 
           const meta: Record<string, { emoji: string; version: string }> = {};
           for (const file of discovered) {
-            meta[file.name] = { emoji: file.emoji || '📋', version: file.version || '' };
+            if (!meta[file.name]) {
+              meta[file.name] = { emoji: file.emoji || '\u{1F4CB}', version: file.version || '' };
+            }
+          }
+
+          // Clean up prefs for skills no longer on disk
+          const newPrefs: Record<string, SkillPrefs> = {};
+          for (const s of newSkills) {
+            if (skillPrefs[s.name]) {
+              newPrefs[s.name] = skillPrefs[s.name];
+            }
           }
 
           set({
             skills: newSkills,
             skillMeta: meta,
+            skillPrefs: newPrefs,
             lastScanTime: Date.now(),
             scanError: null,
           });
@@ -194,7 +235,7 @@ export const useSkillStore = create<SkillState>()(
       },
 
       installSkillZip: async (zipBase64, options) => {
-        const targetDir = options?.targetDir || 'managed-skills';
+        const targetDir = options?.targetDir || SKILLS_BASE;
         const installed = await invoke<{
           name: string;
           description: string;
@@ -206,14 +247,6 @@ export const useSkillStore = create<SkillState>()(
           sourcePathHint: options?.sourcePathHint ?? null,
         });
 
-        get().addPath(targetDir);
-        get().addSkill({
-          name: installed.name,
-          description: installed.description,
-          content: installed.content,
-          location: installed.path,
-          enabled: true,
-        });
         await get().refreshSkills();
 
         const latest = get().skills.find((skill) => skill.name === installed.name);
@@ -250,9 +283,8 @@ export const useSkillStore = create<SkillState>()(
           skillName: skillName ?? null,
         });
 
-        if (result.success && result.skill_path) {
-          get().addPath(result.skill_path);
-          void get().refreshSkills();
+        if (result.success) {
+          await get().refreshSkills();
         }
 
         return result;
@@ -275,6 +307,14 @@ export const useSkillStore = create<SkillState>()(
       // Skills CLI: remove a skill
       skillsCliRemove: async (skillName: string) => {
         await invoke<string>('skills_cli_remove', { skillName });
+        try {
+          const agentStore = useAgentStore.getState();
+          for (const agent of agentStore.agents) {
+            if (agent.skills.includes(skillName)) {
+              agentStore.removeSkillFromAgent(agent.id, skillName);
+            }
+          }
+        } catch { /* agent store may not be loaded yet */ }
         await get().refreshSkills();
       },
 
@@ -285,11 +325,19 @@ export const useSkillStore = create<SkillState>()(
     {
       name: 'snotra-skill-storage',
       partialize: (state) => ({
-        skills: state.skills,
         paths: state.paths,
-        skillMeta: state.skillMeta,
-        lastScanTime: state.lastScanTime,
+        skillPrefs: state.skillPrefs,
       }),
+      // On rehydrate, trigger a rescan so skills reflect current disk state
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error || !state) return;
+          // Defer rescan so it doesn't block first render
+          setTimeout(() => {
+            useSkillStore.getState().refreshSkills().catch(() => {});
+          }, 0);
+        };
+      },
     }
   )
 );

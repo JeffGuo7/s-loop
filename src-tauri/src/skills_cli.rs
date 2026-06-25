@@ -42,6 +42,19 @@ fn dirs_home() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("."))
 }
 
+/// Replace characters that are invalid in file/directory names on any platform.
+fn sanitize_dir_name(raw: &str) -> String {
+    raw.chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '-',
+            c if c.is_control() => '-',
+            c => c,
+        })
+        .collect::<String>()
+        .trim_matches(|c: char| c == '.' || c == ' ')
+        .to_string()
+}
+
 fn percent_encode(query: &str) -> String {
     let mut result = String::new();
     for byte in query.bytes() {
@@ -224,18 +237,62 @@ pub async fn skills_cli_remove(skill_name: String) -> Result<String, String> {
     Ok(stdout)
 }
 
-/// Delete a skill's directory from disk (~/.pi/agent/skills/{name}/).
-/// Used when removing a ClawHub-installed skill that npx doesn't know about.
+/// Delete a skill's directory from disk.
+/// First tries the skill's actual location (extracted from the stored path),
+/// then falls back to ~/.pi/agent/skills/{name}/.
 #[tauri::command]
-pub fn delete_skill_files(skill_name: String) -> Result<String, String> {
+pub fn delete_skill_files(skill_name: String, skill_path: Option<String>) -> Result<String, String> {
+    // Try the actual skill path first (from the stored location)
+    if let Some(ref loc) = skill_path {
+        let loc_path = std::path::Path::new(loc);
+        // If loc is a SKILL.md file path, delete its parent directory
+        let dir_to_delete = if loc_path.is_file()
+            || loc_path.extension().map(|e| e == "md").unwrap_or(false)
+        {
+            loc_path.parent().map(|p| p.to_path_buf())
+        } else {
+            Some(loc_path.to_path_buf())
+        };
+
+        if let Some(dir) = dir_to_delete {
+            if dir.exists() {
+                std::fs::remove_dir_all(&dir)
+                    .map_err(|e| format!("Failed to delete skill directory {}: {}", dir.display(), e))?;
+                return Ok(format!("Deleted skill directory: {}", dir.display()));
+            }
+        }
+    }
+
+    // Fallback: try ~/.pi/agent/skills/{name}/
     let dir = dirs_home().join(".pi").join("agent").join("skills").join(&skill_name);
     if dir.exists() {
         std::fs::remove_dir_all(&dir)
             .map_err(|e| format!("Failed to delete skill directory: {e}"))?;
         Ok(format!("Deleted skill directory: {}", dir.display()))
     } else {
-        Ok(format!("Skill directory not found: {}", dir.display()))
+        Ok(format!("Skill directory not found for: {}", skill_name))
     }
+}
+
+/// Write a new SKILL.md file to ~/.pi/agent/skills/{name}/SKILL.md.
+/// Returns the path to the created skill directory.
+#[tauri::command]
+pub fn create_skill_file(name: String, description: String, content: String) -> Result<String, String> {
+    let safe_name = sanitize_dir_name(&name);
+    let skills_dir = dirs_home().join(".pi").join("agent").join("skills");
+    let skill_dir = skills_dir.join(&safe_name);
+    std::fs::create_dir_all(&skill_dir)
+        .map_err(|e| format!("Failed to create skill directory: {e}"))?;
+
+    let frontmatter = format!(
+        "---\nname: {}\ndescription: {}\n---\n\n{}",
+        name, description, content
+    );
+    let skill_md = skill_dir.join("SKILL.md");
+    std::fs::write(&skill_md, frontmatter)
+        .map_err(|e| format!("Failed to write SKILL.md: {e}"))?;
+
+    Ok(skill_dir.to_string_lossy().to_string())
 }
 
 /// Check current mirror configuration
@@ -314,6 +371,7 @@ pub async fn clawhub_install_skill(
 
         let base_dir = std::path::Path::new(&path)
             .parent()
+            .filter(|p| !p.as_os_str().is_empty())
             .map(|p| format!("{}/", p.to_string_lossy()))
             .unwrap_or_default();
 
@@ -339,7 +397,9 @@ pub async fn clawhub_install_skill(
     let skill_base_dir = &selected.base_dir;
 
     // Use the filter name if provided, otherwise the frontmatter name
-    let name = skill_name.unwrap_or_else(|| selected.frontmatter_name.clone());
+    let name = sanitize_dir_name(
+        &skill_name.unwrap_or_else(|| selected.frontmatter_name.clone())
+    );
 
     // Install to ~/.pi/agent/skills/{name}/
     let skills_dir = dirs_home().join(".pi").join("agent").join("skills");
