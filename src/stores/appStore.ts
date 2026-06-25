@@ -36,6 +36,10 @@ interface AppState {
   workspaceDir: string | null
   fileTreeVersion: number
 
+  // Skill mirror config
+  githubMirror: string
+  npmRegistryMirror: string
+
   // Companion (pet)
   companion: Companion | null
 
@@ -76,6 +80,8 @@ interface AppState {
   setTheme: (theme: 'light' | 'dark') => void
   setColorScheme: (scheme: string) => void
   setLocale: (locale: string) => void
+  setGithubMirror: (url: string) => void
+  setNpmRegistryMirror: (url: string) => void
   toggleSidebar: () => void
   setLeftPanelMode: (mode: 'sessions' | 'files') => void
   toggleLeftPanelMode: () => void
@@ -121,6 +127,8 @@ export const useAppStore = create<AppState>()(
       workspaceCollapsed: false,
       workspaceDir: null,
       fileTreeVersion: 0,
+      githubMirror: 'https://mirror.ghproxy.com/https://github.com/',
+      npmRegistryMirror: 'https://registry.npmmirror.com',
       companion: null,
 
       // ---- Database actions ----
@@ -482,6 +490,9 @@ export const useAppStore = create<AppState>()(
         i18n.changeLanguage(locale)
       },
 
+      setGithubMirror: (url) => set({ githubMirror: url }),
+      setNpmRegistryMirror: (url) => set({ npmRegistryMirror: url }),
+
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setLeftPanelMode: (mode) => set({ leftPanelMode: mode }),
       toggleLeftPanelMode: () => set((state) => ({
@@ -508,6 +519,8 @@ export const useAppStore = create<AppState>()(
         companion: state.companion,
         leftPanelMode: state.leftPanelMode,
         workspaceDir: state.workspaceDir,
+        githubMirror: state.githubMirror,
+        npmRegistryMirror: state.npmRegistryMirror,
       }),
       version: 5,
       migrate: (persistedState, version) => {

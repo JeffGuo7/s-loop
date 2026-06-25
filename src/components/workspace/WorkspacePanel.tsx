@@ -24,6 +24,7 @@ export function WorkspacePanel() {
   const [remoteSkillsError, setRemoteSkillsError] = useState<string | null>(null)
   const [remoteSkills, setRemoteSkills] = useState<Array<{
     id: string
+    slug: string
     source: string
     name: string
     description: string
@@ -52,8 +53,8 @@ export function WorkspacePanel() {
   const removeAccessiblePath = useAgentStore((s) => s.removeAccessiblePath)
   const skills = useSkillStore((s) => s.skills)
   const skillMeta = useSkillStore((s) => s.skillMeta)
-  const skillsCliSearch = useSkillStore((s) => s.skillsCliSearch)
-  const skillsCliInstall = useSkillStore((s) => s.skillsCliInstall)
+  const clawhubSearch = useSkillStore((s) => s.clawhubSearch)
+  const clawhubInstall = useSkillStore((s) => s.clawhubInstall)
   const mcpServers = useMCPStore((s) => s.servers)
   const installRemoteServer = useMCPStore((s) => s.installRemoteServer)
 
@@ -174,12 +175,13 @@ export function WorkspacePanel() {
 
   async function handleRemoteInstallSkill(item: {
     id: string
+    slug: string
     source: string
     name: string
   }) {
     setBusyInstallKey(item.id)
     try {
-      const result = await skillsCliInstall(item.source || item.id, item.name)
+      const result = await clawhubInstall(item.slug, item.name)
 
       if (result.success) {
         const target = ensureAgentTarget()
@@ -202,14 +204,15 @@ export function WorkspacePanel() {
     setRemoteSkillsError(null)
 
     try {
-      const list = await skillsCliSearch(query)
+      const list = await clawhubSearch(query)
       setRemoteSkills(list.map((item) => ({
         id: item.id,
-        source: item.source || item.id,
+        slug: item.slug,
+        source: item.slug,
         name: item.name,
-        description: `${item.source || item.id}${item.installs > 0 ? ` · ${item.installs >= 1000 ? (item.installs / 1000).toFixed(1) + 'K' : item.installs} installs` : ''}`,
-        owner: item.source?.split('/')[0],
-        downloads: item.installs,
+        description: item.description + (item.downloads && item.downloads > 0 ? ` · ${item.downloads >= 1000 ? (item.downloads / 1000).toFixed(1) + 'K' : item.downloads} installs` : ''),
+        owner: item.owner ?? undefined,
+        downloads: item.downloads ?? undefined,
       })))
     } catch (error) {
       setRemoteSkills([])
@@ -634,9 +637,9 @@ export function WorkspacePanel() {
             actionLabel: t('agentStudio.library.remoteInstall'),
             onClick: () => void handleRemoteInstallSkill(skill),
             badges: [
-              'skills.sh',
+              'ClawHub',
               ...(skill.owner ? [skill.owner] : []),
-              ...(typeof skill.downloads === 'number' ? [`${skill.downloads >= 1000 ? (skill.downloads / 1000).toFixed(1) + 'K' : skill.downloads} installs`] : []),
+              ...(typeof skill.downloads === 'number' && skill.downloads > 0 ? [`${skill.downloads >= 1000 ? (skill.downloads / 1000).toFixed(1) + 'K' : skill.downloads} installs`] : []),
             ],
             busy: busyInstallKey === skill.id,
           }))}

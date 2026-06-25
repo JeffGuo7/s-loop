@@ -89,7 +89,7 @@ pub fn read_file_base64(path: String) -> Result<String, String> {
     Ok(BASE64_STANDARD.encode(bytes))
 }
 
-fn parse_frontmatter(content: &str) -> (HashMap<String, String>, String) {
+pub(crate) fn parse_frontmatter(content: &str) -> (HashMap<String, String>, String) {
     let mut meta = HashMap::new();
     let trimmed = content.trim_start();
     if !trimmed.starts_with("---") {

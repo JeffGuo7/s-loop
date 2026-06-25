@@ -958,6 +958,19 @@ createServer((req, res) => {
     return
   }
 
+  const abortMatch = url.pathname.match(/^\/session\/([^/]+)\/abort$/)
+  if (req.method === 'POST' && abortMatch) {
+    const abortSessionId = abortMatch[1]
+    const abortWrapper = sessions.get(abortSessionId)
+    if (abortWrapper?.agent) {
+      console.log('[pi-server] explicit abort for session:', abortSessionId)
+      try { abortWrapper.agent.abort() } catch (e) { console.warn('[pi-server] abort error:', e.message) }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true }))
+    return
+  }
+
   const m = url.pathname.match(/^\/session\/([^/]+)\/message$/)
   if (req.method !== 'POST' || !m) { res.writeHead(404); res.end('Not found'); return }
 
@@ -1108,7 +1121,7 @@ createServer((req, res) => {
         )
       } finally {
         clearTimeout(totalTimeout)
-        totalAc.abort() // Ensure sleep() in retry loop is released
+        totalAc.abort()
       }
 
       const msgs = wrapper.agent.state.messages

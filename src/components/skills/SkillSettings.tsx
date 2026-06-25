@@ -16,8 +16,7 @@ import {
   Check,
   ArrowLeft,
 } from 'lucide-react';
-import { useSkillStore } from '../../stores';
-import type { SkillsCLISearchResult } from '../../stores/skillStore';
+import { useSkillStore, useAppStore } from '../../stores';
 import type { SkillInfo } from '../../types/skill';
 import { CopyButton } from '../chat/shared/CopyButton';
 
@@ -39,6 +38,10 @@ export function SkillSettings() {
     clearScanError,
     installSkillZip,
   } = useSkillStore();
+  const githubMirror = useAppStore((s) => s.githubMirror);
+  const npmRegistryMirror = useAppStore((s) => s.npmRegistryMirror);
+  const setGithubMirror = useAppStore((s) => s.setGithubMirror);
+  const setNpmRegistryMirror = useAppStore((s) => s.setNpmRegistryMirror);
   const [currentView, setCurrentView] = useState<SkillView>('list');
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
   const [dropInstalling, setDropInstalling] = useState(false);
@@ -173,6 +176,34 @@ export function SkillSettings() {
           ))}
         </div>
       )}
+
+      {/* Mirror settings */}
+      <div className="border-t border-[var(--color-border)] pt-6">
+        <h4 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t('skills.mirrorTitle')}</h4>
+        <p className="text-xs text-[var(--color-text-secondary)] mb-4">{t('skills.mirrorDesc')}</p>
+        <div className="grid gap-4">
+          <div>
+            <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('skills.githubMirror')}</label>
+            <input
+              type="url"
+              value={githubMirror}
+              onChange={(e) => setGithubMirror(e.target.value)}
+              placeholder={t('skills.githubMirrorPlaceholder')}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('skills.npmRegistryMirror')}</label>
+            <input
+              type="url"
+              value={npmRegistryMirror}
+              onChange={(e) => setNpmRegistryMirror(e.target.value)}
+              placeholder={t('skills.npmRegistryMirrorPlaceholder')}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+            />
+          </div>
+        </div>
+      </div>
       </>
       )}
 
@@ -332,14 +363,14 @@ function SkillCard({ skill, expanded, onToggleExpand, onToggle, onRemove }: Skil
 
 function AddSkillView({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation();
-  const { addSkill, skillsCliSearch, skillsCliInstall } = useSkillStore();
+  const { addSkill, clawhubSearch, clawhubInstall } = useSkillStore();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
   const [remoteQuery, setRemoteQuery] = useState('');
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
-  const [remoteResults, setRemoteResults] = useState<SkillsCLISearchResult[]>([]);
+  const [clawhubResults, setClawhubResults] = useState<Array<{ slug: string; name: string; description: string; downloads: number; sourceType: string }>>([]);
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const installingRef = useRef(false);
 
@@ -362,11 +393,19 @@ function AddSkillView({ onBack }: { onBack: () => void }) {
     setRemoteLoading(true);
     setRemoteError(null);
     try {
-      const list = await skillsCliSearch(query);
-      setRemoteResults(list);
+      const clawhub = await clawhubSearch(query);
+      setClawhubResults(
+        clawhub.map((r) => ({
+          slug: r.slug,
+          name: r.name,
+          description: r.description,
+          downloads: r.downloads ?? 0,
+          sourceType: 'clawhub',
+        }))
+      );
     } catch (error: unknown) {
       console.error('[SkillSettings] Remote search failed:', error);
-      setRemoteResults([]);
+      setClawhubResults([]);
       const msg = (error instanceof Error)
         ? error.message
         : (typeof error === 'string' ? error : JSON.stringify(error));
@@ -376,30 +415,24 @@ function AddSkillView({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const handleRemoteInstall = async (source: string, skillName: string) => {
+  const handleClawhubInstall = async (slug: string, skillName: string) => {
     if (installingRef.current) return;
     installingRef.current = true;
     setBusySlug(skillName);
     setRemoteError(null);
     try {
-      const result = await skillsCliInstall(source, skillName);
+      const result = await clawhubInstall(slug, skillName);
       if (!result.success) {
         setRemoteError(result.message || t('skills.remoteInstallError'));
       } else {
         onBack();
       }
     } catch (error: unknown) {
-      console.error('[SkillSettings] Remote install failed:', error);
+      console.error('[SkillSettings] ClawHub install failed:', error);
       const msg = (error instanceof Error)
         ? error.message
         : (typeof error === 'string' ? error : JSON.stringify(error));
-      if (!msg || msg === t('skills.remoteInstallError')) {
-        setRemoteError(t('skills.remoteInstallError'));
-      } else if (msg.includes('Is Node.js installed')) {
-        setRemoteError(`${t('skills.remoteInstallError')}: Node.js / npx 未安装，请先安装 Node.js。`);
-      } else {
-        setRemoteError(`${t('skills.remoteInstallError')}: ${msg}`);
-      }
+      setRemoteError(`${t('skills.remoteInstallError')}: ${msg}`);
     } finally {
       setBusySlug(null);
       installingRef.current = false;
@@ -428,12 +461,12 @@ function AddSkillView({ onBack }: { onBack: () => void }) {
             <div className="text-xs text-[var(--color-text-secondary)] mt-1">{t('skills.remoteDesc')}</div>
           </div>
           <a
-            href="https://skills.sh"
+            href="https://clawhub.ai"
             target="_blank"
             rel="noopener noreferrer"
             className="px-3 py-1.5 text-[11px] font-bold text-[var(--color-accent)] hover:underline rounded-lg"
           >
-            skills.sh ↗
+            clawhub.ai ↗
           </a>
         </div>
 
@@ -463,40 +496,34 @@ function AddSkillView({ onBack }: { onBack: () => void }) {
             <div className="rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-bg)] px-4 py-5 text-center text-sm text-[var(--color-error)]">
               {remoteError}
             </div>
-          ) : remoteResults.length === 0 ? (
+          ) : clawhubResults.length === 0 ? (
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
               {t('skills.remoteEmpty')}
             </div>
           ) : (
-            remoteResults.map((item) => (
-              <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+            clawhubResults.map((item) => (
+              <div key={`ch-${item.slug}`} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-bold text-[var(--color-text)] truncate">{item.name}</div>
                     <div className="text-xs text-[var(--color-text-secondary)] mt-1 leading-relaxed line-clamp-2">
-                      {item.source || item.id}
+                      {item.description}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-accent-muted)] text-[var(--color-accent)]">
-                        skills.sh
+                        ClawHub
                       </span>
-                      {item.source && (
-                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] truncate max-w-[180px]">
-                          {item.source}
-                        </span>
-                      )}
-                      {typeof item.installs === 'number' && item.installs > 0 && (
+                      {item.downloads > 0 && (
                         <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]">
-                          {item.installs >= 1000 ? `${(item.installs / 1000).toFixed(1)}K` : item.installs} installs
+                          {item.downloads >= 1000 ? `${(item.downloads / 1000).toFixed(1)}K` : item.downloads} installs
                         </span>
                       )}
                     </div>
                   </div>
                   <button
-                    type="button"
-                    onClick={() => handleRemoteInstall(item.source || item.id, item.name)}
+                    onClick={() => handleClawhubInstall(item.slug, item.name)}
                     disabled={busySlug === item.name}
-                    className="btn-primary shrink-0 px-4 py-2 text-xs disabled:opacity-60"
+                    className="btn-primary px-4 py-2 text-xs flex-shrink-0 disabled:opacity-50"
                   >
                     {busySlug === item.name ? t('skills.installing') : t('skills.install')}
                   </button>

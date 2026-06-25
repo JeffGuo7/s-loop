@@ -657,6 +657,12 @@ const zh = {
     remoteSearchError: '远程技能搜索失败，请稍后重试。',
     remoteInstallError: '远程技能安装失败，请稍后重试。',
     backToList: '返回技能列表',
+    mirrorTitle: '下载镜像',
+    mirrorDesc: '加速中国地区下载。留空则使用默认地址。',
+    githubMirror: 'GitHub 镜像',
+    githubMirrorPlaceholder: 'https://mirror.ghproxy.com/https://github.com/',
+    npmRegistryMirror: 'npm 镜像源',
+    npmRegistryMirrorPlaceholder: 'https://registry.npmmirror.com',
   },
   mcp: {
     title: 'MCP 服务器',

@@ -618,6 +618,12 @@ const en = {
     remoteSearchError: 'Remote skill search failed. Please try again later.',
     remoteInstallError: 'Remote skill install failed. Please try again later.',
     backToList: 'Back to skills',
+    mirrorTitle: 'Download Mirrors',
+    mirrorDesc: 'Accelerate downloads in China. Leave empty for defaults.',
+    githubMirror: 'GitHub Mirror',
+    githubMirrorPlaceholder: 'https://mirror.ghproxy.com/https://github.com/',
+    npmRegistryMirror: 'npm Registry Mirror',
+    npmRegistryMirrorPlaceholder: 'https://registry.npmmirror.com',
   },
   mcp: {
     title: 'MCP Servers',

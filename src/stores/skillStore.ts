@@ -9,6 +9,8 @@ export interface SkillsCLISearchResult {
   name: string;
   source: string;
   installs: number;
+  /** Source type hint: "clawhub" | "skillsh" | "github" */
+  sourceType?: string;
 }
 
 /// Skills CLI install result
@@ -17,6 +19,18 @@ export interface SkillsCLIInstallResult {
   message: string;
   skill_name: string | null;
   skill_path: string | null;
+}
+
+/// ClawHub search raw result (matches Rust RemoteSkillEntry)
+export interface ClawHubSkillEntry {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  source: string;
+  owner: string | null;
+  downloads: number | null;
+  install_mode: string;
 }
 
 interface SkillFileEntry {
@@ -58,7 +72,9 @@ interface SkillState {
 
   // Skills CLI (replaces old ClawHub/SkillHub remote system)
   skillsCliSearch: (query: string) => Promise<SkillsCLISearchResult[]>;
-  skillsCliInstall: (source: string, skillName?: string) => Promise<SkillsCLIInstallResult>;
+  skillsCliInstall: (slug: string, skillName?: string) => Promise<SkillsCLIInstallResult>;
+  clawhubSearch: (query: string) => Promise<ClawHubSkillEntry[]>;
+  clawhubInstall: (slug: string, skillName?: string) => Promise<SkillsCLIInstallResult>;
   skillsCliUpdate: () => Promise<void>;
   skillsCliRemove: (skillName: string) => Promise<void>;
 
@@ -95,6 +111,8 @@ export const useSkillStore = create<SkillState>()(
         set((state) => ({
           skills: state.skills.filter((s) => s.name !== name),
         }));
+        // Also delete skill files from disk (fire and forget)
+        invoke('delete_skill_files', { skillName: name }).catch(() => {});
       },
 
       toggleSkill: (name) => {
@@ -213,27 +231,39 @@ export const useSkillStore = create<SkillState>()(
         return invoke<SkillsCLISearchResult[]>('skills_cli_search', { query });
       },
 
-      // Skills CLI: install via npx skills add
+      // Skills CLI: install via ClawHub only (no git/npx needed)
       skillsCliInstall: async (
-        source: string,
+        slug: string,
         skillName?: string
       ): Promise<SkillsCLIInstallResult> => {
-        const result = await invoke<SkillsCLIInstallResult>('skills_cli_install', {
-          source,
+        const result = await get().clawhubInstall(slug, skillName);
+        return result;
+      },
+
+      // ClawHub: install via clawhub.ai (HTTP download, no git/npx needed)
+      clawhubInstall: async (
+        slug: string,
+        skillName?: string
+      ): Promise<SkillsCLIInstallResult> => {
+        const result = await invoke<SkillsCLIInstallResult>('clawhub_install_skill', {
+          slug,
           skillName: skillName ?? null,
         });
 
-        if (result.success) {
-          // Add Pi's global skills path to scan paths for S-Loop
-          const homePath = result.skill_path;
-          if (homePath) {
-            const parentDir = homePath.split('/').slice(0, -1).join('/');
-            get().addPath(parentDir);
-          }
-          await get().refreshSkills();
+        if (result.success && result.skill_path) {
+          get().addPath(result.skill_path);
+          void get().refreshSkills();
         }
 
         return result;
+      },
+
+      // ClawHub: search via clawhub.ai API
+      clawhubSearch: async (query: string) => {
+        return invoke<ClawHubSkillEntry[]>('search_remote_skills', {
+          source: 'clawhub',
+          query: query || null,
+        });
       },
 
       // Skills CLI: update installed skills

@@ -268,6 +268,9 @@ export function abortSession(sessionId?: string): void {
   const current = _streams.get(sessionId)
   current?.abortController?.abort()
 
+  // Explicitly tell the server to abort — don't rely on connection close
+  fetch(`${_base}/session/${sessionId}/abort`, { method: 'POST' }).catch(() => {})
+
   if (!current) return
   if (current.callbacks) {
     _streams.set(sessionId, { callbacks: current.callbacks })

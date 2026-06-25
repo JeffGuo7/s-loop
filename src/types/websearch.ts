@@ -26,7 +26,7 @@ export const WEB_SEARCH_PROVIDERS: WebSearchProviderConfig[] = [
   {
     id: 'bing',
     name: 'Bing',
-    description: 'Free, no API key required. Works well in China via cn.bing.com. Default provider.',
+    description: 'HTTP fetch + HTML parsing. No config required. Default provider.',
     needsConfig: false,
     requiredFields: [],
     enabled: true,

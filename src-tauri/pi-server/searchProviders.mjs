@@ -63,31 +63,50 @@ function findBrowser() {
 }
 
 // ─── Browser pool ────────────────────────────────────────
+// Single browser reused across searches for speed.
+// Liveness checked via CDP probe (browser.version()) — not just exitCode,
+// which misses zombie processes where the OS sees the process as alive
+// but the DevTools protocol is unresponsive.
 
 let _browser = null
 
 async function getBrowser() {
   if (_browser) {
+    let alive = false
     try {
       const proc = _browser.process()
-      if (proc && proc.exitCode == null) return _browser
-    } catch {}
-    try { await _browser.close() } catch {}
-    _browser = null
+      if (proc && proc.exitCode == null) {
+        // Process is alive — but is it responsive? Probe via CDP.
+        await Promise.race([
+          _browser.version(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('liveness timeout')), 3_000)),
+        ])
+        alive = true
+      }
+    } catch {
+      console.warn('[webSearch] browser liveness check failed, restarting')
+    }
+    if (!alive) {
+      try { await _browser.close() } catch {}
+      _browser = null
+    }
   }
 
-  const info = findBrowser()
-  if (!info) return null
+  if (!_browser) {
+    const info = findBrowser()
+    if (!info) return null
 
-  _browser = await launch({
-    executablePath: info.path,
-    headless: true,
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--window-size=1280,768'],
-    timeout: BROWSER_LAUNCH_TIMEOUT,
-  })
+    _browser = await launch({
+      executablePath: info.path,
+      headless: true,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--window-size=1280,768'],
+      timeout: BROWSER_LAUNCH_TIMEOUT,
+    })
 
-  process.once('exit', () => { try { _browser?.close() } catch {} })
-  console.log('[webSearch] browser launched:', info.path)
+    process.once('exit', () => { try { _browser?.close() } catch {} })
+    console.log('[webSearch] browser launched:', info.path)
+  }
+
   return _browser
 }
 

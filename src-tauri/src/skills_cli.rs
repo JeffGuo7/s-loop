@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::io::Cursor;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
 
 /// Search result from skills.sh API
@@ -36,10 +35,6 @@ fn get_skills_api_url() -> String {
         .unwrap_or_else(|_| "https://skills.sh".to_string())
 }
 
-fn get_github_mirror_url() -> Option<String> {
-    std::env::var("S_LOOP_GITHUB_MIRROR").ok()
-}
-
 fn dirs_home() -> PathBuf {
     std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
@@ -58,94 +53,6 @@ fn percent_encode(query: &str) -> String {
         }
     }
     result
-}
-
-// ─── ANSI escape code stripping ───
-
-/// Strip ANSI escape sequences and cursor movement codes from CLI output.
-/// Leaves plain text that can be displayed in a UI error message.
-fn strip_ansi(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '\x1b' {
-            // Skip escape sequences: ESC [ ... m (SGR), ESC [ ... J/K/h/l (cursor), etc.
-            if chars.peek() == Some(&'[') {
-                chars.next(); // skip '['
-                // Consume parameter bytes (digits, semicolons)
-                while let Some(&c) = chars.peek() {
-                    if c.is_ascii_digit() || c == ';' || c == '?' {
-                        chars.next();
-                    } else {
-                        break;
-                    }
-                }
-                // Consume final byte (letter: m, J, K, h, l, A, B, C, D, etc.)
-                chars.next();
-            }
-            // Also skip ESC ] (OSC sequences)
-            else if chars.peek() == Some(&']') {
-                chars.next(); // skip ']'
-                while let Some(&c) = chars.peek() {
-                    if c == '\x07' || c == '\x1b' {
-                        break;
-                    }
-                    chars.next();
-                }
-                if chars.peek() == Some(&'\x07') {
-                    chars.next();
-                }
-            }
-        }
-        // Skip cursor movement codes: \r, and the 999D pattern (move cursor back 999 columns)
-        else if ch == '\r' {
-            // Skip carriage return — often followed by cursor-back sequences
-            continue;
-        }
-        // Skip the "move cursor back N columns" escape (999D without ESC prefix caused by double-strip)
-        else if ch == '[' && result.ends_with('\n') {
-            // This is likely a residual CSI without ESC — skip until letter
-            continue;
-        }
-        else {
-            result.push(ch);
-        }
-    }
-
-    result
-}
-
-/// Extract the meaningful error lines from CLI stderr/stdout, stripping ANSI and spinners
-fn clean_cli_output(raw: &str) -> String {
-    let stripped = strip_ansi(raw);
-    let lines: Vec<&str> = stripped
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| {
-            !l.is_empty()
-                && !l.starts_with('|')
-                && !l.starts_with("◇")
-                && !l.starts_with("●")
-                && !l.starts_with("○")
-                && !l.starts_with("■")
-                && !l.starts_with("▲")
-                && !l.starts_with("◒")
-                && !l.starts_with("◐")
-                && !l.starts_with("◓")
-                && !l.starts_with("◑")
-                && !l.starts_with("—")
-                && !l.starts_with("└")
-                && !l.starts_with("├")
-                && !l.starts_with("│")
-        })
-        .collect();
-
-    if lines.is_empty() {
-        return stripped.chars().take(500).collect();
-    }
-
-    lines.join("\n").chars().take(800).collect()
 }
 
 // ─── npx resolution (cross-platform — GUI apps may not inherit user PATH) ───
@@ -270,124 +177,6 @@ pub async fn skills_cli_search(query: String) -> Result<Vec<SkillsSearchResult>,
     Ok(skills)
 }
 
-/// Build the source argument for skills CLI, applying mirror if configured
-fn build_source_arg(source: &str) -> String {
-    if let Some(mirror) = get_github_mirror_url() {
-        let mirror = mirror.trim_end_matches('/');
-        if source.contains('/') && !source.starts_with("http") && !source.starts_with("git@") {
-            format!("{}/{}", mirror, source)
-        } else {
-            source.to_string()
-        }
-    } else {
-        source.to_string()
-    }
-}
-
-/// Install a skill via npx skills CLI
-#[tauri::command]
-pub async fn skills_cli_install(
-    source: String,
-    skill_name: Option<String>,
-) -> Result<SkillInstallResult, String> {
-    let effective_source = build_source_arg(&source);
-
-    let mut args = vec![
-        "skills".to_string(),
-        "add".to_string(),
-        effective_source.clone(),
-        "--agent".to_string(),
-        "pi".to_string(),
-        "-g".to_string(),
-        "-y".to_string(),
-    ];
-
-    if let Some(ref name) = skill_name {
-        args.push("--skill".to_string());
-        args.push(name.clone());
-    }
-
-    // Run npx with a 120s timeout
-    let api_url = get_skills_api_url();
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let result = npx_command()
-            .args(&args)
-            .env("SKILLS_API_URL", &api_url)
-            .output();
-        let _ = tx.send(result);
-    });
-
-    let output = rx
-        .recv_timeout(Duration::from_secs(120))
-        .map_err(|_| "npx skills timed out after 120s. Check network or try again.".to_string())?
-        .map_err(|e| format!("Failed to run npx skills: {e}. Is Node.js installed?"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let cleaned = clean_cli_output(&format!("{}\n{}", stderr, stdout));
-        return Ok(SkillInstallResult {
-            success: false,
-            message: cleaned,
-            skill_name: None,
-            skill_path: None,
-        });
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-
-    let extracted_name = skill_name.clone().or_else(|| {
-        for line in stdout.lines() {
-            let lower = line.to_lowercase();
-            if lower.contains("successfully") || lower.contains("installed") || lower.contains("added") || lower.contains("symlinked") {
-                if let Some(name) = extract_skill_name_from_line(line) {
-                    return Some(name);
-                }
-            }
-        }
-        None
-    });
-
-    let home = dirs_home();
-    let skill_path = extracted_name.as_ref().map(|n| {
-        home.join(".pi").join("agent").join("skills").join(n)
-            .to_string_lossy()
-            .to_string()
-    });
-
-    Ok(SkillInstallResult {
-        success: true,
-        message: clean_cli_output(&stdout),
-        skill_name: extracted_name,
-        skill_path,
-    })
-}
-
-/// List installed skills via npx skills CLI
-#[allow(dead_code)]
-#[tauri::command]
-pub async fn skills_cli_list(global: Option<bool>) -> Result<String, String> {
-    let mut args = vec!["skills".to_string(), "list".to_string()];
-    if global.unwrap_or(true) {
-        args.push("-g".to_string());
-    }
-
-    let output = npx_command()
-        .args(&args)
-        .output()
-        .map_err(|e| format!("Failed to run npx skills list: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    if !output.status.success() {
-        return Err(format!("List failed:\n{}\n{}", stdout, stderr));
-    }
-
-    Ok(format!("{}\n{}", stdout, stderr))
-}
-
 /// Update installed skills via npx skills CLI
 #[tauri::command]
 pub async fn skills_cli_update() -> Result<String, String> {
@@ -435,31 +224,170 @@ pub async fn skills_cli_remove(skill_name: String) -> Result<String, String> {
     Ok(stdout)
 }
 
+/// Delete a skill's directory from disk (~/.pi/agent/skills/{name}/).
+/// Used when removing a ClawHub-installed skill that npx doesn't know about.
+#[tauri::command]
+pub fn delete_skill_files(skill_name: String) -> Result<String, String> {
+    let dir = dirs_home().join(".pi").join("agent").join("skills").join(&skill_name);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)
+            .map_err(|e| format!("Failed to delete skill directory: {e}"))?;
+        Ok(format!("Deleted skill directory: {}", dir.display()))
+    } else {
+        Ok(format!("Skill directory not found: {}", dir.display()))
+    }
+}
+
 /// Check current mirror configuration
 #[tauri::command]
 pub fn skills_mirror_config() -> serde_json::Value {
     serde_json::json!({
         "api_url": get_skills_api_url(),
-        "github_mirror": get_github_mirror_url(),
     })
 }
 
 // ─── Helpers ───
 
-fn extract_skill_name_from_line(line: &str) -> Option<String> {
-    let lower = line.to_lowercase();
-    for prefix in &["installed ", "added ", "copied ", "symlinked "] {
-        if let Some(pos) = lower.find(prefix) {
-            let after = &line[pos + prefix.len()..];
-            let name = after
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .trim_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '_');
-            if !name.is_empty() {
-                return Some(name.to_string());
-            }
+/// Install a single skill from ClawHub (https://clawhub.ai).
+/// Downloads the ZIP archive and extracts it to ~/.pi/agent/skills/{name}/.
+/// No npx, no git, no Node.js required.
+#[tauri::command]
+pub async fn clawhub_install_skill(
+    slug: String,
+    skill_name: Option<String>,
+) -> Result<SkillInstallResult, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("S-Loop/0.1.0")
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+
+    let bytes = client
+        .get(format!(
+            "https://clawhub.ai/api/v1/download?slug={}",
+            urlencoding::encode(&slug)
+        ))
+        .send()
+        .await
+        .map_err(|e| format!("ClawHub download failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("ClawHub download failed: {e}"))?
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read download: {e}"))?
+        .to_vec();
+
+    let cursor = Cursor::new(bytes.as_slice());
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("Downloaded file is not a valid ZIP: {e}"))?;
+
+    // First pass: find all SKILL.md files and their frontmatter names
+    struct FoundSkill {
+        base_dir: String,
+        frontmatter_name: String,
+    }
+    let mut found_skills: Vec<FoundSkill> = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read ZIP entry: {e}"))?;
+        let path = entry.name().to_string();
+        let lower = path.replace('\\', "/").to_lowercase();
+
+        if !lower.ends_with("skill.md") {
+            continue;
+        }
+
+        let mut content = String::new();
+        std::io::Read::read_to_string(&mut entry, &mut content)
+            .map_err(|e| format!("Failed to read SKILL.md: {e}"))?;
+
+        let (meta, _body) = crate::commands::parse_frontmatter(&content);
+        let frontmatter_name = meta.get("name").cloned().unwrap_or_else(|| {
+            std::path::Path::new(&path)
+                .parent()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| slug.clone())
+        });
+
+        let base_dir = std::path::Path::new(&path)
+            .parent()
+            .map(|p| format!("{}/", p.to_string_lossy()))
+            .unwrap_or_default();
+
+        found_skills.push(FoundSkill { base_dir, frontmatter_name });
+    }
+
+    if found_skills.is_empty() {
+        return Err("No SKILL.md found in the downloaded archive.".to_string());
+    }
+
+    // Select the right skill: match by skill_name, or take the first one
+    let selected = if let Some(ref filter) = skill_name {
+        let lower_filter = filter.to_lowercase();
+        found_skills
+            .iter()
+            .find(|s| s.frontmatter_name.to_lowercase() == lower_filter)
+            .or_else(|| found_skills.first())
+    } else {
+        found_skills.first()
+    };
+
+    let selected = selected.ok_or("No skill found in archive.")?;
+    let skill_base_dir = &selected.base_dir;
+
+    // Use the filter name if provided, otherwise the frontmatter name
+    let name = skill_name.unwrap_or_else(|| selected.frontmatter_name.clone());
+
+    // Install to ~/.pi/agent/skills/{name}/
+    let skills_dir = dirs_home().join(".pi").join("agent").join("skills");
+    let dest_dir = skills_dir.join(&name);
+    std::fs::create_dir_all(&dest_dir)
+        .map_err(|e| format!("Failed to create skill directory: {e}"))?;
+
+    // Second pass: extract all files belonging to this skill
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read ZIP entry: {e}"))?;
+        let entry_path = entry.name().to_string();
+
+        if entry.name().ends_with('/') {
+            continue;
+        }
+
+        let rel_path = if skill_base_dir.is_empty() {
+            std::path::Path::new(&entry_path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+        } else if entry_path.starts_with(skill_base_dir) {
+            entry_path[skill_base_dir.len()..].to_string()
+        } else {
+            continue;
+        };
+
+        if rel_path.is_empty() {
+            continue;
+        }
+
+        let output = dest_dir.join(&rel_path);
+        if let Some(parent) = output.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+
+        let mut buf = Vec::new();
+        if std::io::Read::read_to_end(&mut entry, &mut buf).is_ok() {
+            std::fs::write(&output, &buf).ok();
         }
     }
-    None
+
+    Ok(SkillInstallResult {
+        success: true,
+        message: format!("Installed {} from ClawHub", name),
+        skill_name: Some(name),
+        skill_path: Some(skills_dir.to_string_lossy().to_string()),
+    })
 }
