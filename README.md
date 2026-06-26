@@ -2,7 +2,15 @@
 
 > AI 桌面助手 — Tauri 2 桌面应用，内置 pi-server (Node.js) 作为 AI 引擎，支持 500+ 模型、原生工具调用、MCP 工具系统、Skills 技能系统、定时任务、桌面宠物、平台消息中心、多色主题。
 
-[![CI](https://github.com/JeffGuo7/s-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/JeffGuo7/s-loop/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/JeffGuo7/s-loop/actions/workflows/ci.yml"><img src="https://github.com/JeffGuo7/s-loop/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/JeffGuo7/s-loop/blob/master/README.md"><img src="https://img.shields.io/github/license/JeffGuo7/s-loop?color=blue" alt="License"></a>
+  <a href="https://github.com/JeffGuo7/s-loop/releases"><img src="https://img.shields.io/github/v/release/JeffGuo7/s-loop?include_prereleases&label=release" alt="Release"></a>
+  <a href="https://github.com/JeffGuo7/s-loop/stargazers"><img src="https://img.shields.io/github/stars/JeffGuo7/s-loop?style=flat" alt="Stars"></a>
+  <a href="https://github.com/JeffGuo7/s-loop/commits/master"><img src="https://img.shields.io/github/last-commit/JeffGuo7/s-loop" alt="Last Commit"></a>
+  <a href="https://github.com/JeffGuo7/s-loop/graphs/contributors"><img src="https://img.shields.io/github/contributors/JeffGuo7/s-loop" alt="Contributors"></a>
+  <a href="https://github.com/JeffGuo7/s-loop"><img src="https://img.shields.io/github/repo-size/JeffGuo7/s-loop" alt="Repo Size"></a>
+</p>
 
 ## 技术栈
 
