@@ -69,10 +69,12 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
   },
 
   startGoal: async (id) => {
-    const { abortFn: prevAbort } = get()
+    const { abortFn: prevAbort, goals } = get()
     if (prevAbort) prevAbort()
 
-    set({ liveEvents: [], isRunning: true, error: null })
+    // Set activeGoal from existing list so UI transitions immediately
+    const existing = goals.find(g => g.id === id)
+    set({ activeGoal: existing || null, liveEvents: [], isRunning: true, error: null })
 
     const controller = new AbortController()
     const abort = () => controller.abort()

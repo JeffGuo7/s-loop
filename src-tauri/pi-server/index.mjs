@@ -802,7 +802,7 @@ const createCronPrompt = async (content, options) => {
 createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
@@ -1107,6 +1107,10 @@ createServer((req, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: err.message }))
       }
+    }).catch((err) => {
+      console.error('[pi-server] goal create error:', err)
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: err.message || 'Bad request' }))
     })
     return
   }
@@ -1128,6 +1132,10 @@ createServer((req, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: err.message }))
       }
+    }).catch((err) => {
+      console.error('[pi-server] goal update error:', err)
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: err.message || 'Bad request' }))
     })
     return
   }
