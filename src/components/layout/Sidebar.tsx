@@ -12,6 +12,7 @@ import {
   Moon,
   Sun,
   Clock,
+  Target,
   FolderOpen,
   MessagesSquare,
   FolderTree,
@@ -462,6 +463,13 @@ export function Sidebar({
             label={t('sidebar.dailyTasks')}
             active={currentPage === 'tasks'}
             onClick={() => onNavigate('tasks')}
+            collapsed={collapsed}
+          />
+          <NavItem
+            icon={Target}
+            label={t('sidebar.goals')}
+            active={currentPage === 'goal'}
+            onClick={() => onNavigate('goal')}
             collapsed={collapsed}
           />
           <NavItem

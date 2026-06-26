@@ -5,6 +5,7 @@ import { SettingsModal } from './components/settings'
 import { TasksPage } from './components/tasks'
 import { PlatformCenter } from './components/platforms'
 import { PetPage } from './components/pet'
+import { GoalPage } from './components/goal/GoalPage'
 import { useAppStore, usePetStore } from './stores'
 import { useTaskScheduler, useTelegramChatSync } from './hooks'
 import { WorkspacePanel } from './components/workspace'
@@ -16,7 +17,7 @@ import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSave
 import { setBaseUrl, syncRuntimeConfig } from './utils/piClient'
 import { getActiveTokens } from './themes'
 
-export type Page = 'chat' | 'tasks' | 'platforms' | 'pet'
+export type Page = 'chat' | 'tasks' | 'platforms' | 'pet' | 'goal'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const APP_STORAGE_KEY = 'snotra-storage'
@@ -244,6 +245,11 @@ function App() {
             </div>
           )}
           {currentPage === 'pet' && <PetPage onToggleWindow={handlePetToggle} />}
+          {currentPage === 'goal' && (
+            <div className="w-full h-full flex flex-col">
+              <GoalPage />
+            </div>
+          )}
         </div>
       </main>
 

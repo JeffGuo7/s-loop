@@ -30,6 +30,7 @@ const zh = {
     dailyTasks: '每日任务',
     platformHub: '平台中心',
     pet: '宠物',
+    goals: '目标',
     sleep: '休眠',
     wakePet: '唤醒宠物',
     hatch: '孵化',

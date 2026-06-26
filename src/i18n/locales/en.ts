@@ -30,6 +30,7 @@ const en = {
     dailyTasks: 'Daily Tasks',
     platformHub: 'Platform Hub',
     pet: 'Pet',
+    goals: 'Goals',
     sleep: 'Sleep',
     wakePet: 'Wake Pet',
     hatch: 'Hatch',

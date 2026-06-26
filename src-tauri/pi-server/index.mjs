@@ -31,6 +31,8 @@ import {
 import { withRetry } from './retry.js'
 import { discoverAgents, formatAgentList, loadAgentDefinition } from './subagent/agent-registry.mjs'
 import { runSubagent, runParallel, runChain } from './subagent/index.mjs'
+import { initGoalPersistence, loadGoals, getGoal, createGoal, updateGoal, deleteGoal, saveGoalRunOutput } from './goal-loop/persistence.mjs'
+import { runGoalLoop } from './goal-loop/index.mjs'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
@@ -1071,6 +1073,166 @@ createServer((req, res) => {
     return
   }
 
+  // ── Goal endpoints ──
+
+  // GET /goals — list all goals
+  if (req.method === 'GET' && url.pathname === '/goals') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(loadGoals()))
+    return
+  }
+
+  // GET /goals/:id — get single goal
+  const goalGetMatch = url.pathname.match(/^\/goals\/([^/]+)$/)
+  if (req.method === 'GET' && goalGetMatch && url.pathname !== '/goals/output') {
+    const goal = getGoal(goalGetMatch[1])
+    if (!goal) {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Goal not found' }))
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(goal))
+    }
+    return
+  }
+
+  // POST /goals/create — create a new goal
+  if (req.method === 'POST' && url.pathname === '/goals/create') {
+    readJsonBody(req).then((data) => {
+      try {
+        const goal = createGoal(data)
+        res.writeHead(201, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(goal))
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      }
+    })
+    return
+  }
+
+  // PUT /goals/:id — update goal
+  const goalUpdateMatch = url.pathname.match(/^\/goals\/([^/]+)\/update$/)
+  if (req.method === 'PUT' && goalUpdateMatch) {
+    readJsonBody(req).then((data) => {
+      try {
+        const updated = updateGoal(goalUpdateMatch[1], data)
+        if (!updated) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Goal not found' }))
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(updated))
+        }
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      }
+    })
+    return
+  }
+
+  // DELETE /goals/:id — delete goal
+  const goalDeleteMatch = url.pathname.match(/^\/goals\/([^/]+)$/)
+  if (req.method === 'DELETE' && goalDeleteMatch) {
+    const ok = deleteGoal(goalDeleteMatch[1])
+    res.writeHead(ok ? 200 : 404, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok }))
+    return
+  }
+
+  // POST /goals/:id/run — execute goal (SSE stream)
+  const goalRunMatch = url.pathname.match(/^\/goals\/([^/]+)\/run$/)
+  if (req.method === 'POST' && goalRunMatch) {
+    const goalId = goalRunMatch[1]
+    const goal = getGoal(goalId)
+    if (!goal) {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Goal not found' }))
+      return
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    })
+
+    const emit = (event, data) => {
+      try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`) } catch {}
+    }
+
+    const apiKey = runtimeConfig.apiKey || process.env.PI_API_KEY || ''
+    const projectDir = runtimeConfig.workspaceDir || DATA_DIR
+
+    runGoalLoop({
+      goalState: goal,
+      runtimeConfig: { ...runtimeConfig, apiKey },
+      resolveModel: (providerID, modelID, providerConfig) =>
+        getModel(providerID, modelID, {
+          apiKey,
+          ...(providerConfig.api ? { api: providerConfig.api } : {}),
+          ...(providerConfig.baseUrl ? { baseUrl: providerConfig.baseUrl } : {}),
+        }),
+      getTools,
+      projectDir,
+      signal: AbortSignal.any ? AbortSignal.any([]) : new AbortController().signal,
+      onUpdate: (ev) => {
+        emit('goal_event', ev)
+        if (ev.type === 'goal_done' || ev.type === 'goal_error') {
+          emit('done', {})
+          // Save final output
+          const output = ev.type === 'goal_done'
+            ? `# Goal: ${goal.goal}\n\n## Plan\n${goal.plan?.reasoning || 'N/A'}\n\n## Result\n${goal.finalResult || 'Completed'}`
+            : `# Goal: ${goal.goal}\n\n## Error\n${ev.message || 'Unknown error'}`
+          saveGoalRunOutput(goalId, output)
+        }
+      },
+    }).catch((err) => {
+      emit('goal_event', { type: 'goal_error', message: err.message || String(err) })
+      emit('done', {})
+    })
+
+    return
+  }
+
+  // POST /goals/:id/abort — abort running goal
+  const goalAbortMatch = url.pathname.match(/^\/goals\/([^/]+)\/abort$/)
+  if (req.method === 'POST' && goalAbortMatch) {
+    const goal = getGoal(goalAbortMatch[1])
+    if (goal && (goal.status === 'planning' || goal.status === 'executing')) {
+      updateGoal(goalAbortMatch[1], { status: 'aborted' })
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true }))
+    return
+  }
+
+  // GET /goals/output/:id — get goal run outputs
+  const goalOutputMatch = url.pathname.match(/^\/goals\/output\/([^/]+)$/)
+  if (req.method === 'GET' && goalOutputMatch) {
+    const outputDir = path.join(DATA_DIR, 'goals', 'output', goalOutputMatch[1])
+    let outputs = []
+    if (fs.existsSync(outputDir)) {
+      outputs = fs.readdirSync(outputDir)
+        .filter((f) => f.endsWith('.md'))
+        .map((f) => {
+          const filePath = path.join(outputDir, f)
+          const stat = fs.statSync(filePath)
+          return {
+            file: f,
+            timestamp: parseInt(f.replace('.md', '')) || stat.mtimeMs,
+            size: stat.size,
+          }
+        })
+        .sort((a, b) => b.timestamp - a.timestamp)
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(outputs))
+    return
+  }
+
   // ── Existing endpoints ──
 
   if (req.method === 'GET' && url.pathname === '/health') {
@@ -1441,6 +1603,7 @@ createServer((req, res) => {
   initTelegramMonitor(sLoopDir)
   initTelegramChatSync(sLoopDir)
   initTasks(sLoopDir)
+  initGoalPersistence(sLoopDir)
   startTicker({
     projectDir: sLoopDir,
     apiKey: process.env.PI_API_KEY || '',

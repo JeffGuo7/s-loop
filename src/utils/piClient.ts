@@ -358,3 +358,170 @@ export async function deleteSubagent(
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
+
+// ─── Goal API ─────────────────────────────────────────────
+
+export interface GoalState {
+  id: string
+  goal: string
+  status: 'pending' | 'planning' | 'executing' | 'completed' | 'failed' | 'aborted'
+  plan: GoalPlan | null
+  currentStepIndex: number
+  currentIteration: number
+  maxIterations: number
+  progressNotes: string[]
+  finalResult: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface GoalPlan {
+  steps: GoalStep[]
+  reasoning: string
+}
+
+export interface GoalStep {
+  index: number
+  name: string
+  description: string
+  agent: string
+  task: string
+  status: 'pending' | 'running' | 'completed' | 'skipped' | 'failed'
+  result?: {
+    agent: string
+    exitCode: number
+    finalOutput: string
+    usage: { input: number; output: number; cost: number; turns: number }
+    stopReason?: string
+    errorMessage?: string
+  }
+}
+
+export async function fetchGoals(): Promise<GoalState[]> {
+  try {
+    const res = await fetch(`${_base}/goals`)
+    if (!res.ok) return []
+    return await res.json()
+  } catch {
+    return []
+  }
+}
+
+export async function createGoal(data: {
+  goal: string
+  maxIterations?: number
+}): Promise<GoalState | null> {
+  try {
+    const res = await fetch(`${_base}/goals/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function deleteGoal(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${_base}/goals/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    const data = await res.json()
+    return data.ok === true
+  } catch {
+    return false
+  }
+}
+
+export interface GoalRunCallbacks {
+  onEvent: (event: any) => void
+  onDone: () => void
+  onError?: (msg: string) => void
+}
+
+export async function runGoal(
+  goalId: string,
+  callbacks: GoalRunCallbacks,
+): Promise<() => void> {
+  const controller = new AbortController()
+
+  const doFetch = async () => {
+    try {
+      const res = await fetch(`${_base}/goals/${encodeURIComponent(goalId)}/run`, {
+        method: 'POST',
+        signal: controller.signal,
+      })
+
+      if (!res.ok) {
+        callbacks.onError?.(`Server ${res.status}`)
+        return
+      }
+
+      const reader = res.body?.getReader()
+      if (!reader) {
+        callbacks.onError?.('No response body')
+        return
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        let lineEnd = buffer.indexOf('\n')
+        while (lineEnd !== -1) {
+          const line = buffer.slice(0, lineEnd)
+          buffer = buffer.slice(lineEnd + 1)
+          lineEnd = buffer.indexOf('\n')
+
+          const trimmed = line.trim()
+          if (!trimmed || trimmed.startsWith(':')) continue
+
+          if (trimmed.startsWith('event: ')) {
+            const eventType = trimmed.slice(7)
+            const nextEnd = buffer.indexOf('\n')
+            const dataLine = nextEnd === -1 ? buffer.trim() : buffer.slice(0, nextEnd).trim()
+            if (dataLine.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(dataLine.slice(6))
+                if (eventType === 'goal_event') {
+                  callbacks.onEvent(data)
+                } else if (eventType === 'done') {
+                  callbacks.onDone()
+                  return
+                }
+              } catch { /* skip */ }
+            }
+            if (nextEnd !== -1) {
+              buffer = buffer.slice(nextEnd + 1)
+              lineEnd = buffer.indexOf('\n')
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as any)?.name !== 'AbortError') {
+        callbacks.onError?.(err instanceof Error ? err.message : String(err))
+      }
+    }
+  }
+
+  doFetch()
+
+  return () => controller.abort()
+}
+
+export async function abortGoal(goalId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${_base}/goals/${encodeURIComponent(goalId)}/abort`, { method: 'POST' })
+    const data = await res.json()
+    return data.ok === true
+  } catch {
+    return false
+  }
+}
