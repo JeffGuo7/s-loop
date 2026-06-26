@@ -23,6 +23,7 @@ export interface PiStreamCallbacks {
   onThinking: (delta: string) => void
   onToolCall: (id: string, name: string, args: any) => void
   onToolResult: (id: string, name: string, result: any) => void
+  onToolUpdate?: (id: string, name: string, partialResult: any) => void
   onMcpToolRequest?: (request: McpToolRequest) => void
   onDone: () => void
   onResult?: (text: string) => void
@@ -219,6 +220,9 @@ export async function prompt(
                 case 'tool_execution_end':
                   cb?.onToolResult(data.id, data.name, data.result)
                   break
+                case 'tool_execution_update':
+                  cb?.onToolUpdate?.(data.id, data.name, data.partialResult)
+                  break
                 case 'mcp_tool_request':
                   cb?.onMcpToolRequest?.(data)
                   break
@@ -290,4 +294,67 @@ export async function sendMcpToolResponse(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ requestId, result, error }),
   })
+}
+
+export interface SubagentInfo {
+  name: string
+  description: string
+  model: string | null
+  tools: string[]
+  source: 'builtin' | 'user'
+  maxTurns: number
+  thinkingLevel: string
+  permissionMode: string
+  systemPromptPreview: string
+}
+
+export async function fetchSubagents(projectDir?: string): Promise<SubagentInfo[]> {
+  try {
+    let url = `${_base}/subagents`
+    if (projectDir) url += `?projectDir=${encodeURIComponent(projectDir)}`
+    const res = await fetch(url)
+    if (!res.ok) return []
+    return await res.json()
+  } catch {
+    return []
+  }
+}
+
+export async function saveSubagent(
+  name: string,
+  data: {
+    description?: string
+    model?: string
+    tools?: string[]
+    thinkingLevel?: string
+    maxTurns?: number
+    permissionMode?: string
+    systemPrompt?: string
+    projectDir?: string
+  },
+): Promise<{ ok: boolean; path?: string; error?: string }> {
+  try {
+    const res = await fetch(`${_base}/subagents/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return await res.json()
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function deleteSubagent(
+  name: string,
+  projectDir?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    let url = `${_base}/subagents/${encodeURIComponent(name)}`
+    if (projectDir) url += `?projectDir=${encodeURIComponent(projectDir)}`
+    const res = await fetch(url, { method: 'DELETE' })
+    return await res.json()
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }

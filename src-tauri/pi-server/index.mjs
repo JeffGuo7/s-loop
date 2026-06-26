@@ -1,5 +1,7 @@
 import { createServer } from 'node:http'
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import * as path from 'node:path'
+import * as fs from 'node:fs'
 import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, getModels } from '@earendil-works/pi-ai'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
@@ -27,6 +29,8 @@ import {
   recordPlatformOutbound,
 } from './telegram-chat-sync.mjs'
 import { withRetry } from './retry.js'
+import { discoverAgents, formatAgentList, loadAgentDefinition } from './subagent/agent-registry.mjs'
+import { runSubagent, runParallel, runChain } from './subagent/index.mjs'
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
@@ -150,6 +154,185 @@ function getTools(dir, webSearchConfig) {
   }
   return tools
 }
+
+// ── Sub-agent tool factories ─────────────────────────────
+
+function createDelegateTaskTool({ runtimeConfig, resolveModel, getTools, projectDir, emit, wrapper }) {
+  return {
+    name: 'delegate_task',
+    label: 'Delegate Task',
+    description: `Delegate a task to a specialized sub-agent. Available agents: ${(() => {
+      const { agents } = discoverAgents(projectDir)
+      return formatAgentList(agents)
+    })()}. The sub-agent runs with an isolated context (clean message history) and tool whitelist. Use this to break complex work into focused subtasks.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        agent: { type: 'string', description: 'Name of the sub-agent to invoke (e.g., researcher, coder, reviewer).' },
+        task: { type: 'string', description: 'Detailed task description for the sub-agent. Be specific about what you want done.' },
+      },
+      required: ['agent', 'task'],
+    },
+    execute: async (_toolCallId, params, signal, onUpdate) => {
+      console.log('[pi-server] delegate_task:', { agent: params.agent, task: params.task?.slice(0, 80) })
+
+      // Forward sub-agent events as SSE tool updates
+      const result = await runSubagent({
+        agentName: params.agent,
+        task: params.task,
+        parentConfig: {
+          providerID: runtimeConfig.providerID,
+          modelID: runtimeConfig.modelID,
+          apiKey: runtimeConfig.apiKey,
+          workspaceDir: runtimeConfig.workspaceDir,
+          webSearchConfig: wrapper?.config?.webSearchConfig,
+          providerConfig: runtimeConfig.providerConfig,
+        },
+        resolveModel,
+        getTools,
+        signal,
+        projectDir: projectDir || runtimeConfig.workspaceDir,
+        onUpdate: onUpdate
+          ? (ev) => {
+              // Structured sub-agent event — frontend can render as live progress
+              onUpdate({
+                content: [
+                  {
+                    type: 'text',
+                    text: ev.type === 'text_delta'
+                      ? ev.delta || ''
+                      : ev.type === 'tool_start'
+                        ? `Tool: ${ev.toolName}`
+                        : ev.type === 'tool_end'
+                          ? `Tool done: ${ev.toolName}`
+                          : `[${ev.type}]`,
+                  },
+                ],
+                details: {
+                  subagentEvent: ev,
+                },
+              })
+            }
+          : undefined,
+      })
+
+      const isError = result.exitCode !== 0 || result.stopReason === 'error' || result.stopReason === 'aborted'
+      const output = result.finalOutput || result.errorMessage || '(no output)'
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: isError
+              ? `Sub-agent "${result.agent}" failed: ${output}`
+              : output,
+          },
+        ],
+        details: {
+          agent: result.agent,
+          exitCode: result.exitCode,
+          usage: result.usage,
+          model: result.model,
+          stopReason: result.stopReason,
+        },
+        isError,
+      }
+    },
+  }
+}
+
+function createDelegateParallelTool({ runtimeConfig, resolveModel, getTools, projectDir, emit, wrapper }) {
+  return {
+    name: 'delegate_parallel',
+    label: 'Delegate Parallel',
+    description: `Delegate multiple tasks in parallel to sub-agents. Each task runs independently with isolated context. Max 8 tasks, 4 concurrent. Available agents: ${(() => {
+      const { agents } = discoverAgents(projectDir)
+      return formatAgentList(agents)
+    })()}`,
+    parameters: {
+      type: 'object',
+      properties: {
+        tasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              agent: { type: 'string', description: 'Sub-agent name' },
+              task: { type: 'string', description: 'Task description' },
+            },
+            required: ['agent', 'task'],
+          },
+          description: 'Array of { agent, task } to execute in parallel',
+        },
+      },
+      required: ['tasks'],
+    },
+    execute: async (_toolCallId, params, signal) => {
+      const tasks = params.tasks || []
+      if (tasks.length > 8) {
+        return {
+          content: [{ type: 'text', text: `Too many parallel tasks (${tasks.length}). Max is 8.` }],
+          details: {},
+          isError: true,
+        }
+      }
+
+      console.log('[pi-server] delegate_parallel:', tasks.length, 'tasks')
+
+      const results = await runParallel(tasks, 4, {
+        parentConfig: {
+          providerID: runtimeConfig.providerID,
+          modelID: runtimeConfig.modelID,
+          apiKey: runtimeConfig.apiKey,
+          workspaceDir: runtimeConfig.workspaceDir,
+          webSearchConfig: wrapper?.config?.webSearchConfig,
+          providerConfig: runtimeConfig.providerConfig,
+        },
+        resolveModel,
+        getTools,
+        signal,
+        projectDir: projectDir || runtimeConfig.workspaceDir,
+      })
+
+      const successCount = results.filter((r) => r.exitCode === 0 && !r.errorMessage).length
+      const summaries = results.map((r) => {
+        const status = r.exitCode === 0 ? 'OK' : `FAILED${r.stopReason ? ` (${r.stopReason})` : ''}`
+        const output = r.finalOutput || r.errorMessage || '(no output)'
+        const preview = output.length > 500 ? output.slice(0, 500) + '...' : output
+        return `### [${r.agent}] ${status}\n\n${preview}`
+      })
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join('\n\n---\n\n')}`,
+          },
+        ],
+        details: { results },
+      }
+    },
+  }
+}
+
+// ── Sub-agent endpoint helpers ────────────────────────────
+
+function getSubagentList(projectDir) {
+  const { agents, builtinDir, userDir } = discoverAgents(projectDir)
+  return agents.map((a) => ({
+    name: a.name,
+    description: a.description,
+    model: a.model,
+    tools: a.tools,
+    source: a.source,
+    maxTurns: a.maxTurns,
+    thinkingLevel: a.thinkingLevel,
+    permissionMode: a.permissionMode,
+    systemPromptPreview: a.systemPrompt.slice(0, 200),
+  }))
+}
+
+// ── Server ───────────────────────────────────────────────
 
 process.on('uncaughtException', (err) => console.error('[pi-server] UNCAUGHT:', err))
 process.on('unhandledRejection', (err) => console.error('[pi-server] UNHANDLED:', err))
@@ -895,6 +1078,85 @@ createServer((req, res) => {
     res.end(JSON.stringify({ healthy: true, service: 's-loop-pi-server', port: PORT })); return
   }
 
+  if (req.method === 'GET' && url.pathname === '/subagents') {
+    const projectDir = url.searchParams.get('projectDir') || runtimeConfig.workspaceDir || DATA_DIR
+    const list = getSubagentList(projectDir)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(list))
+    return
+  }
+
+  // POST /subagents/:name — create or update a user sub-agent .md file
+  const subagentSaveMatch = url.pathname.match(/^\/subagents\/([^/]+)$/)
+  if (req.method === 'POST' && subagentSaveMatch) {
+    const agentName = decodeURIComponent(subagentSaveMatch[1])
+    readJsonBody(req).then((data) => {
+      try {
+        const projectDir = data.projectDir || runtimeConfig.workspaceDir || DATA_DIR
+        const agentsDir = path.join(projectDir, '.s-loop', 'agents')
+        if (!fs.existsSync(agentsDir)) {
+          fs.mkdirSync(agentsDir, { recursive: true })
+        }
+
+        // Build .md content from frontmatter + body
+        const frontmatter = [
+          '---',
+          `name: ${data.name || agentName}`,
+          `description: ${data.description || ''}`,
+          data.model ? `model: ${data.model}` : '',
+          data.tools && data.tools.length > 0 ? 'tools:' : '',
+          ...(data.tools || []).map((t) => `  - ${t}`),
+          data.thinkingLevel ? `thinkingLevel: ${data.thinkingLevel}` : '',
+          data.maxTurns ? `maxTurns: ${data.maxTurns}` : '',
+          data.permissionMode ? `permissionMode: ${data.permissionMode}` : '',
+          '---',
+        ].filter((l) => l !== '').join('\n')
+
+        const md = `${frontmatter}\n\n${data.systemPrompt || ''}`
+        const safeName = agentName.replace(/[^\w.-]+/g, '_')
+        const filePath = path.join(agentsDir, `${safeName}.md`)
+        fs.writeFileSync(filePath, md, 'utf-8')
+
+        // Reload so the new agent is available immediately
+        const def = loadAgentDefinition(safeName, projectDir)
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, path: filePath, agent: def }))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  // DELETE /subagents/:name — delete a user sub-agent .md file
+  if (req.method === 'DELETE' && subagentSaveMatch) {
+    const agentName = decodeURIComponent(subagentSaveMatch[1])
+    const projectDir = url.searchParams.get('projectDir') || runtimeConfig.workspaceDir || DATA_DIR
+    const agentsDir = path.join(projectDir, '.s-loop', 'agents')
+    const safeName = agentName.replace(/[^\w.-]+/g, '_')
+    const filePath = path.join(agentsDir, `${safeName}.md`)
+
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Agent not found' }))
+      }
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    }
+    return
+  }
+
   if (req.method === 'GET' && url.pathname === '/models') {
     (async () => {
       const provider = url.searchParams.get('provider') || 'anthropic'
@@ -1007,7 +1269,10 @@ createServer((req, res) => {
         const mcpToolDefs = Array.isArray(mcpTools)
           ? mcpTools.map((t) => createMcpToolDefinition(t, wrapper, sessionId))
           : []
-        const tools = [...baseTools, ...mcpToolDefs]
+        const tools = [...baseTools, ...mcpToolDefs,
+          createDelegateTaskTool({ runtimeConfig: { ...runtimeConfig, apiKey }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
+          createDelegateParallelTool({ runtimeConfig: { ...runtimeConfig, apiKey }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
+        ]
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
         const contextEngine = createDefaultEngine(model, { contextLength: model?.contextLength })
@@ -1066,6 +1331,7 @@ createServer((req, res) => {
             }
             case 'tool_execution_start': e('tool_execution_start', { id: event.toolCallId, name: event.toolName, args: event.args }); break
             case 'tool_execution_end': e('tool_execution_end', { id: event.toolCallId, name: event.toolName, result: event.result, isError: event.isError }); break
+            case 'tool_execution_update': e('tool_execution_update', { id: event.toolCallId, name: event.toolName, partialResult: event.partialResult }); break
           }
         })
 

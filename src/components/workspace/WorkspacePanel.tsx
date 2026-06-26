@@ -9,6 +9,7 @@ import { motion } from 'framer-motion'
 import { useAgentStore, useAppStore } from '../../stores'
 import { useMCPStore } from '../../stores/mcpStore'
 import { useSkillStore } from '../../stores/skillStore'
+import { SubagentEditor } from '../skills/SubagentEditor'
 
 export function WorkspacePanel() {
   const { t } = useTranslation()
@@ -600,6 +601,11 @@ export function WorkspacePanel() {
                           />
                         </div>
                       )}
+                    </div>
+
+                    {/* Sub-agent editor */}
+                    <div className="rounded-[24px] border border-border-light/70 bg-white/70 p-4 shadow-sm backdrop-blur-xl dark:bg-white/5">
+                      <SubagentEditor projectDir={workspaceDir ?? undefined} />
                     </div>
                   </div>
                 )}

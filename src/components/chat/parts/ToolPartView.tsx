@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Wrench, FileText, Terminal, Globe, Database, FolderOpen, ChevronDown, Activity } from 'lucide-react'
+import { Wrench, FileText, Terminal, Globe, Database, FolderOpen, ChevronDown, Activity, Bot } from 'lucide-react'
 import { CopyButton } from '../shared/CopyButton'
 import { Card } from '../../ui'
+import { SubagentPanel } from './SubagentPanel'
 import type { ToolPart } from '../../../types'
 
 interface ToolPartViewProps {
@@ -32,6 +33,8 @@ const TOOL_ICONS: Record<string, typeof Wrench> = {
   access_mcp_resource: Database,
   insert_content: FileText,
   search_and_replace: FileText,
+  delegate_task: Bot,
+  delegate_parallel: Bot,
 }
 
 function getToolIcon(toolName: string): typeof Wrench {
@@ -102,23 +105,28 @@ export function ToolPartView({ part }: ToolPartViewProps) {
         {expanded && (
           <div className="border-t border-black/[0.04] dark:border-white/[0.04] bg-surface-secondary/40 animate-fade-in">
             <div className="p-4 space-y-4">
-              {/* Output Only to keep it simple and stacked */}
-              {output && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between px-1">
-                    <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${isError ? 'text-red-500/80' : 'text-text-tertiary'}`}>
-                      {isError ? t('chat.parts.error') : t('chat.parts.result')}
-                    </span>
-                    <CopyButton text={output} />
+              {/* Sub-agent panel for delegate tools */}
+              {(toolName === 'delegate_task' || toolName === 'delegate_parallel') ? (
+                <SubagentPanel part={part} />
+              ) : (
+                /* Output Only to keep it simple and stacked */
+                output && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${isError ? 'text-red-500/80' : 'text-text-tertiary'}`}>
+                        {isError ? t('chat.parts.error') : t('chat.parts.result')}
+                      </span>
+                      <CopyButton text={output} />
+                    </div>
+                    <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[250px] overflow-y-auto rounded-[8px] p-3 border shadow-inner ${
+                      isError
+                        ? 'bg-red-500/5 border-red-500/10 text-red-500/90'
+                        : 'bg-surface border-black/[0.04] dark:border-white/[0.04] text-text-secondary'
+                    } scrollbar-subtle`}>
+                      {output}
+                    </pre>
                   </div>
-                  <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[250px] overflow-y-auto rounded-[8px] p-3 border shadow-inner ${
-                    isError 
-                      ? 'bg-red-500/5 border-red-500/10 text-red-500/90' 
-                      : 'bg-surface border-black/[0.04] dark:border-white/[0.04] text-text-secondary'
-                  } scrollbar-subtle`}>
-                    {output}
-                  </pre>
-                </div>
+                )
               )}
             </div>
           </div>
