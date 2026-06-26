@@ -2,6 +2,8 @@
 
 > AI 桌面助手 — Tauri 2 桌面应用，内置 pi-server (Node.js) 作为 AI 引擎，支持 500+ 模型、原生工具调用、MCP 工具系统、Skills 技能系统、定时任务、桌面宠物、平台消息中心、多色主题。
 
+[![CI](https://github.com/JeffGuo7/s-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/JeffGuo7/s-loop/actions/workflows/ci.yml)
+
 ## 技术栈
 
 | 类别 | 技术选型 |

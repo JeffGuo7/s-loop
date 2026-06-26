@@ -47,3 +47,9 @@ managed-skills/
 
 # Temporary probe files
 tmp_*
+
+# Test coverage output
+coverage/
+
+# Windows temp file
+nul

@@ -119,6 +119,7 @@ const zh = {
       seconds: '{{n}}秒',
       minutesSeconds: '{{n}}分{{n2}}秒',
     },
+    slashCommands: '斜杠命令',
   },
   settings: {
     title: '设置',
