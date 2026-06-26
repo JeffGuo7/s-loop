@@ -382,6 +382,16 @@ Anthropic / OpenAI / Google Gemini / DeepSeek / Groq / OpenRouter / Mistral / xA
 | `ls` | 列出目录 |
 | `web_search` | 联网搜索（5 引擎可选） |
 
+## Star History
+
+<a href="https://star-history.com/#JeffGuo7/s-loop&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=JeffGuo7/s-loop&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=JeffGuo7/s-loop&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=JeffGuo7/s-loop&type=Date" width="600" />
+  </picture>
+</a>
+
 ## License
 
 MIT
