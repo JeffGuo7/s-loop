@@ -154,29 +154,34 @@ Begin by calling plan_goal to decompose this goal into concrete steps. Then exec
     signal?.addEventListener('abort', abortHandler, { once: true })
 
     try {
-      const messages = await agent.prompt(initialPrompt)
+      await agent.prompt(initialPrompt)
 
-      // Extract final output from the last assistant message
-      const lastAssistant = [...messages].reverse().find(
-        m => m.role === 'assistant' && m.content?.some(c => c.type === 'text')
-      )
-      if (lastAssistant) {
-        const textParts = lastAssistant.content
-          .filter(c => c.type === 'text')
-          .map(c => c.text)
-          .join('\n\n')
-        finalOutput = textParts
-      }
+      // Read messages from agent.state, same pattern as subagent/index.mjs
+      const messages = agent.state.messages || []
 
-      // Aggregate usage from all messages
-      for (const msg of messages) {
-        if (msg.usage) {
-          usage.input += msg.usage.input || 0
-          usage.output += msg.usage.output || 0
-          usage.cacheRead += msg.usage.cacheRead || 0
-          usage.cacheWrite += msg.usage.cacheWrite || 0
-          usage.cost += msg.usage.cost || 0
-          usage.turns += 1
+      if (Array.isArray(messages) && messages.length > 0) {
+        // Extract final output from the last assistant message
+        const lastAssistant = [...messages].reverse().find(
+          m => m.role === 'assistant' && m.content?.some(c => c.type === 'text')
+        )
+        if (lastAssistant) {
+          const textParts = lastAssistant.content
+            .filter(c => c.type === 'text')
+            .map(c => c.text)
+            .join('\n\n')
+          finalOutput = textParts
+        }
+
+        // Aggregate usage from all messages
+        for (const msg of messages) {
+          if (msg.usage) {
+            usage.input += msg.usage.input || 0
+            usage.output += msg.usage.output || 0
+            usage.cacheRead += msg.usage.cacheRead || 0
+            usage.cacheWrite += msg.usage.cacheWrite || 0
+            usage.cost += msg.usage.cost || 0
+            usage.turns += 1
+          }
         }
       }
 
