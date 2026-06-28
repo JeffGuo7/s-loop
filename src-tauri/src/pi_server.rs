@@ -1,4 +1,5 @@
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -9,6 +10,90 @@ pub struct PiServerProcess {
 }
 
 pub struct PiServerState(pub Arc<Mutex<Option<PiServerProcess>>>);
+
+fn dirs_home() -> PathBuf {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."))
+}
+
+/// Find the node executable by searching common installation paths.
+/// GUI apps on all platforms may not inherit shell-configured PATH.
+fn find_node_cmd() -> Option<String> {
+    let node_name = if cfg!(target_os = "windows") {
+        "node.exe"
+    } else {
+        "node"
+    };
+
+    // 1. Try the system's command locator
+    let locator = if cfg!(target_os = "windows") { "where" } else { "which" };
+    if let Ok(output) = Command::new(locator).arg(node_name).output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Some(line) = stdout.lines().next() {
+            let p = line.trim();
+            if !p.is_empty() && std::path::Path::new(p).exists() {
+                return Some(p.to_string());
+            }
+        }
+    }
+
+    // 2. Search common Node.js install directories
+    let home = dirs_home();
+    let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
+        vec![
+            r"C:\Program Files\nodejs\node.exe".into(),
+            r"C:\Program Files (x86)\nodejs\node.exe".into(),
+            home.join("AppData").join("Roaming").join("npm").join("node.exe"),
+        ]
+    } else {
+        vec![
+            "/usr/local/bin/node".into(),
+            "/opt/homebrew/bin/node".into(),
+            "/usr/bin/node".into(),
+            home.join(".volta").join("bin").join("node"),
+        ]
+    };
+
+    for candidate in &candidates {
+        if candidate.exists() {
+            return Some(candidate.to_string_lossy().to_string());
+        }
+    }
+
+    // 3. nvm: search ~/.nvm/versions/node/*/bin/node
+    let nvm_versions = home.join(".nvm").join("versions").join("node");
+    if nvm_versions.exists() {
+        if let Ok(entries) = std::fs::read_dir(&nvm_versions) {
+            for entry in entries.flatten() {
+                let node = entry.path().join("bin").join("node");
+                if node.exists() {
+                    return Some(node.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // 4. fnm: search ~/.local/share/fnm/node-versions/*/installation/bin/node
+    let fnm_versions = if cfg!(target_os = "macos") {
+        home.join("Library").join("Application Support").join("fnm").join("node-versions")
+    } else {
+        home.join(".local").join("share").join("fnm").join("node-versions")
+    };
+    if fnm_versions.exists() {
+        if let Ok(entries) = std::fs::read_dir(&fnm_versions) {
+            for entry in entries.flatten() {
+                let node = entry.path().join("installation").join("bin").join("node");
+                if node.exists() {
+                    return Some(node.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
 
 impl PiServerProcess {
     #[allow(dead_code)]
@@ -21,7 +106,14 @@ impl PiServerProcess {
             return Err(format!("Project directory not found: {}", project_dir));
         }
 
-        let node_path = std::env::var("PI_NODE_PATH").unwrap_or_else(|_| "node".into());
+        let node_path = std::env::var("PI_NODE_PATH")
+            .ok()
+            .and_then(|p| {
+                let path = std::path::Path::new(&p);
+                if path.exists() { Some(p) } else { None }
+            })
+            .or_else(find_node_cmd)
+            .unwrap_or_else(|| "node".into());
 
         let mut cmd = Command::new(&node_path);
         cmd.args([&format!("{}/src-tauri/pi-server/index.mjs", project_dir)]);
