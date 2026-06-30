@@ -396,14 +396,14 @@ pub async fn clawhub_install_skill(
     let selected = selected.ok_or("No skill found in archive.")?;
     let skill_base_dir = &selected.base_dir;
 
-    // Use the filter name if provided, otherwise the frontmatter name
-    let name = sanitize_dir_name(
-        &skill_name.unwrap_or_else(|| selected.frontmatter_name.clone())
-    );
+    // Use the frontmatter name — it's what refreshSkills will produce.
+    // The user-provided skill_name is only used for filtering which SKILL.md to pick.
+    let display_name = selected.frontmatter_name.clone();
+    let dir_name = sanitize_dir_name(&display_name);
 
-    // Install to ~/.pi/agent/skills/{name}/
+    // Install to ~/.pi/agent/skills/{dir_name}/
     let skills_dir = dirs_home().join(".pi").join("agent").join("skills");
-    let dest_dir = skills_dir.join(&name);
+    let dest_dir = skills_dir.join(&dir_name);
     std::fs::create_dir_all(&dest_dir)
         .map_err(|e| format!("Failed to create skill directory: {e}"))?;
 
@@ -446,8 +446,8 @@ pub async fn clawhub_install_skill(
 
     Ok(SkillInstallResult {
         success: true,
-        message: format!("Installed {} from ClawHub", name),
-        skill_name: Some(name),
+        message: format!("Installed {} from ClawHub", display_name),
+        skill_name: Some(display_name),
         skill_path: Some(skills_dir.to_string_lossy().to_string()),
     })
 }
