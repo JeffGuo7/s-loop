@@ -511,6 +511,12 @@ const zh = {
       instructionsPlaceholder: '补充这套智能体的额外指令或风格要求',
       modelPlaceholder: '可选覆盖模型，例如 deepseek-chat',
     },
+    confirm: {
+      removeSkillTitle: '移除 Skill "{{name}}"?',
+      removeSkillMessage: '该 Skill 将从当前智能体卸载。',
+      removeMcpTitle: '移除 MCP 服务 "{{name}}"?',
+      removeMcpMessage: '该 MCP 服务将从当前智能体卸载。',
+    },
     feedback: {
       skillInstalled: '已安装 Skill：{{name}}',
       skillRemoved: '已移除 Skill：{{name}}',

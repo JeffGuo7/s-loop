@@ -511,6 +511,12 @@ const en = {
       instructionsPlaceholder: 'Add extra instructions or style rules for this agent',
       modelPlaceholder: 'Optional model override, for example deepseek-chat',
     },
+    confirm: {
+      removeSkillTitle: 'Remove skill "{{name}}"?',
+      removeSkillMessage: 'This skill will be unmounted from the current agent.',
+      removeMcpTitle: 'Remove MCP server "{{name}}"?',
+      removeMcpMessage: 'This MCP server will be unmounted from the current agent.',
+    },
     feedback: {
       skillInstalled: 'Installed skill: {{name}}',
       skillRemoved: 'Removed skill: {{name}}',

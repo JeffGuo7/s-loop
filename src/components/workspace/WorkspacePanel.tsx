@@ -20,6 +20,8 @@ export function WorkspacePanel() {
   const [showCreateAdvanced, setShowCreateAdvanced] = useState(false)
   const [showDetailAdvanced, setShowDetailAdvanced] = useState(false)
   const [confirmDeleteAgentId, setConfirmDeleteAgentId] = useState<string | null>(null)
+  const [confirmRemoveSkillName, setConfirmRemoveSkillName] = useState<string | null>(null)
+  const [confirmRemoveMcpServer, setConfirmRemoveMcpServer] = useState<string | null>(null)
   const [busyInstallKey, setBusyInstallKey] = useState<string | null>(null)
   const [remoteSkillsLoading, setRemoteSkillsLoading] = useState(false)
   const [remoteSkillsError, setRemoteSkillsError] = useState<string | null>(null)
@@ -533,8 +535,7 @@ export function WorkspacePanel() {
                         key: name,
                         label: `${skillMeta[name]?.emoji || '✦'} ${name}`,
                         onRemove: () => {
-                          removeSkillFromAgent(activeAgent.id, name)
-                          setFeedback(t('agentStudio.feedback.skillRemoved', { name }))
+                          setConfirmRemoveSkillName(name)
                         },
                       })) : undefined}
                     />
@@ -546,8 +547,7 @@ export function WorkspacePanel() {
                         key: name,
                         label: name,
                         onRemove: () => {
-                          removeMCPServerFromAgent(activeAgent.id, name)
-                          setFeedback(t('agentStudio.feedback.mcpRemoved', { name }))
+                          setConfirmRemoveMcpServer(name)
                         },
                       })) : undefined}
                     />
@@ -705,6 +705,34 @@ export function WorkspacePanel() {
           onSubmit={handleCreateAgent}
         />
       )}
+
+      {(confirmRemoveSkillName || confirmRemoveMcpServer) && (
+        <ConfirmRemoveModal
+          title={confirmRemoveSkillName
+            ? t('agentStudio.confirm.removeSkillTitle', { name: confirmRemoveSkillName })
+            : t('agentStudio.confirm.removeMcpTitle', { name: confirmRemoveMcpServer })
+          }
+          message={confirmRemoveSkillName
+            ? t('agentStudio.confirm.removeSkillMessage')
+            : t('agentStudio.confirm.removeMcpMessage')
+          }
+          onConfirm={() => {
+            if (confirmRemoveSkillName && activeAgent) {
+              removeSkillFromAgent(activeAgent.id, confirmRemoveSkillName)
+              setFeedback(t('agentStudio.feedback.skillRemoved', { name: confirmRemoveSkillName }))
+              setConfirmRemoveSkillName(null)
+            } else if (confirmRemoveMcpServer && activeAgent) {
+              removeMCPServerFromAgent(activeAgent.id, confirmRemoveMcpServer)
+              setFeedback(t('agentStudio.feedback.mcpRemoved', { name: confirmRemoveMcpServer }))
+              setConfirmRemoveMcpServer(null)
+            }
+          }}
+          onCancel={() => {
+            setConfirmRemoveSkillName(null)
+            setConfirmRemoveMcpServer(null)
+          }}
+        />
+      )}
     </aside>
   )
 }
@@ -816,6 +844,53 @@ function TagPanel({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function ConfirmRemoveModal({
+  title,
+  message,
+  onConfirm,
+  onCancel,
+}: {
+  title: string
+  message: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="mx-4 w-full max-w-xs rounded-2xl border border-border-light/70 bg-white/95 p-6 shadow-2xl backdrop-blur-xl dark:bg-gray-900/95"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-[13px] font-bold tracking-tight text-text">
+          {title}
+        </p>
+        <p className="mt-2 text-[11px] leading-relaxed text-text-tertiary">
+          {message}
+        </p>
+        <div className="mt-5 flex items-center gap-3">
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-full bg-red-500 px-4 py-2 text-[11px] font-black text-white transition-all duration-300 hover:bg-red-600"
+          >
+            {t('common.confirm')}
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-full bg-white/75 px-4 py-2 text-[11px] font-black text-text-tertiary transition-all duration-300 hover:text-text dark:bg-white/10"
+          >
+            {t('common.cancel')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

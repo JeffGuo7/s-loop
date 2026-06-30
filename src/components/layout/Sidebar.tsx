@@ -1,4 +1,4 @@
-import { useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   MessageSquare,
@@ -71,13 +71,45 @@ export function Sidebar({
     [activeSessionId, setActiveSession, onNavigate],
   )
 
+  const [confirmDeleteSessionId, setConfirmDeleteSessionId] = useState<string | null>(null)
+  const [confirmClearAll, setConfirmClearAll] = useState(false)
+
   const handleDelete = useCallback(
     (e: MouseEvent, id: string) => {
       e.stopPropagation()
+      setConfirmDeleteSessionId(id)
+    },
+    [],
+  )
+
+  const handleConfirmDelete = useCallback(
+    (e: MouseEvent, id: string) => {
+      e.stopPropagation()
       deleteSession(id)
+      setConfirmDeleteSessionId(null)
     },
     [deleteSession],
   )
+
+  const handleCancelDelete = useCallback(
+    (e: MouseEvent) => {
+      e.stopPropagation()
+      setConfirmDeleteSessionId(null)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (!confirmDeleteSessionId && !confirmClearAll) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setConfirmDeleteSessionId(null)
+        setConfirmClearAll(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [confirmDeleteSessionId, confirmClearAll])
 
   const applyWorkspaceDir = useCallback((dir: string) => {
     setWorkspaceDir(dir)
@@ -192,17 +224,33 @@ export function Sidebar({
                 </div>
                 <div className="flex items-center gap-1.5">
                   {!isFilesMode && (
-                    <button
-                      onClick={() => {
-                        if (window.confirm(t('sidebar.clearConfirm'))) {
-                          useAppStore.getState().clearSessions()
-                        }
-                      }}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-text-quaternary transition-all duration-300 hover:bg-red-500/10 hover:text-red-500"
-                      title={t('sidebar.clearTitle')}
-                    >
-                      <Trash2 size={11} strokeWidth={2} />
-                    </button>
+                    confirmClearAll ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            useAppStore.getState().clearSessions()
+                            setConfirmClearAll(false)
+                          }}
+                          className="rounded-md bg-red-500 px-2 py-1 text-[10px] font-black text-white transition-all duration-300 hover:bg-red-600"
+                        >
+                          {t('common.confirm')}
+                        </button>
+                        <button
+                          onClick={() => setConfirmClearAll(false)}
+                          className="rounded-md bg-white/75 px-2 py-1 text-[10px] font-black text-text-tertiary transition-all duration-300 hover:text-text dark:bg-white/10"
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmClearAll(true)}
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-text-quaternary transition-all duration-300 hover:bg-red-500/10 hover:text-red-500"
+                        title={t('sidebar.clearTitle')}
+                      >
+                        <Trash2 size={11} strokeWidth={2} />
+                      </button>
+                    )
                   )}
                   <motion.button
                     whileHover={{ scale: 1.05, x: -2 }}
@@ -327,27 +375,41 @@ export function Sidebar({
                 )}
               </div>
 
-              <div
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDelete(e, session.id)
-                }}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation()
-                    handleDelete(e as unknown as MouseEvent, session.id)
-                  }
-                }}
-                className={`cursor-pointer rounded-md p-1 transition-all duration-300 ${
-                  isActive
-                    ? 'text-accent/60 hover:text-red-500 hover:bg-red-500/10'
-                    : 'text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100'
-                }`}
-              >
-                <Trash2 size={12} strokeWidth={1.5} />
-              </div>
+              {confirmDeleteSessionId === session.id ? (
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={(e) => handleConfirmDelete(e, session.id)}
+                    className="rounded-md bg-red-500 px-2 py-1 text-[10px] font-black text-white transition-all duration-300 hover:bg-red-600"
+                  >
+                    {t('common.confirm')}
+                  </button>
+                  <button
+                    onClick={handleCancelDelete}
+                    className="rounded-md bg-white/75 px-2 py-1 text-[10px] font-black text-text-tertiary transition-all duration-300 hover:text-text dark:bg-white/10"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                </div>
+              ) : (
+                <div
+                  onClick={(e) => handleDelete(e, session.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation()
+                      handleDelete(e as unknown as MouseEvent, session.id)
+                    }
+                  }}
+                  className={`cursor-pointer rounded-md p-1 transition-all duration-300 ${
+                    isActive
+                      ? 'text-accent/60 hover:text-red-500 hover:bg-red-500/10'
+                      : 'text-text-quaternary hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100'
+                  }`}
+                >
+                  <Trash2 size={12} strokeWidth={1.5} />
+                </div>
+              )}
 
               {isActive && (
                 <div className="absolute left-0 top-2 bottom-2 z-20 w-1 rounded-r-full bg-accent shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
