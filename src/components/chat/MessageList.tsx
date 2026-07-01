@@ -67,7 +67,7 @@ export function MessageList({ sessionId }: MessageListProps) {
         initialTopMostItemIndex={groupedMessages.length - 1}
         className="flex-1 h-full chat-scroll-area"
         components={{
-          Footer: () => <div className="h-48" />
+          Footer: () => <div className="h-4" />
         }}
         itemContent={(index, message) => {
           const isStreaming = 

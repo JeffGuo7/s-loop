@@ -462,7 +462,7 @@ export function ChatView() {
         <div className="flex-1 min-h-0 relative bg-transparent">
           <AnimatePresence mode="wait">
             {isEmpty ? (
-              <motion.div key="empty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full flex flex-col items-center justify-center px-16 relative pb-48">
+              <motion.div key="empty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full flex flex-col items-center justify-center px-16 relative">
                 <div className="text-center relative z-10 w-full flex flex-col items-center">
                   <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">{t('chat.welcome.subtitle')}</p>
                   <div className="flex justify-center w-full mb-8">
@@ -521,91 +521,90 @@ export function ChatView() {
               </motion.div>
             )}
           </AnimatePresence>
-
-          <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
-            <div className="bg-linear-to-t from-bg via-bg/95 to-transparent pt-12 pb-2 pointer-events-auto">
-              <div className="w-full max-w-(--spacing-chat-max) mx-auto relative px-4">
-                <ChatInput
+        </div>
+        <div className="bg-linear-to-t from-bg to-transparent pt-1 pb-2 shrink-0">
+          <div className="w-full max-w-(--spacing-chat-max) mx-auto relative px-4">
+            <ChatInput
                   onSubmit={handleSubmit}
                   onAbort={abort}
                   isStreaming={isStreaming}
                   disabled={isReadOnlySession}
                   placeholder={isReadOnlySession ? t('chat.session.readOnlyPlaceholder') : t('chat.input.placeholder')}
                 />
-                {/* Permission mode selector */}
-                {activeSessionId && (() => {
-                  const agentStore = useAgentStore.getState()
-                  const agent = agentStore.activeAgentId ? agentStore.agents.find(a => a.id === agentStore.activeAgentId) : null
-                  const mode = agent?.permissionMode || 'ask'
-                  const modeConfig = {
-                    allow: { icon: ShieldCheck, label: 'Allow' },
-                    ask: { icon: ShieldAlert, label: 'Ask' },
-                    deny: { icon: ShieldOff, label: 'Deny' },
-                  }[mode] || { icon: ShieldAlert, label: 'Ask' }
-                  const ModeIcon = modeConfig.icon
-                  return (
-                    <div className="relative mt-2 flex justify-start">
-                      <button
-                        onClick={() => setShowPermissionPopup(!showPermissionPopup)}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border-light/70 bg-surface-secondary/60 text-[12px] font-bold tracking-tight text-text-secondary transition-all duration-300 hover:border-accent/20 hover:text-accent hover:bg-accent-subtle"
-                      >
-                        <ModeIcon size={15} strokeWidth={2.5} className="text-accent/70" />
-                        <span className="uppercase tracking-[0.1em]">{modeConfig.label}</span>
-                        <ChevronUp size={14} strokeWidth={2.5} className={`transition-transform duration-300 ${showPermissionPopup ? 'rotate-0' : 'rotate-180'}`} />
-                      </button>
-                      {showPermissionPopup && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setShowPermissionPopup(false)} />
-                          <div className="absolute bottom-full left-0 mb-2 z-50 w-52 rounded-[24px] border border-border-light/70 bg-white/92 dark:bg-[#171717]/95 backdrop-blur-2xl shadow-[0_16px_48px_rgba(0,0,0,0.12)] overflow-hidden animate-fade-in">
-                            {([
-                              { mode: 'allow' as const, icon: ShieldCheck, label: 'Allow', desc: 'All tools run without asking' },
-                              { mode: 'ask' as const, icon: ShieldAlert, label: 'Ask', desc: 'Dangerous tools require approval' },
-                              { mode: 'deny' as const, icon: ShieldOff, label: 'Deny', desc: 'All tools are blocked' },
-                            ]).map((item) => {
-                              const isActive = mode === item.mode
-                              const ItemIcon = item.icon
-                              return (
-                                <button
-                                  key={item.mode}
-                                  onClick={() => {
-                                    if (agent) {
-                                      agentStore.updateAgent(agent.id, { permissionMode: item.mode })
-                                    }
-                                    setShowPermissionPopup(false)
-                                  }}
-                                  className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-all duration-200 hover:bg-surface-secondary/70 ${
-                                    isActive ? 'bg-accent-subtle border-l-2 border-accent' : 'border-l-2 border-transparent'
-                                  }`}
-                                >
-                                  <ItemIcon size={16} strokeWidth={2.2} className={isActive ? 'text-accent' : 'text-text-tertiary'} />
-                                  <div className="flex-1 min-w-0">
-                                    <div className={`text-[12px] font-bold tracking-tight ${isActive ? 'text-accent' : 'text-text'}`}>{item.label}</div>
-                                    <div className="text-[10px] text-text-tertiary leading-tight mt-0.5">{item.desc}</div>
-                                  </div>
-                                  {isActive && <div className="w-2 h-2 rounded-full bg-accent" />}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </>
-                      )}
+                {/* Permission + model info row */}
+                <div className="mt-2 pb-2 flex items-center justify-center relative">
+                  {activeSessionId && (() => {
+                    const agentStore = useAgentStore.getState()
+                    const agent = agentStore.activeAgentId ? agentStore.agents.find(a => a.id === agentStore.activeAgentId) : null
+                    const mode = agent?.permissionMode || 'ask'
+                    const modeConfig = {
+                      allow: { icon: ShieldCheck, label: 'Allow' },
+                      ask: { icon: ShieldAlert, label: 'Ask' },
+                      deny: { icon: ShieldOff, label: 'Deny' },
+                    }[mode] || { icon: ShieldAlert, label: 'Ask' }
+                    const ModeIcon = modeConfig.icon
+                    return (
+                      <div className="absolute left-0">
+                        <button
+                          onClick={() => setShowPermissionPopup(!showPermissionPopup)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border-light/70 bg-surface-secondary/60 text-[12px] font-bold tracking-tight text-text-secondary transition-all duration-300 hover:border-accent/20 hover:text-accent hover:bg-accent-subtle"
+                        >
+                          <ModeIcon size={15} strokeWidth={2.5} className="text-accent/70" />
+                          <span className="uppercase tracking-[0.1em]">{modeConfig.label}</span>
+                          <ChevronUp size={14} strokeWidth={2.5} className={`transition-transform duration-300 ${showPermissionPopup ? 'rotate-0' : 'rotate-180'}`} />
+                        </button>
+                        {showPermissionPopup && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setShowPermissionPopup(false)} />
+                            <div className="absolute bottom-full left-0 mb-2 z-50 w-52 rounded-[24px] border border-border-light/70 bg-white/92 dark:bg-[#171717]/95 backdrop-blur-2xl shadow-[0_16px_48px_rgba(0,0,0,0.12)] overflow-hidden animate-fade-in max-h-48 overflow-y-auto">
+                              {([
+                                { mode: 'allow' as const, icon: ShieldCheck, label: 'Allow', desc: 'All tools run without asking' },
+                                { mode: 'ask' as const, icon: ShieldAlert, label: 'Ask', desc: 'Dangerous tools require approval' },
+                                { mode: 'deny' as const, icon: ShieldOff, label: 'Deny', desc: 'All tools are blocked' },
+                              ]).map((item) => {
+                                const isActive = mode === item.mode
+                                const ItemIcon = item.icon
+                                return (
+                                  <button
+                                    key={item.mode}
+                                    onClick={() => {
+                                      if (agent) {
+                                        agentStore.updateAgent(agent.id, { permissionMode: item.mode })
+                                      }
+                                      setShowPermissionPopup(false)
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-all duration-200 hover:bg-surface-secondary/70 ${
+                                      isActive ? 'bg-accent-subtle border-l-2 border-accent' : 'border-l-2 border-transparent'
+                                    }`}
+                                  >
+                                    <ItemIcon size={16} strokeWidth={2.2} className={isActive ? 'text-accent' : 'text-text-tertiary'} />
+                                    <div className="flex-1 min-w-0">
+                                      <div className={`text-[12px] font-bold tracking-tight ${isActive ? 'text-accent' : 'text-text'}`}>{item.label}</div>
+                                      <div className="text-[10px] text-text-tertiary leading-tight mt-0.5">{item.desc}</div>
+                                    </div>
+                                    {isActive && <div className="w-2 h-2 rounded-full bg-accent" />}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
+                  <div className="text-[10px] text-text-tertiary flex items-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
+                    <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
+                      <Cpu size={12} className="text-accent/60" />
+                      <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || t('chat.status.noModel')}</span>
+                      <span className="opacity-10 px-1">|</span>
+                      <span className="font-bold uppercase tracking-[0.2em]">{activeProvider}</span>
+                      {(() => {
+                        const agent = useAgentStore.getState().activeAgentId ? useAgentStore.getState().agents.find(a => a.id === useAgentStore.getState().activeAgentId) : null
+                        return agent ? <><span className="opacity-10 px-1">|</span><Bot size={12} strokeWidth={2.5} className="text-accent/60" /><span className="font-bold">{agent.name}</span></> : null
+                      })()}
                     </div>
-                  )
-                })()}
-                <div className="mt-2 pb-2 text-[10px] text-text-tertiary text-center flex items-center justify-center gap-4 opacity-20 hover:opacity-100 transition-all duration-700 scale-90 origin-bottom">
-                  <div className="flex items-center gap-3 px-5 py-1.5 rounded-full bg-surface-secondary/80 border border-border-light backdrop-blur-3xl shadow-sm hover:shadow-accent/5 hover:border-accent/20 transition-all">
-                    <Cpu size={12} className="text-accent/60" />
-                    <span className="font-bold uppercase tracking-[0.2em]">{providerConfigs[activeProvider]?.model || t('chat.status.noModel')}</span>
-                    <span className="opacity-10 px-1">|</span>
-                    <span className="font-bold uppercase tracking-[0.2em]">{activeProvider}</span>
-                    {(() => {
-                      const agent = useAgentStore.getState().activeAgentId ? useAgentStore.getState().agents.find(a => a.id === useAgentStore.getState().activeAgentId) : null
-                      return agent ? <><span className="opacity-10 px-1">|</span><Bot size={12} strokeWidth={2.5} className="text-accent/60" /><span className="font-bold">{agent.name}</span></> : null
-                    })()}
                   </div>
                 </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
