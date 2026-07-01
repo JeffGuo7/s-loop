@@ -1,9 +1,11 @@
 # S-Loop (Snotra)
 
-> AI Desktop Workbench — chat, agent orchestration, scheduled tasks, desktop pet, all in one Tauri 2 app
+> AI 桌面助手 — 集对话、Agent 编排、定时任务、桌面宠物于一体的 Tauri 2 应用
+
+[English](README.md)
 
 <p align="center">
-  <!-- TODO: replace with app demo GIF/WebP -->
+  <!-- TODO: 放一张应用主界面动图 (GIF/WebP) -->
   <img src="" alt="S-Loop Screenshot" width="800" />
 </p>
 
@@ -15,9 +17,7 @@
   <a href="https://github.com/JeffGuo7/s-loop"><img src="https://img.shields.io/github/repo-size/JeffGuo7/s-loop" alt="Repo Size"></a>
 </p>
 
-[中文文档](README.zh-CN.md)
-
-## Quick Start
+## 快速开始
 
 ```bash
 git clone https://github.com/JeffGuo7/s-loop.git
@@ -26,57 +26,57 @@ npm install
 npm run tauri:dev
 ```
 
-> Prerequisites: Node.js ≥ 18, Rust ≥ 1.85 (MSVC), npm
+> 前置要求：Node.js ≥ 18、Rust ≥ 1.85 (MSVC)、npm
 
-## Features
+## 功能概览
 
-<!-- TODO: add screenshots for each module -->
+<!-- TODO: 每个模块放一张动图 -->
 
-| Module | Description |
-|--------|-------------|
-| **AI Chat** | Streaming SSE output, reasoning visualization, tool call logs, Markdown + syntax highlighting, Mermaid / LaTeX |
-| **Agent Builder** | Custom agents (instructions / model / Skills / MCP / permissions), slash commands, drag-and-drop assembly |
-| **MCP Servers** | stdio MCP process management, auto tool discovery, Rust-managed lifecycle |
-| **Skills** | Local SKILL.md scanning, remote install from ClawHub, CLI integration, ZIP drag-and-drop |
-| **Scheduled Tasks** | Cron / interval / one-shot, bind Agent + Skills, deliver to chat or platform |
-| **Platform Hub** | Telegram (bidirectional sync), Email, Webhook, Feishu, DingTalk, WeCom |
-| **Desktop Pet** | SVG animated pet, transparent overlay window, multi-state, theme packs |
-| **Web Search** | Bing / Brave / SearXNG / Tavily / Exa — 5 engines, zero-config default |
-| **Themes** | 9 color palettes × dark/light, glassmorphism, CSS variable driven |
+| 模块 | 说明 |
+|------|------|
+| **AI 对话** | 流式 SSE 输出、推理过程展示、工具调用日志、Markdown + 代码高亮、Mermaid / LaTeX 渲染 |
+| **Agent 构建器** | 自定义 Agent（指令/模型/Skills/MCP/权限）、斜杠命令、拖拽编排 |
+| **MCP 服务器** | stdio 类型 MCP 进程管理，工具列表自动发现，Rust 后端生命周期控制 |
+| **Skills 系统** | 本地 SKILL.md 扫描、远程搜索安装（ClawHub）、CLI 集成、ZIP 拖拽安装 |
+| **定时任务** | Cron / 间隔 / 一次性，绑定 Agent + Skills，交付到聊天或平台 |
+| **平台消息中心** | Telegram（收发双向同步）、Email、Webhook、飞书、钉钉、企业微信 |
+| **桌面宠物** | SVG 动画宠物，独立透明窗口，多状态切换，多主题包 |
+| **联网搜索** | Bing / Brave / SearXNG / Tavily / Exa，5 引擎可切换 |
+| **主题系统** | 9 套色系 × 深色/浅色，毛玻璃效果，CSS 变量驱动实时切换 |
 
-## Tech Stack
+## 技术栈
 
-| Layer | Stack |
-|-------|-------|
-| Desktop | Tauri 2 |
-| Frontend | React 19 + TypeScript + Vite |
-| Styling | Tailwind CSS 4 + HeroUI v3 |
-| State | Zustand |
-| Animation | Framer Motion |
-| Icons | Lucide React |
-| Syntax | Shiki |
-| AI Engine | `@earendil-works/pi-agent-core` + `pi-ai` + `pi-coding-agent` |
-| AI Runtime | pi-server (Node.js child process, HTTP + SSE) |
-| Database | SQLite (tauri-plugin-sql) |
-| i18n | i18next (English / Chinese) |
+| 类别 | 技术 |
+|------|------|
+| 桌面框架 | Tauri 2 |
+| 前端 | React 19 + TypeScript + Vite |
+| 样式 | Tailwind CSS 4 + HeroUI v3 |
+| 状态管理 | Zustand |
+| 动效 | Framer Motion |
+| 图标 | Lucide React |
+| 代码高亮 | Shiki |
+| AI 引擎 | `@earendil-works/pi-agent-core` + `pi-ai` + `pi-coding-agent` |
+| AI 服务 | pi-server（Node.js 子进程，HTTP + SSE） |
+| 数据库 | SQLite（tauri-plugin-sql） |
+| 国际化 | i18next（中文 / English） |
 
-## Architecture
+## 架构
 
 ```
 ┌─ Tauri 2 ───────────────────────────────────────────────────┐
 │                                                               │
-│  Rust Backend                  Node.js AI Engine              │
+│  Rust 后端                    Node.js AI 引擎                 │
 │  ┌──────────────────┐        ┌──────────────────────────┐   │
 │  │ pi_server.rs     │◄──────►│ pi-server (HTTP + SSE)    │   │
-│  │ mcp_manager.rs   │        │   Agent sessions           │   │
-│  │ commands.rs      │        │   delegate_task / subagent │   │
-│  │ skill_installer  │        │   Goal Loop executor       │   │
-│  │ skills_cli.rs    │        │   task-scheduler (cron)    │   │
-│  │ system_tray      │        │   platform-center (hub)    │   │
-│  │                  │        │   telegram-monitor         │   │
+│  │ mcp_manager.rs   │        │   Agent 会话管理           │   │
+│  │ commands.rs      │        │   delegate_task / 子智能体  │   │
+│  │ skill_installer  │        │   Goal Loop 自主执行       │   │
+│  │ skills_cli.rs    │        │   task-scheduler 定时任务   │   │
+│  │ system_tray      │        │   platform-center 消息中心  │   │
+│  │                  │        │   telegram-monitor 轮询    │   │
 │  └──────────────────┘        └──────────────────────────┘   │
 │                                                               │
-│  React Frontend                                               │
+│  React 前端                                                   │
 │  ┌───────────────────────────────────────────────────────┐   │
 │  │ ChatView │ AgentBuilder │ TasksPage │ PetPage         │   │
 │  │ SettingsModal │ FileTree │ WorkspacePanel │ Sidebar   │   │
