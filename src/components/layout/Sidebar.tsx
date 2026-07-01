@@ -44,6 +44,7 @@ export function Sidebar({
 }: SidebarProps) {
   const sessions = useAppStore((s) => s.sessions)
   const activeSessionId = useAppStore((s) => s.activeSessionId)
+  const streamingMessage = useAppStore((s) => s.streamingMessage)
   const setActiveSession = useAppStore((s) => s.setActiveSession)
   const createSession = useAppStore((s) => s.createSession)
   const deleteSession = useAppStore((s) => s.deleteSession)
@@ -303,6 +304,7 @@ export function Sidebar({
         <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 scrollbar-subtle space-y-1">
           {sessions.map((session) => {
           const isActive = session.id === activeSessionId
+          const isStreaming = streamingMessage[session.id]?.isStreaming ?? false
           const title = session.title || t('sidebar.untitled')
           const isPlatformSession = session.source === 'platform'
           const sessionBadge = session.sourceLabel || (session.readOnly ? t('chat.session.readOnly') : '')
@@ -328,6 +330,9 @@ export function Sidebar({
                     P
                   </div>
                 )}
+                {isStreaming && !isActive && (
+                  <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-accent border-2 border-white dark:border-[#1a1a1a] animate-pulse shadow-sm" />
+                )}
                 {isActive && (
                   <div className="absolute left-0 top-3 bottom-3 w-1 bg-accent rounded-r-full z-20 shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
                 )}
@@ -352,10 +357,13 @@ export function Sidebar({
               </div>
 
               <div className="min-w-0 flex-1 text-left">
-                <p className={`truncate text-[13px] tracking-tight transition-all duration-500 ${
+                <p className={`truncate text-[13px] tracking-tight transition-all duration-500 flex items-center gap-1.5 ${
                   isActive ? 'font-bold text-accent' : 'font-medium text-text-secondary group-hover:text-text'
                 }`}>
-                  {title}
+                  <span className="truncate">{title}</span>
+                  {isStreaming && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse flex-shrink-0 shadow-[0_0_6px_rgba(var(--color-accent-rgb),0.5)]" />
+                  )}
                 </p>
                 {sessionBadge && (
                   <div className="mt-1 flex items-center gap-2">
@@ -605,7 +613,7 @@ return (
         strokeWidth={active ? 2.5 : 2} 
       />
       {badge && !active && (
-        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-surface-secondary shadow-[0_0_10px_rgba(34,197,94,0.6)] animate-pulse" />
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-surface-secondary shadow-[0_0_10px_rgba(var(--color-accent-rgb),0.6)] animate-pulse" />
       )}
     </div>
     
