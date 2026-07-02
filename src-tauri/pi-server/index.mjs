@@ -5,7 +5,7 @@ import * as fs from 'node:fs'
 import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, getModels } from '@earendil-works/pi-ai'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
-import { webSearch, fetchUrl } from './searchProviders.mjs'
+import { webSearch, fetchUrl, resetBrowser } from './searchProviders.mjs'
 import { createDefaultEngine, calculateContextTokens, truncateContent } from './context-engine/index.mjs'
 import { createSessionRepo, findSession } from './session-store.mjs'
 import { init as initTasks, loadTasks, getTask, createTask, updateTask, removeTask, getTaskOutputs, runTask, startTicker } from './task-scheduler.mjs'
@@ -1180,11 +1180,15 @@ createServer((req, res) => {
 
     const cleanupController = () => {
       goalLoopControllers.delete(goalId)
+      // Subagents may have used web_search and left the shared browser
+      // in a bad state (e.g. mid-navigation when aborted). Reset it.
+      resetBrowser().catch(() => {})
     }
 
     res.on('close', () => {
       goalController.abort()
       cleanupController()
+      resetBrowser().catch(() => {})
     })
 
     runGoalLoop({
@@ -1232,6 +1236,9 @@ createServer((req, res) => {
       if (ctrl) {
         ctrl.abort()
         goalLoopControllers.delete(abortId)
+        // Force-reset shared browser — a subagent may have been mid-search
+        // and left the puppeteer browser in a bad state.
+        resetBrowser().catch(() => {})
       }
     }
     res.writeHead(200, { 'Content-Type': 'application/json' })

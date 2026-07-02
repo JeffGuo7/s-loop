@@ -385,18 +385,34 @@ export function Sidebar({
 
               {confirmDeleteSessionId === session.id ? (
                 <div className="flex shrink-0 items-center gap-1">
-                  <button
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => handleConfirmDelete(e, session.id)}
-                    className="rounded-md bg-red-500 px-2 py-1 text-[10px] font-black text-white transition-all duration-300 hover:bg-red-600"
+                    onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation()
+                        handleConfirmDelete(e as unknown as MouseEvent, session.id)
+                      }
+                    }}
+                    className="rounded-md bg-red-500 px-2 py-1 text-[10px] font-black text-white transition-all duration-300 hover:bg-red-600 cursor-pointer"
                   >
                     {t('common.confirm')}
-                  </button>
-                  <button
+                  </div>
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={handleCancelDelete}
-                    className="rounded-md bg-white/75 px-2 py-1 text-[10px] font-black text-text-tertiary transition-all duration-300 hover:text-text dark:bg-white/10"
+                    onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation()
+                        handleCancelDelete(e as unknown as MouseEvent)
+                      }
+                    }}
+                    className="rounded-md bg-white/75 px-2 py-1 text-[10px] font-black text-text-tertiary transition-all duration-300 hover:text-text dark:bg-white/10 cursor-pointer"
                   >
                     {t('common.cancel')}
-                  </button>
+                  </div>
                 </div>
               ) : (
                 <div

@@ -87,6 +87,17 @@ async function getBrowser() {
       console.warn('[webSearch] browser liveness check failed, restarting')
     }
     if (!alive) {
+      // Force-kill the browser process before setting to null.
+      // browser.close() sends a graceful CDP shutdown, but if the browser
+      // is unresponsive, the CDP connection may hang. Kill the OS process
+      // directly to guarantee cleanup — the next caller gets a fresh browser.
+      try {
+        const proc = _browser.process()
+        if (proc && proc.pid) {
+          process.kill(proc.pid, 'SIGKILL')
+          console.log('[webSearch] killed unresponsive browser process:', proc.pid)
+        }
+      } catch {}
       try { await _browser.close() } catch {}
       _browser = null
     }
@@ -116,9 +127,12 @@ async function getBrowser() {
 
 async function fetchWithBrowser(url) {
   const browser = await getBrowser()
-  if (!browser) return null
+  if (!browser) {
+    return { html: null, reason: 'No browser found. Install Edge, Chrome, or Firefox to use web search.' }
+  }
 
   let page
+  let lastError = null
   try {
     page = await browser.newPage()
 
@@ -135,10 +149,11 @@ async function fetchWithBrowser(url) {
     await page.waitForSelector('#b_results', { timeout: RESULT_WAIT_TIMEOUT })
 
     const html = await page.content()
-    return html
+    return { html }
   } catch (err) {
-    console.warn(`[webSearch] fetch failed: ${err.message.split('\n')[0]}`)
-    return null
+    lastError = err
+    console.warn(`[webSearch] fetch failed (${err.name || 'Error'}): ${err.message.split('\n')[0]}`)
+    return { html: null, reason: `Page load failed: ${err.message.split('\n')[0]}` }
   } finally {
     if (page) await page.close().catch(() => {})
   }
@@ -147,12 +162,11 @@ async function fetchWithBrowser(url) {
 async function searchBing(query, limit = 5) {
   console.log(`[webSearch] query: ${JSON.stringify(query)}`)
 
-  // MFG-A URL: www.bing.com
   const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`
 
-  const html = await fetchWithBrowser(url)
+  const { html, reason } = await fetchWithBrowser(url)
   if (!html) {
-    throw new Error('Browser search failed — no browser available or page load error.')
+    throw new Error(reason || 'Browser search failed.')
   }
 
   const results = parseBingHtml(html, limit)
@@ -394,3 +408,23 @@ async function webSearch(query, config = {}) {
 }
 
 export { webSearch, fetchUrl, listProviders, SearchResult }
+
+/**
+ * Force-reset the shared browser instance.
+ * Call this when the browser may have been left in a bad state
+ * (e.g. after aborting a goal loop mid-search).
+ */
+export async function resetBrowser() {
+  if (_browser) {
+    try {
+      const proc = _browser.process()
+      if (proc && proc.pid) {
+        process.kill(proc.pid, 'SIGKILL')
+        console.log('[webSearch] resetBrowser: killed process', proc.pid)
+      }
+    } catch {}
+    try { await _browser.close() } catch {}
+    _browser = null
+    console.log('[webSearch] resetBrowser: browser reset complete')
+  }
+}
