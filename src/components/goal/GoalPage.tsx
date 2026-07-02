@@ -94,8 +94,7 @@ export function GoalPage() {
             </div>
           ) : hasResult ? (
             <div className="rounded-[24px] border border-accent/20 bg-accent/[0.03] p-6 shadow-sm backdrop-blur-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-accent/15 flex items-center justify-center">
                     <CheckCircle2 size={16} className="text-accent" />
                   </div>
@@ -103,8 +102,6 @@ export function GoalPage() {
                     {activeGoal.status === 'completed' ? 'Goal Achieved' : 'Result'}
                   </span>
                 </div>
-                <CopyButton text={activeGoal.finalResult!} />
-              </div>
               <ResultContent text={activeGoal.finalResult!} />
               <button
                 onClick={clearActive}
@@ -296,7 +293,7 @@ export function GoalPage() {
                           Start
                         </button>
                       )}
-                      {goal.steps?.length > 0 && (goal.status === 'completed' || goal.status === 'failed') && (
+                      {((goal.steps?.length > 0 || goal.finalResult) && (goal.status === 'completed' || goal.status === 'failed')) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleViewGoal(goal) }}
                           className="flex items-center gap-1 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold text-accent hover:bg-accent/20 transition-colors"
