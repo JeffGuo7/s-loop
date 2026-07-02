@@ -4,11 +4,12 @@ import type { GoalStep } from '../../types/goal'
 
 interface GoalStepCardProps {
   step: GoalStep
+  index: number
   isActive: boolean
   autoExpand?: boolean
 }
 
-export function GoalStepCard({ step, isActive, autoExpand = false }: GoalStepCardProps) {
+export function GoalStepCard({ step, index, isActive, autoExpand = false }: GoalStepCardProps) {
   const [expanded, setExpanded] = useState(autoExpand && !!step.result)
 
   const statusIcon = (() => {
@@ -46,7 +47,7 @@ export function GoalStepCard({ step, isActive, autoExpand = false }: GoalStepCar
           step.status === 'failed' ? 'bg-red-500 text-white' :
           'bg-surface-tertiary text-text-tertiary'
         }`}>
-          {step.index + 1}
+          {index + 1}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -56,7 +57,7 @@ export function GoalStepCard({ step, isActive, autoExpand = false }: GoalStepCar
               step.status === 'failed' ? 'text-red-600' :
               'text-text'
             }`}>
-              {step.name}
+              {step.agent}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-surface-secondary/60 px-2 py-0.5 text-[9px] font-bold text-text-tertiary">
               <Bot size={9} />
@@ -64,7 +65,7 @@ export function GoalStepCard({ step, isActive, autoExpand = false }: GoalStepCar
             </span>
           </div>
           <p className="mt-1 text-[10px] leading-relaxed text-text-tertiary line-clamp-2">
-            {step.description}
+            {step.task}
           </p>
         </div>
 

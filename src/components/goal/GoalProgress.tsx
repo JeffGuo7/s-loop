@@ -8,7 +8,7 @@ interface GoalProgressProps {
 }
 
 export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
-  const steps: GoalStep[] = goal.plan?.steps || []
+  const steps: GoalStep[] = goal.steps || []
   const total = steps.length
   const completed = steps.filter((s) => s.status === 'completed').length
   const failed = steps.filter((s) => s.status === 'failed').length
@@ -31,6 +31,16 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
     return 'text-accent'
   })()
 
+  const statusLabel = (() => {
+    switch (goal.status) {
+      case 'running': return 'Running'
+      case 'completed': return 'Completed'
+      case 'failed': return 'Failed'
+      case 'aborted': return 'Aborted'
+      default: return 'Pending'
+    }
+  })()
+
   return (
     <div className="rounded-[24px] border border-border-light/70 bg-white/76 p-5 shadow-sm backdrop-blur-xl dark:bg-white/5">
       {/* Header */}
@@ -38,16 +48,13 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-black uppercase tracking-[0.15em] ${statusColor}`}>
-              {goal.status === 'planning' ? 'Planning...' :
-               goal.status === 'executing' ? 'Executing' :
-               goal.status === 'completed' ? 'Completed' :
-               goal.status === 'failed' ? 'Failed' :
-               goal.status === 'aborted' ? 'Aborted' :
-               'Pending'}
+              {statusLabel}
             </span>
-            <span className="text-[10px] font-bold text-text-tertiary">
-              Step {goal.currentStepIndex + 1}/{total} · Iteration {goal.currentIteration}/{goal.maxIterations}
-            </span>
+            {total > 0 && (
+              <span className="text-[10px] font-bold text-text-tertiary">
+                {completed + failed}/{total} steps
+              </span>
+            )}
           </div>
           <h3 className="mt-1 text-[15px] font-black tracking-tight text-text line-clamp-2">
             {goal.goal}
@@ -89,7 +96,7 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
         <div className="rounded-2xl bg-surface-secondary/55 px-3 py-2.5">
           <div className="text-[8px] font-black uppercase tracking-[0.1em] text-text-tertiary">Steps</div>
           <div className="mt-1 text-[14px] font-black tracking-tight text-text">
-            {completed}/{total}
+            {completed}/{total || '-'}
           </div>
         </div>
         <div className="rounded-2xl bg-surface-secondary/55 px-3 py-2.5">
@@ -101,7 +108,7 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
         <div className="rounded-2xl bg-surface-secondary/55 px-3 py-2.5">
           <div className="text-[8px] font-black uppercase tracking-[0.1em] text-text-tertiary">Tokens</div>
           <div className="mt-1 text-[14px] font-black tracking-tight text-text font-mono">
-            {totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(0)}k` : totalTokens}
+            {totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(0)}k` : totalTokens || '-'}
           </div>
         </div>
         <div className="rounded-2xl bg-surface-secondary/55 px-3 py-2.5">
@@ -111,17 +118,6 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
           </div>
         </div>
       </div>
-
-      {/* Progress notes */}
-      {goal.progressNotes.length > 0 && (
-        <div className="mt-3 space-y-1">
-          {goal.progressNotes.map((note, i) => (
-            <div key={i} className="text-[10px] text-text-tertiary font-mono">
-              {note}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

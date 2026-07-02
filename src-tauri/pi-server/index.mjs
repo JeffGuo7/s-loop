@@ -1211,7 +1211,7 @@ createServer((req, res) => {
           cleanupController()
           // Save final output
           const output = ev.type === 'goal_done'
-            ? `# Goal: ${goal.goal}\n\n## Plan\n${goal.plan?.reasoning || 'N/A'}\n\n## Result\n${goal.finalResult || 'Completed'}`
+            ? `# Goal: ${goal.goal}\n\n## Result\n${goal.finalResult || 'Completed'}\n\n## Steps\n${(goal.steps || []).map(s => `- ${s.agent}: ${s.task}`).join('\n')}`
             : `# Goal: ${goal.goal}\n\n## Error\n${ev.message || 'Unknown error'}`
           saveGoalRunOutput(goalId, output)
         }
@@ -1230,7 +1230,7 @@ createServer((req, res) => {
   if (req.method === 'POST' && goalAbortMatch) {
     const abortId = goalAbortMatch[1]
     const goal = getGoal(abortId)
-    if (goal && (goal.status === 'planning' || goal.status === 'executing')) {
+    if (goal && goal.status === 'running') {
       updateGoal(abortId, { status: 'aborted' })
       const ctrl = goalLoopControllers.get(abortId)
       if (ctrl) {

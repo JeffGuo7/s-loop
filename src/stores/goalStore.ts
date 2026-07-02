@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getBaseUrl } from '../utils/piClient'
-import type { GoalState, GoalSSEEvent, StepStatus, GoalStep } from '../types/goal'
+import type { GoalState, GoalSSEEvent, GoalStep } from '../types/goal'
 
 interface GoalStoreState {
   goals: GoalState[]
@@ -47,7 +47,7 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
       const res = await fetch(`${BASE()}/goals/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal, maxIterations: 10 }),
+        body: JSON.stringify({ goal }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const created = await res.json()
@@ -72,11 +72,10 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
     const { abortFn: prevAbort, goals } = get()
     if (prevAbort) prevAbort()
 
-    // Set activeGoal — use existing or create a minimal placeholder so the UI doesn't flash away
     const existing = goals.find(g => g.id === id)
     const cleanGoal: GoalState = existing
-      ? { ...existing, status: 'planning' as const, plan: null, currentStepIndex: -1, currentIteration: 0, progressNotes: [], finalResult: null }
-      : { id, goal: '', status: 'planning' as const, plan: null, currentStepIndex: -1, currentIteration: 0, maxIterations: 5, progressNotes: [], finalResult: null, createdAt: Date.now(), updatedAt: Date.now() }
+      ? { ...existing, status: 'running' as const, steps: [], finalResult: null }
+      : { id, goal: '', status: 'running' as const, steps: [], finalResult: null, createdAt: Date.now(), updatedAt: Date.now() }
     set({ activeGoal: cleanGoal, liveEvents: [], isRunning: true, error: null })
 
     const controller = new AbortController()
@@ -128,29 +127,30 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
                 if (eventType === 'goal_event') {
                   set((s) => ({ liveEvents: [...s.liveEvents, data] }))
 
-                  if (data.type === 'goal_plan') {
-                    set((s) => ({
-                      activeGoal: s.activeGoal
-                        ? { ...s.activeGoal, plan: data.plan, status: 'executing' }
-                        : { id: '', goal: data.plan?.reasoning || '', status: 'executing' as const, plan: data.plan, currentStepIndex: -1, currentIteration: 0, maxIterations: 5, progressNotes: [], finalResult: null, createdAt: Date.now(), updatedAt: Date.now() },
-                    }))
-                  } else if (data.type === 'goal_step_start') {
+                  if (data.type === 'goal_step_start') {
                     set((s) => {
-                      if (!s.activeGoal?.plan) return s
-                      const steps = s.activeGoal.plan.steps.map((step, i) =>
-                        i === data.stepIndex ? { ...step, status: 'running' as StepStatus } : step
-                      ) as GoalStep[]
-                      return { activeGoal: { ...s.activeGoal, plan: { ...s.activeGoal.plan, steps }, currentStepIndex: data.stepIndex } }
+                      if (!s.activeGoal) return s
+                      const newStep: GoalStep = {
+                        agent: data.agent,
+                        task: data.task,
+                        status: 'running',
+                      }
+                      return {
+                        activeGoal: {
+                          ...s.activeGoal,
+                          steps: [...s.activeGoal.steps, newStep],
+                        },
+                      }
                     })
                   } else if (data.type === 'goal_step_end') {
                     set((s) => {
-                      if (!s.activeGoal?.plan) return s
-                      const steps = s.activeGoal.plan.steps.map((step, i) =>
+                      if (!s.activeGoal) return s
+                      const steps = s.activeGoal.steps.map((step, i) =>
                         i === data.stepIndex
-                          ? { ...step, status: (data.result?.error ? 'failed' : 'completed') as StepStatus, result: data.result }
+                          ? { ...step, status: data.result?.exitCode === 0 ? 'completed' as const : 'failed' as const, result: data.result }
                           : step
                       ) as GoalStep[]
-                      return { activeGoal: { ...s.activeGoal, plan: { ...s.activeGoal.plan, steps } } }
+                      return { activeGoal: { ...s.activeGoal, steps } }
                     })
                   } else if (data.type === 'goal_done') {
                     if (data.goalState) {

@@ -55,9 +55,10 @@ export function GoalPage() {
     })
   }
 
-  // Active goal without plan — planning, or finished with error
-  if (activeGoal && !activeGoal.plan) {
-    const isPlanning = activeGoal.status === 'planning' || activeGoal.status === 'executing'
+  // Active goal without steps — still running or finished without subagent calls
+  if (activeGoal && activeGoal.steps.length === 0) {
+    const isRunning_ = activeGoal.status === 'running'
+    const hasResult = !!activeGoal.finalResult
     return (
       <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
         <div className="max-w-[680px] mx-auto p-6 space-y-6">
@@ -82,14 +83,35 @@ export function GoalPage() {
             onAbort={abortGoal}
           />
 
-          {isPlanning ? (
+          {isRunning_ ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 size={24} className="animate-spin-slow text-accent" />
                 <span className="text-[12px] font-bold text-text-tertiary">
-                  Planning goal steps...
+                  Working on goal...
                 </span>
               </div>
+            </div>
+          ) : hasResult ? (
+            <div className="rounded-[24px] border border-accent/20 bg-accent/[0.03] p-6 shadow-sm backdrop-blur-xl">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-accent/15 flex items-center justify-center">
+                    <CheckCircle2 size={16} className="text-accent" />
+                  </div>
+                  <span className="text-[12px] font-black text-text">
+                    {activeGoal.status === 'completed' ? 'Goal Achieved' : 'Result'}
+                  </span>
+                </div>
+                <CopyButton text={activeGoal.finalResult!} />
+              </div>
+              <ResultContent text={activeGoal.finalResult!} />
+              <button
+                onClick={clearActive}
+                className="mt-4 rounded-xl bg-surface-secondary/70 px-4 py-2 text-[11px] font-bold text-text-secondary hover:text-text transition-colors"
+              >
+                Back to Goals
+              </button>
             </div>
           ) : (
             <div className="rounded-[24px] border border-red-500/20 bg-red-500/[0.03] p-6">
@@ -99,13 +121,9 @@ export function GoalPage() {
                   {activeGoal.status === 'failed' ? 'Goal Failed' : activeGoal.status === 'aborted' ? 'Goal Aborted' : 'Goal Ended'}
                 </span>
               </div>
-              {activeGoal.finalResult ? (
-                <ResultContent text={activeGoal.finalResult} />
-              ) : (
-                <p className="text-[11px] text-text-tertiary">
-                  {error || 'The goal did not produce a result.'}
-                </p>
-              )}
+              <p className="text-[11px] text-text-tertiary">
+                {error || 'The goal did not produce a result.'}
+              </p>
               <button
                 onClick={clearActive}
                 className="mt-4 rounded-xl bg-surface-secondary/70 px-4 py-2 text-[11px] font-bold text-text-secondary hover:text-text transition-colors"
@@ -119,8 +137,8 @@ export function GoalPage() {
     )
   }
 
-  // Active goal with plan
-  if (activeGoal && activeGoal.plan) {
+  // Active goal with steps
+  if (activeGoal && activeGoal.steps.length > 0) {
     const allDone = !isRunning && (activeGoal.status === 'completed' || activeGoal.status === 'failed' || activeGoal.status === 'aborted')
 
     return (
@@ -193,30 +211,23 @@ export function GoalPage() {
                   <p className="text-[11px] text-text-tertiary">
                     The agent completed execution. See step details below for results.
                   </p>
-                  {activeGoal.plan && (
-                    <div className="space-y-2">
-                      {activeGoal.plan.steps.filter(s => s.result?.finalOutput).map(s => (
-                        <details key={s.index} className="group">
+                  {activeGoal.steps.filter(s => s.result?.finalOutput).map((s, i) => (
+                        <details key={i} className="group">
                           <summary className="cursor-pointer text-[11px] font-bold text-text-secondary hover:text-text transition-colors">
-                            Step {s.index + 1}: {s.name} ({s.status})
+                            Step {i + 1}: {s.agent} — {s.task.slice(0, 50)} ({s.status})
                           </summary>
                           <pre className="mt-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap rounded-xl bg-surface-secondary/50 p-3 border border-border-light/70 text-text-secondary max-h-[200px] overflow-y-auto">
                             {s.result?.finalOutput || 'No output'}
                           </pre>
                         </details>
                       ))}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
           )}
 
           <GoalPlan
-            steps={activeGoal.plan.steps}
-            reasoning={activeGoal.plan.reasoning}
-            currentStepIndex={activeGoal.currentStepIndex}
-            autoExpand={allDone}
+            steps={activeGoal.steps}
           />
         </div>
       </div>
@@ -251,8 +262,8 @@ export function GoalPage() {
               {goals.map((goal) => (
                 <div
                   key={goal.id}
-                  onClick={() => goal.plan ? handleViewGoal(goal) : null}
-                  className={`rounded-[20px] border border-border-light/70 bg-white/76 p-4 shadow-sm backdrop-blur-xl dark:bg-white/5 ${goal.plan ? 'cursor-pointer hover:border-accent/30 transition-colors' : ''}`}
+                  onClick={() => goal.steps?.length > 0 ? handleViewGoal(goal) : null}
+                  className={`rounded-[20px] border border-border-light/70 bg-white/76 p-4 shadow-sm backdrop-blur-xl dark:bg-white/5 ${goal.steps?.length > 0 ? 'cursor-pointer hover:border-accent/30 transition-colors' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -269,9 +280,9 @@ export function GoalPage() {
                         </span>
                       </div>
                       <p className="mt-1 text-[12px] font-bold text-text line-clamp-2">{goal.goal}</p>
-                      {goal.plan && (
+                      {goal.steps?.length > 0 && (
                         <p className="mt-1 text-[10px] text-text-tertiary">
-                          {goal.plan.steps.length} steps · {goal.plan.steps.filter(s => s.status === 'completed').length} completed
+                          {goal.steps.length} steps · {goal.steps.filter(s => s.status === 'completed').length} completed
                         </p>
                       )}
                     </div>
@@ -285,7 +296,7 @@ export function GoalPage() {
                           Start
                         </button>
                       )}
-                      {goal.plan && (goal.status === 'completed' || goal.status === 'failed') && (
+                      {goal.steps?.length > 0 && (goal.status === 'completed' || goal.status === 'failed') && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleViewGoal(goal) }}
                           className="flex items-center gap-1 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold text-accent hover:bg-accent/20 transition-colors"
