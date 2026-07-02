@@ -552,7 +552,7 @@ export function ChatView() {
                         onClick={() => setShowPermissionPopup(!showPermissionPopup)}
                         className="inline-flex items-center gap-1.5 px-2 py-0.5 -mx-1 rounded-full hover:bg-accent/10 transition-all duration-300 border border-transparent hover:border-accent/20"
                       >
-                        <ModeIcon size={12} strokeWidth={2.5} className={mode === 'allow' ? 'text-green-500' : mode === 'deny' ? 'text-red-400' : 'text-amber-400'} />
+                        <ModeIcon size={12} strokeWidth={2.5} className="text-accent" />
                         <span className="font-bold uppercase tracking-[0.1em]">{modeConfig.label}</span>
                         <ChevronUp size={10} strokeWidth={2.5} className={`transition-transform duration-300 ${showPermissionPopup ? 'rotate-0' : 'rotate-180'} opacity-50`} />
                       </button>
