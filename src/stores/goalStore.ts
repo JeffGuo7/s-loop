@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getBaseUrl } from '../utils/piClient'
-import type { GoalState, GoalSSEEvent } from '../types/goal'
+import type { GoalState, GoalSSEEvent, StepStatus, GoalStep } from '../types/goal'
 
 interface GoalStoreState {
   goals: GoalState[]
@@ -131,12 +131,29 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
                         ? { ...s.activeGoal, plan: data.plan, status: 'executing' }
                         : null,
                     }))
+                  } else if (data.type === 'goal_step_start') {
+                    set((s) => {
+                      if (!s.activeGoal?.plan) return s
+                      const steps = s.activeGoal.plan.steps.map((step, i) =>
+                        i === data.stepIndex ? { ...step, status: 'running' as StepStatus } : step
+                      ) as GoalStep[]
+                      return { activeGoal: { ...s.activeGoal, plan: { ...s.activeGoal.plan, steps }, currentStepIndex: data.stepIndex } }
+                    })
+                  } else if (data.type === 'goal_step_end') {
+                    set((s) => {
+                      if (!s.activeGoal?.plan) return s
+                      const steps = s.activeGoal.plan.steps.map((step, i) =>
+                        i === data.stepIndex
+                          ? { ...step, status: (data.result?.error ? 'failed' : 'completed') as StepStatus, result: data.result }
+                          : step
+                      ) as GoalStep[]
+                      return { activeGoal: { ...s.activeGoal, plan: { ...s.activeGoal.plan, steps } } }
+                    })
                   } else if (data.type === 'goal_done') {
                     set(() => ({
                       activeGoal: data.goalState,
                       isRunning: false,
                     }))
-                    // Refresh goals list
                     get().fetchGoals()
                   } else if (data.type === 'goal_error') {
                     set({ error: data.message, isRunning: false })

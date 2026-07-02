@@ -74,6 +74,16 @@ export function createExecuteStepTool(goalState, opts) {
     },
     execute: async (_id, params, signal, onUpdate) => {
       const idx = params.step_index
+
+      // Enforce maxIterations server-side
+      if (goalState.currentIteration >= goalState.maxIterations) {
+        return {
+          content: [{ type: 'text', text: `Maximum iterations (${goalState.maxIterations}) reached. Please call check_progress to finalize, or stop here.` }],
+          details: { error: 'max iterations reached' },
+          isError: true,
+        }
+      }
+
       if (!goalState.plan || !goalState.plan.steps[idx]) {
         return {
           content: [{ type: 'text', text: `Error: step ${idx} not found in plan.` }],

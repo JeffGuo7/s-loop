@@ -172,9 +172,9 @@ Begin by calling plan_goal to decompose this goal into concrete steps. Then exec
           finalOutput = textParts
         }
 
-        // Aggregate usage from all messages
+        // Aggregate usage from assistant messages only
         for (const msg of messages) {
-          if (msg.usage) {
+          if (msg.role === 'assistant' && msg.usage) {
             usage.input += msg.usage.input || 0
             usage.output += msg.usage.output || 0
             usage.cacheRead += msg.usage.cacheRead || 0

@@ -39,6 +39,7 @@ const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DI
 const sessionRepo = createSessionRepo(DATA_DIR)
 const sessions = new Map()
 const inboundSeen = new Map()
+const goalLoopControllers = new Map()  // goalId → AbortController
 const runtimeConfig = {
   providerID: 'anthropic',
   modelID: 'claude-sonnet-4-20250514',
@@ -1174,6 +1175,18 @@ createServer((req, res) => {
     const apiKey = runtimeConfig.apiKey || process.env.PI_API_KEY || ''
     const projectDir = runtimeConfig.workspaceDir || DATA_DIR
 
+    const goalController = new AbortController()
+    goalLoopControllers.set(goalId, goalController)
+
+    const cleanupController = () => {
+      goalLoopControllers.delete(goalId)
+    }
+
+    res.on('close', () => {
+      goalController.abort()
+      cleanupController()
+    })
+
     runGoalLoop({
       goalState: goal,
       runtimeConfig: { ...runtimeConfig, apiKey },
@@ -1185,11 +1198,13 @@ createServer((req, res) => {
         }),
       getTools,
       projectDir,
-      signal: AbortSignal.any ? AbortSignal.any([]) : new AbortController().signal,
+      signal: goalController.signal,
+      persistFn: (updated) => updateGoal(goalId, updated),
       onUpdate: (ev) => {
         emit('goal_event', ev)
         if (ev.type === 'goal_done' || ev.type === 'goal_error') {
           emit('done', {})
+          cleanupController()
           // Save final output
           const output = ev.type === 'goal_done'
             ? `# Goal: ${goal.goal}\n\n## Plan\n${goal.plan?.reasoning || 'N/A'}\n\n## Result\n${goal.finalResult || 'Completed'}`
@@ -1200,6 +1215,7 @@ createServer((req, res) => {
     }).catch((err) => {
       emit('goal_event', { type: 'goal_error', message: err.message || String(err) })
       emit('done', {})
+      cleanupController()
     })
 
     return
@@ -1208,9 +1224,15 @@ createServer((req, res) => {
   // POST /goals/:id/abort — abort running goal
   const goalAbortMatch = url.pathname.match(/^\/goals\/([^/]+)\/abort$/)
   if (req.method === 'POST' && goalAbortMatch) {
-    const goal = getGoal(goalAbortMatch[1])
+    const abortId = goalAbortMatch[1]
+    const goal = getGoal(abortId)
     if (goal && (goal.status === 'planning' || goal.status === 'executing')) {
-      updateGoal(goalAbortMatch[1], { status: 'aborted' })
+      updateGoal(abortId, { status: 'aborted' })
+      const ctrl = goalLoopControllers.get(abortId)
+      if (ctrl) {
+        ctrl.abort()
+        goalLoopControllers.delete(abortId)
+      }
     }
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok: true }))
