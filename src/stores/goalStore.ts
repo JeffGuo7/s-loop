@@ -12,7 +12,7 @@ interface GoalStoreState {
   abortFn: (() => void) | null
 
   fetchGoals: () => Promise<void>
-  createGoal: (goal: string, maxIterations?: number) => Promise<GoalState | null>
+  createGoal: (goal: string) => Promise<GoalState | null>
   removeGoal: (id: string) => Promise<void>
   startGoal: (id: string) => Promise<void>
   abortGoal: () => void
@@ -42,12 +42,12 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
     }
   },
 
-  createGoal: async (goal, maxIterations) => {
+  createGoal: async (goal) => {
     try {
       const res = await fetch(`${BASE()}/goals/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal, maxIterations: maxIterations || 5 }),
+        body: JSON.stringify({ goal, maxIterations: 10 }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const created = await res.json()
