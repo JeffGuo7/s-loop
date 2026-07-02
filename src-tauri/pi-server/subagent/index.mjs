@@ -16,7 +16,7 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { loadAgentDefinition, formatAgentList } from './agent-registry.mjs'
 
 const MAX_CONCURRENCY = 4
-const MAX_SUBAGENT_TIMEOUT = 120_000
+const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
 
 /**
  * Run a single sub-agent.

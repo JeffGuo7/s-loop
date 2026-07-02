@@ -47,7 +47,7 @@ export function GoalInput({ onSubmit, loading }: GoalInputProps) {
         <div className="flex items-center justify-between mt-4">
           <div className="flex items-center gap-2">
             <label className="text-[10px] font-bold text-text-tertiary uppercase tracking-[0.1em]">
-              Max Steps
+              Max Iterations
             </label>
             <select
               value={maxIterations}

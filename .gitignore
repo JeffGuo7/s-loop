@@ -29,6 +29,15 @@ CLAUDE.md
 
 # Runtime data
 .s-loop/
+goals/
+platforms/
+tasks/
+telegram/
+sessions/
+mcp/
+skills/
+logs/
+temp/
 
 # Environment files
 .env

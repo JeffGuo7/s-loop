@@ -1,7 +1,6 @@
 ---
 name: reviewer
 description: Code review specialist — find bugs, security issues, and improvements
-model: claude-sonnet-4-6
 tools:
   - read
   - grep

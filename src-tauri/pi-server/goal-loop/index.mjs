@@ -93,7 +93,7 @@ export async function runGoalLoop({
     },
     sessionId,
     getApiKey: async () => apiKey,
-    toolExecution: 'parallel',
+    toolExecution: 'sequential',
   })
 
   // 5. Subscribe to events → forward structured goal events
@@ -137,10 +137,10 @@ export async function runGoalLoop({
     }
   })
 
-  // 6. Build initial prompt and execute
+  // 6. Build initial prompt — directive, not suggestive
   const initialPrompt = `Goal: ${goalState.goal}
 
-Begin by calling plan_goal to decompose this goal into concrete steps. Then execute each step one at a time with execute_step, checking progress after each with check_progress.`
+IMPORTANT: You MUST call plan_goal NOW. Do NOT write a text response. Use the plan_goal tool immediately with your plan for achieving this goal.`
 
   let finalOutput = ''
   let usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 }
@@ -156,6 +156,29 @@ Begin by calling plan_goal to decompose this goal into concrete steps. Then exec
     try {
       await agent.prompt(initialPrompt)
 
+      // If the model responded with text instead of calling plan_goal, retry
+      let retries = 0
+      while (!goalState.plan && retries < 2) {
+        retries++
+        console.log(`[goal-loop] plan_goal not called after prompt ${retries}, retrying with stronger directive...`)
+        await agent.prompt(
+          `You have NOT called plan_goal yet. This is your attempt #${retries + 1}. ` +
+          `You MUST call the plan_goal tool RIGHT NOW with your structured plan. ` +
+          `Do NOT write any text — call the tool.`
+        )
+      }
+
+      if (!goalState.plan) {
+        console.log('[goal-loop] plan_goal was never called — model refused to invoke the tool')
+        goalState.status = 'failed'
+        goalState.finalResult = 'Agent completed without calling plan_goal. The model may not support tool calling for this workflow.'
+        if (persistFn) persistFn(goalState)
+        if (onUpdate) {
+          onUpdate({ type: 'goal_error', message: goalState.finalResult })
+        }
+        return { exitCode: 1, goalState, finalOutput: goalState.finalResult, usage }
+      }
+
       // Read messages from agent.state, same pattern as subagent/index.mjs
       const messages = agent.state.messages || []
 
@@ -169,7 +192,9 @@ Begin by calling plan_goal to decompose this goal into concrete steps. Then exec
             .filter(c => c.type === 'text')
             .map(c => c.text)
             .join('\n\n')
-          finalOutput = textParts
+          if (textParts.trim()) {
+            finalOutput = textParts
+          }
         }
 
         // Aggregate usage from assistant messages only
@@ -182,6 +207,20 @@ Begin by calling plan_goal to decompose this goal into concrete steps. Then exec
             usage.cost += msg.usage.cost || 0
             usage.turns += 1
           }
+        }
+      }
+
+      // If model didn't write a summary, build result from step outputs
+      if (!finalOutput && goalState.plan) {
+        const completedSteps = goalState.plan.steps.filter(s => s.result?.finalOutput)
+        if (completedSteps.length > 0) {
+          finalOutput = completedSteps.map(s =>
+            `## Step ${s.index + 1}: ${s.name}\n\n${s.result.finalOutput}`
+          ).join('\n\n---\n\n')
+        } else {
+          const total = goalState.plan.steps.length
+          const done = goalState.plan.steps.filter(s => s.status === 'completed' || s.status === 'failed').length
+          finalOutput = `Goal completed. ${done}/${total} step(s) executed. Check the step details below for results.`
         }
       }
 

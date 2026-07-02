@@ -1,7 +1,6 @@
 ---
 name: coder
 description: General-purpose coding agent — write, edit, and test code
-model: claude-sonnet-4-6
 tools:
   - read
   - write

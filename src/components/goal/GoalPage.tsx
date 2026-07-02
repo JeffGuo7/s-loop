@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Trash2, Target, Plus, MessageSquare } from 'lucide-react'
+import { Loader2, Trash2, Target, Plus, MessageSquare, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useGoalStore } from '../../stores/goalStore'
 import { useAppStore } from '../../stores/appStore'
 import { GoalInput } from './GoalInput'
@@ -17,17 +17,25 @@ export function GoalPage() {
 
   useEffect(() => {
     fetchGoals()
-  }, [fetchGoals])
+  }, []) // stable mount-only effect
 
   const handleCreate = async (goal: string, maxIterations: number) => {
-    const created = await createGoal(goal, maxIterations)
-    if (created) {
-      startGoal(created.id)
+    try {
+      const created = await createGoal(goal, maxIterations)
+      if (created) {
+        startGoal(created.id)
+      }
+    } catch (err) {
+      console.error('[GoalPage] handleCreate error:', err)
     }
   }
 
   const handleStartGoal = (id: string) => {
     startGoal(id)
+  }
+
+  const handleViewGoal = (goal: GoalState) => {
+    useGoalStore.setState({ activeGoal: goal, isRunning: false, error: null })
   }
 
   const handleSendToChat = (goal: GoalState) => {
@@ -47,24 +55,68 @@ export function GoalPage() {
     })
   }
 
-  // Planning / pre-plan state
-  if (activeGoal && !activeGoal.plan && (activeGoal.status === 'planning' || activeGoal.status === 'executing')) {
+  // Active goal without plan — planning, or finished with error
+  if (activeGoal && !activeGoal.plan) {
+    const isPlanning = activeGoal.status === 'planning' || activeGoal.status === 'executing'
     return (
       <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
         <div className="max-w-[680px] mx-auto p-6 space-y-6">
+          {/* Back + goal title */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={clearActive}
+              className="rounded-xl bg-surface-secondary/70 px-3 py-1.5 text-[10px] font-black text-text-tertiary hover:text-text transition-colors"
+            >
+              Back
+            </button>
+            <div className="flex items-center gap-2">
+              <Target size={16} className="text-accent" />
+              <span className="text-[14px] font-black tracking-tight text-text line-clamp-1">
+                {activeGoal.goal || 'Running goal...'}
+              </span>
+            </div>
+          </div>
+
           <GoalProgress
             goal={activeGoal}
             isRunning={isRunning}
             onAbort={abortGoal}
           />
-          <div className="flex items-center justify-center py-12">
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 size={24} className="animate-spin-slow text-accent" />
-              <span className="text-[12px] font-bold text-text-tertiary">
-                Planning goal steps...
-              </span>
+
+          {isPlanning ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 size={24} className="animate-spin-slow text-accent" />
+                <span className="text-[12px] font-bold text-text-tertiary">
+                  Planning goal steps...
+                </span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-[24px] border border-red-500/20 bg-red-500/[0.03] p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertCircle size={16} className="text-red-500" />
+                <span className="text-[12px] font-black text-text">
+                  {activeGoal.status === 'failed' ? 'Goal Failed' : activeGoal.status === 'aborted' ? 'Goal Aborted' : 'Goal Ended'}
+                </span>
+              </div>
+              {activeGoal.finalResult ? (
+                <pre className="font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-y-auto rounded-xl bg-surface-secondary/50 p-3 text-text-secondary">
+                  {activeGoal.finalResult}
+                </pre>
+              ) : (
+                <p className="text-[11px] text-text-tertiary">
+                  {error || 'The goal did not produce a result.'}
+                </p>
+              )}
+              <button
+                onClick={clearActive}
+                className="mt-4 rounded-xl bg-surface-secondary/70 px-4 py-2 text-[11px] font-bold text-text-secondary hover:text-text transition-colors"
+              >
+                Back to Goals
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -72,6 +124,8 @@ export function GoalPage() {
 
   // Active goal with plan
   if (activeGoal && activeGoal.plan) {
+    const allDone = !isRunning && (activeGoal.status === 'completed' || activeGoal.status === 'failed' || activeGoal.status === 'aborted')
+
     return (
       <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
         <div className="max-w-[680px] mx-auto p-6 space-y-6">
@@ -90,7 +144,7 @@ export function GoalPage() {
               </span>
             </div>
             <div className="flex-1" />
-            {!isRunning && activeGoal.finalResult && (
+            {allDone && (
               <button
                 onClick={() => handleSendToChat(activeGoal)}
                 className="flex items-center gap-1.5 rounded-xl bg-accent/10 px-3 py-1.5 text-[10px] font-black text-accent hover:bg-accent/20 transition-colors"
@@ -107,10 +161,57 @@ export function GoalPage() {
             onAbort={abortGoal}
           />
 
+          {/* Result card — always shown when done */}
+          {allDone && (
+            <div className="rounded-[24px] border border-accent/20 bg-accent/[0.03] p-6 shadow-sm backdrop-blur-xl">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-xl bg-accent/15 flex items-center justify-center">
+                  {activeGoal.status === 'completed'
+                    ? <CheckCircle2 size={16} className="text-accent" />
+                    : <AlertCircle size={16} className="text-red-500" />
+                  }
+                </div>
+                <div>
+                  <span className="text-[12px] font-black text-text">Result</span>
+                  <p className="text-[10px] text-text-tertiary">
+                    {activeGoal.status === 'completed' ? 'Goal achieved' :
+                     activeGoal.status === 'failed' ? 'Execution failed' : 'Aborted'}
+                  </p>
+                </div>
+              </div>
+              {activeGoal.finalResult ? (
+                <pre className="font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto rounded-2xl bg-surface-secondary/50 p-4 border border-border-light/70 text-text-secondary">
+                  {activeGoal.finalResult}
+                </pre>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-[11px] text-text-tertiary">
+                    The agent completed execution. See step details below for results.
+                  </p>
+                  {activeGoal.plan && (
+                    <div className="space-y-2">
+                      {activeGoal.plan.steps.filter(s => s.result?.finalOutput).map(s => (
+                        <details key={s.index} className="group">
+                          <summary className="cursor-pointer text-[11px] font-bold text-text-secondary hover:text-text transition-colors">
+                            Step {s.index + 1}: {s.name} ({s.status})
+                          </summary>
+                          <pre className="mt-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap rounded-xl bg-surface-secondary/50 p-3 border border-border-light/70 text-text-secondary max-h-[200px] overflow-y-auto">
+                            {s.result?.finalOutput || 'No output'}
+                          </pre>
+                        </details>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <GoalPlan
             steps={activeGoal.plan.steps}
             reasoning={activeGoal.plan.reasoning}
             currentStepIndex={activeGoal.currentStepIndex}
+            autoExpand={allDone}
           />
         </div>
       </div>
@@ -145,7 +246,8 @@ export function GoalPage() {
                 {goals.map((goal) => (
                   <div
                     key={goal.id}
-                    className="rounded-[20px] border border-border-light/70 bg-white/76 p-4 shadow-sm backdrop-blur-xl dark:bg-white/5"
+                    onClick={() => goal.plan ? handleViewGoal(goal) : null}
+                    className={`rounded-[20px] border border-border-light/70 bg-white/76 p-4 shadow-sm backdrop-blur-xl dark:bg-white/5 ${goal.plan ? 'cursor-pointer hover:border-accent/30 transition-colors' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
@@ -171,15 +273,23 @@ export function GoalPage() {
                       <div className="flex items-center gap-1">
                         {(goal.status === 'pending' || goal.status === 'failed') && (
                           <button
-                            onClick={() => handleStartGoal(goal.id)}
+                            onClick={(e) => { e.stopPropagation(); handleStartGoal(goal.id) }}
                             className="flex items-center gap-1 rounded-lg bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold text-accent hover:bg-accent/20 transition-colors"
                           >
                             <Plus size={10} />
                             Start
                           </button>
                         )}
+                        {goal.plan && (goal.status === 'completed' || goal.status === 'failed') && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleViewGoal(goal) }}
+                            className="flex items-center gap-1 rounded-lg bg-surface-secondary/70 px-2.5 py-1.5 text-[10px] font-bold text-text-secondary hover:text-text transition-colors"
+                          >
+                            View
+                          </button>
+                        )}
                         <button
-                          onClick={() => removeGoal(goal.id)}
+                          onClick={(e) => { e.stopPropagation(); removeGoal(goal.id) }}
                           className="p-1.5 rounded-lg text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-colors"
                         >
                           <Trash2 size={12} />

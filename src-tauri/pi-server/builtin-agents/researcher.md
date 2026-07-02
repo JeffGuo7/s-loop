@@ -1,7 +1,6 @@
 ---
 name: researcher
 description: Fast codebase research agent — search, read, and analyze code. Read-only.
-model: claude-haiku-4-5
 tools:
   - read
   - grep

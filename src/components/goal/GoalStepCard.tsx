@@ -5,10 +5,11 @@ import type { GoalStep } from '../../types/goal'
 interface GoalStepCardProps {
   step: GoalStep
   isActive: boolean
+  autoExpand?: boolean
 }
 
-export function GoalStepCard({ step, isActive }: GoalStepCardProps) {
-  const [expanded, setExpanded] = useState(false)
+export function GoalStepCard({ step, isActive, autoExpand = false }: GoalStepCardProps) {
+  const [expanded, setExpanded] = useState(autoExpand && !!step.result)
 
   const statusIcon = (() => {
     switch (step.status) {

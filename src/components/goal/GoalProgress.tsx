@@ -1,4 +1,4 @@
-import { Square, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Square } from 'lucide-react'
 import type { GoalState, GoalStep } from '../../types/goal'
 
 interface GoalProgressProps {
@@ -111,24 +111,6 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
           </div>
         </div>
       </div>
-
-      {/* Final result */}
-      {goal.finalResult && !isRunning && (
-        <div className="mt-4 rounded-2xl border border-border-light/70 bg-surface-secondary/40 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            {goal.status === 'completed'
-              ? <CheckCircle2 size={14} className="text-green-500" />
-              : <AlertCircle size={14} className="text-red-500" />
-            }
-            <span className="text-[11px] font-black text-text">
-              {goal.status === 'completed' ? 'Final Result' : 'Error'}
-            </span>
-          </div>
-          <pre className="font-mono text-[10px] leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-y-auto text-text-secondary">
-            {goal.finalResult}
-          </pre>
-        </div>
-      )}
 
       {/* Progress notes */}
       {goal.progressNotes.length > 0 && (

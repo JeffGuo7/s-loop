@@ -72,9 +72,12 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
     const { abortFn: prevAbort, goals } = get()
     if (prevAbort) prevAbort()
 
-    // Set activeGoal from existing list so UI transitions immediately
+    // Set activeGoal — use existing or create a minimal placeholder so the UI doesn't flash away
     const existing = goals.find(g => g.id === id)
-    set({ activeGoal: existing || null, liveEvents: [], isRunning: true, error: null })
+    const cleanGoal: GoalState = existing
+      ? { ...existing, status: 'planning' as const, plan: null, currentStepIndex: -1, currentIteration: 0, progressNotes: [], finalResult: null }
+      : { id, goal: '', status: 'planning' as const, plan: null, currentStepIndex: -1, currentIteration: 0, maxIterations: 5, progressNotes: [], finalResult: null, createdAt: Date.now(), updatedAt: Date.now() }
+    set({ activeGoal: cleanGoal, liveEvents: [], isRunning: true, error: null })
 
     const controller = new AbortController()
     const abort = () => controller.abort()
@@ -129,7 +132,7 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
                     set((s) => ({
                       activeGoal: s.activeGoal
                         ? { ...s.activeGoal, plan: data.plan, status: 'executing' }
-                        : null,
+                        : { id: '', goal: data.plan?.reasoning || '', status: 'executing' as const, plan: data.plan, currentStepIndex: -1, currentIteration: 0, maxIterations: 5, progressNotes: [], finalResult: null, createdAt: Date.now(), updatedAt: Date.now() },
                     }))
                   } else if (data.type === 'goal_step_start') {
                     set((s) => {
@@ -150,13 +153,24 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
                       return { activeGoal: { ...s.activeGoal, plan: { ...s.activeGoal.plan, steps } } }
                     })
                   } else if (data.type === 'goal_done') {
-                    set(() => ({
-                      activeGoal: data.goalState,
-                      isRunning: false,
-                    }))
+                    if (data.goalState) {
+                      set(() => ({
+                        activeGoal: data.goalState,
+                        isRunning: false,
+                      }))
+                    } else {
+                      set((s) => ({
+                        activeGoal: s.activeGoal ? { ...s.activeGoal, status: 'completed' as const } : null,
+                        isRunning: false,
+                      }))
+                    }
                     get().fetchGoals()
                   } else if (data.type === 'goal_error') {
-                    set({ error: data.message, isRunning: false })
+                    set((s) => ({
+                      error: data.message,
+                      isRunning: false,
+                      activeGoal: s.activeGoal ? { ...s.activeGoal, status: 'failed' as const, finalResult: data.message } : null,
+                    }))
                   }
                 } else if (eventType === 'done') {
                   set({ isRunning: false, abortFn: null })

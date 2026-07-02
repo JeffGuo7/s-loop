@@ -6,9 +6,10 @@ interface GoalPlanProps {
   steps: GoalStep[]
   reasoning: string
   currentStepIndex: number
+  autoExpand?: boolean
 }
 
-export function GoalPlan({ steps, reasoning, currentStepIndex }: GoalPlanProps) {
+export function GoalPlan({ steps, reasoning, currentStepIndex, autoExpand = false }: GoalPlanProps) {
   const activeRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function GoalPlan({ steps, reasoning, currentStepIndex }: GoalPlanProps) 
               <GoalStepCard
                 step={step}
                 isActive={step.index === currentStepIndex}
+                autoExpand={autoExpand}
               />
             </div>
           ))}
