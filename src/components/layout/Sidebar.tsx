@@ -547,7 +547,7 @@ export function Sidebar({
         <div className="flex flex-col gap-6 mt-4">
           <NavItem
             icon={Clock}
-            label={t('sidebar.dailyTasks')}
+            label={t('sidebar.tasks')}
             active={currentPage === 'tasks'}
             onClick={() => onNavigate('tasks')}
             collapsed={collapsed}
