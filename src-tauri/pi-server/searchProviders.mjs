@@ -110,8 +110,25 @@ async function getBrowser() {
     _browser = await launch({
       executablePath: info.path,
       headless: true,
-      args: ['--no-sandbox', '--disable-dev-shm-usage', '--window-size=1280,768'],
+      args: [
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-extensions',
+        '--no-first-run',
+        '--disable-default-apps',
+        '--disable-infobars',
+        '--disable-background-networking',
+        '--hide-scrollbars',
+        '--mute-audio',
+        '--window-position=-32000,-32000',
+        '--window-size=1280,768',
+      ],
+      pipe: true,
       timeout: BROWSER_LAUNCH_TIMEOUT,
+      handleSIGINT: false,
+      handleSIGTERM: false,
+      handleSIGHUP: false,
     })
 
     process.once('exit', () => { try { _browser?.close() } catch {} })

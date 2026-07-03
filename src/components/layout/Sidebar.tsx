@@ -419,6 +419,7 @@ export function Sidebar({
                   onClick={(e) => handleDelete(e, session.id)}
                   role="button"
                   tabIndex={0}
+                  aria-label={`Delete "${title}"`}
                   onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.stopPropagation()

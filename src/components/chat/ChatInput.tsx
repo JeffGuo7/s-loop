@@ -216,6 +216,7 @@ export function ChatInput({
                     type="button"
                     variant="danger"
                     size="icon"
+                    aria-label="Stop generating"
                     onClick={onAbort}
                     className="w-11 h-11 rounded-xl shadow-xl shadow-red-500/30 animate-fade-in"
                   >
@@ -226,6 +227,7 @@ export function ChatInput({
                     type="submit"
                     variant="primary"
                     size="icon"
+                    aria-label="Send message"
                     isDisabled={(!input.trim() && attachments.length === 0) || disabled}
                     className={`w-11 h-11 rounded-xl shadow-xl transition-all duration-700 ${
                       input.trim() || attachments.length > 0 

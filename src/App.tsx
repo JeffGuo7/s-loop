@@ -40,7 +40,7 @@ function App() {
           const existing = await WebviewWindow.getByLabel('pet')
           if (!existing) {
             const win = new WebviewWindow('pet', {
-              url: '/pet.html',
+              url: '/pet/index.html',
               title: 'Pet',
               width: 200,
               height: 200,
@@ -181,7 +181,7 @@ function App() {
 
       if (visible) {
         const win = new WebviewWindow('pet', {
-          url: '/pet.html',
+          url: '/pet/index.html',
           title: 'Pet',
           width: 200,
           height: 200,

@@ -142,6 +142,7 @@ function TreeNode({ path, name, depth, isDir }: TreeNodeProps) {
       <div
         role="button"
         tabIndex={0}
+        aria-label={`${name}, ${isDir ? 'folder' : 'file'}`}
         draggable={true}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}

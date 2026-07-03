@@ -29,7 +29,7 @@ export default defineConfig(async () => ({
     rollupOptions: {
       input: {
         main: resolve(__dirname, "index.html"),
-        pet: resolve(__dirname, "pet.html"),
+        pet: resolve(__dirname, "pet/index.html"),
       },
     },
   },
