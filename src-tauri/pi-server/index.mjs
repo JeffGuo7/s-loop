@@ -34,6 +34,16 @@ import { runSubagent, runParallel, runChain } from './subagent/index.mjs'
 import { initGoalPersistence, loadGoals, getGoal, createGoal, updateGoal, deleteGoal, saveGoalRunOutput } from './goal-loop/persistence.mjs'
 import { runGoalLoop } from './goal-loop/index.mjs'
 
+// Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
+// On Windows Git Bash, the default codepage is GBK which causes
+// UnicodeEncodeError when piping API responses through Python.
+// Setting PYTHONUTF8=1 tells Python to ignore the terminal codepage
+// and use UTF-8 unconditionally. Node.js inherits these for child_process.
+process.env.LANG = process.env.LANG || 'en_US.UTF-8';
+process.env.LC_ALL = process.env.LC_ALL || 'en_US.UTF-8';
+process.env.PYTHONUTF8 = '1';
+process.env.PYTHONIOENCODING = 'utf-8';
+
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
 const sessionRepo = createSessionRepo(DATA_DIR)
@@ -155,6 +165,23 @@ function getTools(dir, webSearchConfig) {
       },
     })
   }
+
+  // Wrap bash tool to ensure UTF-8 encoding on all platforms.
+  // Even with PYTHONUTF8 env set, some shells (Git Bash on Windows)
+  // need an explicit locale override before each command.
+  const bashTool = tools.find((t) => t.name === 'bash')
+  if (bashTool) {
+    const orig = bashTool.execute
+    bashTool.execute = async (id, params, signal, onUpdate) => {
+      // Prepend UTF-8 locale setup — harmless on Linux/macOS, critical on Windows
+      const cmdKey = 'command' in params ? 'command' : 'cmd' in params ? 'cmd' : null
+      if (cmdKey && typeof params[cmdKey] === 'string') {
+        params = { ...params, [cmdKey]: `export LANG=en_US.UTF-8 PYTHONUTF8=1 2>/dev/null\n${params[cmdKey]}` }
+      }
+      return orig(id, params, signal, onUpdate)
+    }
+  }
+
   return tools
 }
 
