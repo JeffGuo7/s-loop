@@ -271,10 +271,10 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
 
     if source_lower == "clawhub" {
         let url = if query.is_empty() {
-            "https://clawhub.ai/api/v1/skills?limit=24&sort=downloads&nonSuspiciousOnly=true".to_string()
+            "https://clawhub.ai/api/v1/skills?limit=24&sort=stars&nonSuspiciousOnly=true".to_string()
         } else {
             format!(
-                "https://clawhub.ai/api/v1/search?q={}&limit=24&sort=downloads&nonSuspiciousOnly=true",
+                "https://clawhub.ai/api/v1/search?q={}&limit=24&sort=stars&nonSuspiciousOnly=true",
                 urlencoding::encode(&query)
             )
         };
@@ -297,7 +297,7 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
             .cloned()
             .unwrap_or_default();
 
-        let results = items
+        let mut results = items
             .into_iter()
             .filter_map(|item| {
                 let slug = item.get("slug")?.as_str()?.to_string();
@@ -371,7 +371,7 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
         .cloned()
         .unwrap_or_default();
 
-    let results = items
+    let mut results = items
         .into_iter()
         .filter_map(|item| {
             let slug = item.get("slug")?.as_str()?.to_string();
