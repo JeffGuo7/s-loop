@@ -271,10 +271,10 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
 
     if source_lower == "clawhub" {
         let url = if query.is_empty() {
-            "https://clawhub.ai/api/v1/skills?limit=24&sort=trending&nonSuspiciousOnly=true".to_string()
+            "https://clawhub.ai/api/v1/skills?limit=24&sort=downloads&nonSuspiciousOnly=true".to_string()
         } else {
             format!(
-                "https://clawhub.ai/api/v1/search?q={}&nonSuspiciousOnly=true",
+                "https://clawhub.ai/api/v1/search?q={}&limit=24&sort=downloads&nonSuspiciousOnly=true",
                 urlencoding::encode(&query)
             )
         };
@@ -331,8 +331,11 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
                     install_mode: "Package".to_string(),
                 })
             })
-            .collect();
+            .collect::<Vec<_>>();
 
+        // Sort by downloads descending (API sort=downloads should handle this,
+        // but local sort guarantees consistency regardless of API behavior)
+        results.sort_by(|a, b| b.downloads.unwrap_or(0).cmp(&a.downloads.unwrap_or(0)));
         return Ok(results);
     }
 
@@ -404,8 +407,9 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
                 install_mode: "Mirror".to_string(),
             })
         })
-        .collect();
+        .collect::<Vec<_>>();
 
+    results.sort_by(|a, b| b.downloads.unwrap_or(0).cmp(&a.downloads.unwrap_or(0)));
     Ok(results)
 }
 

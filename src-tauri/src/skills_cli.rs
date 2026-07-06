@@ -166,7 +166,7 @@ fn npx_command() -> Command {
 pub async fn skills_cli_search(query: String) -> Result<Vec<SkillsSearchResult>, String> {
     let api_base = get_skills_api_url();
     let encoded = percent_encode(&query);
-    let url = format!("{}/api/search?q={}&limit=20", api_base, encoded);
+    let url = format!("{}/api/search?q={}&limit=24", api_base, encoded);
 
     let client = reqwest::Client::builder()
         .user_agent("S-Loop/0.1.0")
