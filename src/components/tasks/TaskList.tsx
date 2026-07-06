@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '../../stores';
-import { Plus, Trash2, Play, Pause, Zap, FileText, Search, Clock, Calendar } from 'lucide-react';
+import { Plus, Trash2, Play, Pause, Zap, FileText, Search, Calendar } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { MagicButton } from '../ui';
 import type { ScheduledTask } from '../../types/task';
