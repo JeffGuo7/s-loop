@@ -595,6 +595,16 @@ const en = {
       weeklyMon: 'Weekly Mon',
       custom: 'Custom',
     },
+    scheduleOptions: {
+      every30m: 'Every 30 minutes',
+      every1h: 'Every 1 hour',
+      every2h: 'Every 2 hours',
+      every6h: 'Every 6 hours',
+      daily9am: 'Daily at 9:00 AM',
+      weekdays9am: 'Weekdays at 9:00 AM',
+      weeklyMon9am: 'Monday at 9:00 AM',
+      custom: 'Custom (cron expression)',
+    },
   },
   createTask: {
     title: 'Create Task',

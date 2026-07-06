@@ -595,6 +595,16 @@ const zh = {
       weeklyMon: '每周一',
       custom: '自定义',
     },
+    scheduleOptions: {
+      every30m: '每30分钟',
+      every1h: '每1小时',
+      every2h: '每2小时',
+      every6h: '每6小时',
+      daily9am: '每天上午9:00',
+      weekdays9am: '工作日上午9:00',
+      weeklyMon9am: '每周一上午9:00',
+      custom: '自定义（Cron 表达式）',
+    },
   },
   createTask: {
     title: '创建任务',
