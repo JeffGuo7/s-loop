@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '../../stores';
-import { Plus, Trash2, Play, Pause, Zap, FileText, Search, Calendar } from 'lucide-react';
+import { Plus, Trash2, Play, Pause, Zap, Search, Calendar, Eye } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { MagicButton } from '../ui';
+import { TaskDetailModal } from './TaskDetailModal';
 import type { ScheduledTask } from '../../types/task';
 import { PLATFORM_PRESETS } from '../../types/platform';
 
@@ -35,10 +36,8 @@ const DELIVER_SILENT = 'silent';
 
 export function TaskList({ onCreateTask }: TaskListProps) {
   const { t } = useTranslation();
-  const { tasks, toggleTask, removeTask, triggerRun, fetchOutput } = useTaskStore();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [outputCache, setOutputCache] = useState<Record<string, { timestamp: string; content: string; file?: string }[]>>({});
-  const [loadingOutputId, setLoadingOutputId] = useState<string | null>(null);
+  const { tasks, toggleTask, removeTask, triggerRun } = useTaskStore();
+  const [detailTask, setDetailTask] = useState<ScheduledTask | null>(null);
   const [query, setQuery] = useState('');
   const platformNameMap = Object.fromEntries(PLATFORM_PRESETS.map((p) => [p.id, p.name]));
 
@@ -49,19 +48,6 @@ export function TaskList({ onCreateTask }: TaskListProps) {
       t.name.toLowerCase().includes(q) || t.prompt.toLowerCase().includes(q)
     );
   }, [tasks, query]);
-
-  const toggleOutputs = async (taskId: string) => {
-    if (expandedId === taskId) { setExpandedId(null); return; }
-    setExpandedId(taskId);
-    if (outputCache[taskId]) return;
-    setLoadingOutputId(taskId);
-    try {
-      const outputs = await fetchOutput(taskId);
-      setOutputCache((prev) => ({ ...prev, [taskId]: outputs }));
-    } finally {
-      setLoadingOutputId((current) => (current === taskId ? null : current));
-    }
-  };
 
   const deliverLabel = (d: string) => {
     if (d === DELIVER_CHAT) return t('tasks.deliverChat');
@@ -143,8 +129,8 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                         {formatNextRun(task.nextRunAt, t)}
                       </span>
                       <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => toggleOutputs(task.id)} className="p-1.5 rounded-md hover:bg-accent/10 text-text-quaternary hover:text-accent" title={t('tasks.history')}>
-                          <FileText size={13} />
+                        <button onClick={() => setDetailTask(task)} className="p-1.5 rounded-md hover:bg-accent/10 text-text-quaternary hover:text-accent" title={t('tasks.history')}>
+                          <Eye size={13} />
                         </button>
                         <button onClick={() => toggleTask(task.id)}
                           className={`p-1.5 rounded-md ${task.enabled ? 'text-text-tertiary hover:text-text' : 'text-text-quaternary hover:text-accent'} hover:bg-surface-secondary`}>
@@ -158,29 +144,6 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                         </button>
                       </div>
                     </div>
-
-                    {expandedId === task.id && (
-                      <div className="border-t border-border-light px-4 py-3 bg-surface-secondary/30">
-                        {loadingOutputId === task.id ? (
-                          <p className="text-[11px] text-text-tertiary">{t('tasks.loadingHistory')}</p>
-                        ) : (outputCache[task.id]?.length ?? 0) === 0 ? (
-                          <p className="text-[11px] text-text-tertiary">{t('tasks.noHistory')}</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {outputCache[task.id].map((o) => (
-                              <div key={o.file || o.timestamp} className="rounded-lg border border-border-light bg-surface p-3">
-                                <div className="flex items-center justify-between gap-3 mb-1.5">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-accent">{o.timestamp}</span>
-                                </div>
-                                <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-text-secondary font-mono max-h-48 overflow-auto">
-                                  {o.content}
-                                </pre>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -188,6 +151,8 @@ export function TaskList({ onCreateTask }: TaskListProps) {
           </>
         )}
       </div>
+
+      {detailTask && <TaskDetailModal task={detailTask} onClose={() => setDetailTask(null)} />}
     </div>
   );
 }
