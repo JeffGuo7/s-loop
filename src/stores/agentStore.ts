@@ -12,6 +12,26 @@ function pickAvatar(): string {
   return DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)]
 }
 
+function createDefaultAgent(): Agent {
+  return {
+    id: 'agent_default',
+    name: 'S-Loop',
+    description: '通用助手，理解上下文、调度技能、编排工具。',
+    avatar: '🤖',
+    instructions: 'You are a helpful assistant. Use available tools when needed.',
+    model: '',
+    skills: [],
+    mcpTools: [],
+    mcpServers: [],
+    accessiblePaths: [],
+    permissionMode: 'ask',
+    permissionRules: {},
+    slashCommands: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+}
+
 export const useAgentStore = create<AgentStore>()(
   persist(
     (set, get) => ({
@@ -188,6 +208,18 @@ export const useAgentStore = create<AgentStore>()(
         agents: state.agents,
         activeAgentId: state.activeAgentId,
       }),
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error || !state) return
+          if (!state.agents || state.agents.length === 0) {
+            const defaultAgent = createDefaultAgent()
+            useAgentStore.setState({
+              agents: [defaultAgent],
+              activeAgentId: defaultAgent.id,
+            })
+          }
+        }
+      },
     }
   )
 )
