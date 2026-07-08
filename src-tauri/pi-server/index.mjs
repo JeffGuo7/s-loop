@@ -655,7 +655,10 @@ async function processPlatformInbound(platformId, incoming, options = {}) {
 
   recordPlatformMessage(platformId, 'received', incoming.text)
   recordPlatformInbound(incoming)
-  const sessionId = `${platformId}:${incoming.conversationId}`
+  // Session id doubles as part of a session filename, so it must be
+  // filesystem-safe. Colons (from platform:conversation:thread) are
+  // illegal in Windows filenames — replace any unsafe char with '_'.
+  const sessionId = `${platformId}:${incoming.conversationId}`.replace(/[:<>"/\\|?* -]/g, '_')
   // Best-effort typing indicator while the AI generates (adapters that
   // support it, e.g. Telegram). Never block or fail the flow on this.
   const adapter = tryGetAdapter(platformId)
