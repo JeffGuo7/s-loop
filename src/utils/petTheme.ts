@@ -1,6 +1,7 @@
 import type { PetPackage, PetTheme, PetAnimationState } from '../types/pet'
 
 const PET_PACKAGES: PetPackage[] = []
+const PET_IDS = ['cloudling', 'clawd']
 
 let loaded = false
 
@@ -8,22 +9,24 @@ export async function loadPetPackages(): Promise<PetPackage[]> {
   if (loaded && PET_PACKAGES.length > 0) return PET_PACKAGES
   loaded = true
 
-  try {
-    const themeRes = await fetch('/pets/clawd/theme.json')
-    if (themeRes.ok) {
-      const theme: PetTheme = await themeRes.json()
-      PET_PACKAGES.push({
-        id: 'clawd',
-        displayName: theme.name,
-        description: theme.description,
-        version: theme.version,
-        author: theme.author,
-        assetsPath: '/pets/clawd/assets',
-        theme,
-      })
+  for (const id of PET_IDS) {
+    try {
+      const themeRes = await fetch(`/pets/${id}/theme.json`)
+      if (themeRes.ok) {
+        const theme: PetTheme = await themeRes.json()
+        PET_PACKAGES.push({
+          id,
+          displayName: theme.name,
+          description: theme.description,
+          version: theme.version,
+          author: theme.author,
+          assetsPath: `/pets/${id}/assets`,
+          theme,
+        })
+      }
+    } catch {
+      // package not available
     }
-  } catch {
-    // clawd theme not available
   }
 
   return PET_PACKAGES
