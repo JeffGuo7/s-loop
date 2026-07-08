@@ -47,6 +47,8 @@ interface PetStore {
   onError: () => void
   onNotification: () => void
   onDrag: () => void
+  onDoubleClick: () => void
+  onRightClick: () => void
 }
 
 export const usePetStore = create<PetStore>()(
@@ -197,7 +199,9 @@ export const usePetStore = create<PetStore>()(
           const p = get().pet
           if (!p) return
           clearAll()
-          set({ pet: { ...p, state: 'thinking', mood: 'neutral', idleAnimationFile: null } })
+          // Use ultrathink for multi-session deep thinking
+          const thinkingFile = get().activeSessionCount >= 2 ? 'clawd-working-ultrathink.svg' : null
+          set({ pet: { ...p, state: 'thinking', mood: 'neutral', idleAnimationFile: thinkingFile } })
           emitPetEvent('thinking', 'neutral')
         },
         onResponded: () => {
@@ -230,12 +234,12 @@ export const usePetStore = create<PetStore>()(
           const p = get().pet
           if (!p) return
           clearAll()
-          set({ pet: { ...p, state: 'error', mood: 'sleepy', idleAnimationFile: null } })
+          set({ pet: { ...p, state: 'idle', mood: 'sleepy', idleAnimationFile: 'clawd-dizzy.svg' } })
           emitPetEvent('error', 'sleepy')
           _reactionT = setTimeout(() => {
             const p2 = get().pet
             if (p2) {
-              set({ pet: { ...p2, state: 'idle', mood: 'neutral', idleAnimationFile: null } })
+              set({ pet: { ...p2, idleAnimationFile: null } })
               emitPetEvent('idle', 'neutral')
               scheduleIdleAnimation()
               startSleepSequence()
@@ -264,6 +268,36 @@ export const usePetStore = create<PetStore>()(
           clearAll()
           set({ pet: { ...p, state: 'idle', idleAnimationFile: 'clawd-react-drag.svg' } })
           emitPetEvent('idle', 'happy')
+          _reactionT = setTimeout(() => {
+            const p2 = get().pet
+            if (p2) {
+              set({ pet: { ...p2, idleAnimationFile: null } })
+              scheduleIdleAnimation()
+              startSleepSequence()
+            }
+          }, 2500)
+        },
+        onDoubleClick: () => {
+          const p = get().pet
+          if (!p) return
+          clearAll()
+          set({ pet: { ...p, state: 'idle', idleAnimationFile: 'clawd-react-double.svg' } })
+          emitPetEvent('idle', 'excited')
+          _reactionT = setTimeout(() => {
+            const p2 = get().pet
+            if (p2) {
+              set({ pet: { ...p2, idleAnimationFile: null } })
+              scheduleIdleAnimation()
+              startSleepSequence()
+            }
+          }, 2000)
+        },
+        onRightClick: () => {
+          const p = get().pet
+          if (!p) return
+          clearAll()
+          set({ pet: { ...p, state: 'idle', idleAnimationFile: 'clawd-react-annoyed.svg' } })
+          emitPetEvent('idle', 'sleepy')
           _reactionT = setTimeout(() => {
             const p2 = get().pet
             if (p2) {

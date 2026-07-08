@@ -92,7 +92,13 @@ export function PetWindow() {
   }, [])
 
   const handleDoubleClick = useCallback(() => {
+    store.getState().onDoubleClick()
     setIsMini(m => !m)
+  }, [])
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    store.getState().onRightClick()
   }, [])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -140,7 +146,7 @@ export function PetWindow() {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onDoubleClick={handleDoubleClick}
-      onContextMenu={e => e.preventDefault()}
+      onContextMenu={handleContextMenu}
     >
       <div
         style={{

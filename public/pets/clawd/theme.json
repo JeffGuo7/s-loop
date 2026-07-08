@@ -63,8 +63,9 @@
     "waking": ["clawd-wake.svg"]
   },
   "workingTiers": [
-    { "minSessions": 5, "file": "clawd-working-wizard.svg" },
-    { "minSessions": 4, "file": "clawd-working-debugger.svg" },
+    { "minSessions": 6, "file": "clawd-working-wizard.svg" },
+    { "minSessions": 5, "file": "clawd-working-debugger.svg" },
+    { "minSessions": 4, "file": "clawd-working-typing-boss.svg" },
     { "minSessions": 3, "file": "clawd-working-building.svg" },
     { "minSessions": 2, "file": "clawd-headphones-groove.svg" },
     { "minSessions": 1, "file": "clawd-working-typing.svg" }
