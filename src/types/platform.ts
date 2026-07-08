@@ -1,4 +1,4 @@
-export type PlatformId = 'telegram' | 'email' | 'webhook' | 'feishu' | 'dingtalk' | 'wechat'
+export type PlatformId = 'telegram' | 'email' | 'webhook' | 'feishu' | 'dingtalk' | 'wechat' | 'slack' | 'discord'
 
 export interface PlatformField {
   key: string
@@ -115,5 +115,35 @@ export const PLATFORM_PRESETS: PlatformConfig[] = [
       { key: 'inboundToken', label: '回调 Token', type: 'password', placeholder: '用于校验企业微信回调', required: false },
     ],
     values: { webhookUrl: '', inboundToken: '' },
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    icon: 'MessageSquare',
+    description: 'Slack 工作区通知。使用 Incoming Webhook 或 Bot Token。',
+    enabled: false,
+    connected: false,
+    fields: [
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://hooks.slack.com/services/...', required: false },
+      { key: 'botToken', label: 'Bot Token (xoxb-...)', type: 'password', placeholder: 'xoxb-...', required: false },
+      { key: 'channelId', label: 'Channel ID', type: 'text', placeholder: 'C0123456789', required: false },
+      { key: 'signingSecret', label: 'Signing Secret', type: 'password', placeholder: '用于校验 Slack 回调', required: false },
+    ],
+    values: { webhookUrl: '', botToken: '', channelId: '', signingSecret: '' },
+  },
+  {
+    id: 'discord',
+    name: 'Discord',
+    icon: 'MessageSquare',
+    description: 'Discord 频道通知。使用 Webhook URL 或 Bot Token。',
+    enabled: false,
+    connected: false,
+    fields: [
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://discord.com/api/webhooks/...', required: false },
+      { key: 'botToken', label: 'Bot Token', type: 'password', placeholder: 'Bot Token', required: false },
+      { key: 'channelId', label: 'Channel ID', type: 'text', placeholder: 'Discord Channel ID', required: false },
+      { key: 'publicKey', label: 'Public Key', type: 'password', placeholder: '用于校验 Discord 回调', required: false },
+    ],
+    values: { webhookUrl: '', botToken: '', channelId: '', publicKey: '' },
   },
 ]

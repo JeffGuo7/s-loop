@@ -89,6 +89,36 @@ const PLATFORM_PRESETS = [
     ],
     values: { webhookUrl: '', inboundToken: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
   },
+  {
+    id: 'slack',
+    name: 'Slack',
+    icon: 'MessageSquare',
+    description: 'Slack 工作区通知。使用 Incoming Webhook 或 Bot Token。',
+    enabled: false,
+    connected: false,
+    fields: [
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://hooks.slack.com/services/...', required: false },
+      { key: 'botToken', label: 'Bot Token (xoxb-...)', type: 'password', placeholder: 'xoxb-...', required: false },
+      { key: 'channelId', label: 'Channel ID', type: 'text', placeholder: 'C0123456789', required: false },
+      { key: 'signingSecret', label: 'Signing Secret', type: 'password', placeholder: '用于校验 Slack 回调', required: false },
+    ],
+    values: { webhookUrl: '', botToken: '', channelId: '', signingSecret: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
+  },
+  {
+    id: 'discord',
+    name: 'Discord',
+    icon: 'MessageSquare',
+    description: 'Discord 频道通知。使用 Webhook URL 或 Bot Token。',
+    enabled: false,
+    connected: false,
+    fields: [
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://discord.com/api/webhooks/...', required: false },
+      { key: 'botToken', label: 'Bot Token', type: 'password', placeholder: 'Bot Token', required: false },
+      { key: 'channelId', label: 'Channel ID', type: 'text', placeholder: 'Discord Channel ID', required: false },
+      { key: 'publicKey', label: 'Public Key', type: 'password', placeholder: '用于校验 Discord 回调', required: false },
+    ],
+    values: { webhookUrl: '', botToken: '', channelId: '', publicKey: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
+  },
 ]
 
 const MESSAGE_LIMIT = 100

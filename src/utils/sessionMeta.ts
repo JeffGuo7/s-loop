@@ -8,6 +8,8 @@ const PLATFORM_LABELS: Record<PlatformId, string> = {
   feishu: '飞书',
   dingtalk: '钉钉',
   wechat: '企业微信',
+  slack: 'Slack',
+  discord: 'Discord',
 }
 
 export function parseSessionModel(model?: string | null): {
