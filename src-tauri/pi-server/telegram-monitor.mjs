@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { getProxyDispatcher } from './platforms/base.mjs'
 
 let _stateFile = ''
 let _running = false
@@ -44,7 +45,7 @@ function _extractIncomingMessage(update) {
   }
 }
 
-async function _fetchUpdates(token, offset) {
+async function _fetchUpdates(token, offset, proxyUrl) {
   const url = new URL(`https://api.telegram.org/bot${token}/getUpdates`)
   url.searchParams.set('timeout', '20')
   url.searchParams.set('allowed_updates', JSON.stringify(['message', 'edited_message']))
@@ -52,7 +53,8 @@ async function _fetchUpdates(token, offset) {
     url.searchParams.set('offset', String(offset))
   }
 
-  const res = await fetch(url)
+  const dispatcher = getProxyDispatcher(proxyUrl)
+  const res = await fetch(url, dispatcher ? { dispatcher } : {})
   const data = await res.json()
   if (!res.ok || !data.ok) {
     throw new Error(data?.description || 'Telegram getUpdates 失败')
@@ -69,7 +71,7 @@ export function initTelegramMonitor(baseDir) {
   }
 }
 
-export async function startTelegramMonitor({ getToken, onMessage, onError }) {
+export async function startTelegramMonitor({ getToken, getProxy, onMessage, onError }) {
   if (_running) return
   _running = true
   _loopPromise = (async () => {
@@ -81,9 +83,10 @@ export async function startTelegramMonitor({ getToken, onMessage, onError }) {
           await _sleep(5000)
           continue
         }
+        const proxyUrl = getProxy ? await getProxy() : ''
 
         const current = _readState()
-        const updates = await _fetchUpdates(token, (current.lastUpdateId || 0) + 1)
+        const updates = await _fetchUpdates(token, (current.lastUpdateId || 0) + 1, proxyUrl)
         if (updates.length === 0) {
           backoffMs = 3000
           continue

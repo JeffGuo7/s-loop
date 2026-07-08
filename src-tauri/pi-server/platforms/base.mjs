@@ -26,6 +26,7 @@
  * `platform` is the stored config object: { id, name, values: {...}, fields, ... }
  */
 import { timingSafeEqual } from 'node:crypto'
+import { ProxyAgent } from 'undici'
 
 /** Constant-time string comparison to avoid timing attacks on token checks. */
 export function constantTimeEqual(left, right) {
@@ -35,12 +36,36 @@ export function constantTimeEqual(left, right) {
   return timingSafeEqual(a, b)
 }
 
+// Memoized proxy agents keyed by URL so we don't rebuild one per request.
+const _proxyAgents = new Map()
+
+/**
+ * Return an undici ProxyAgent dispatcher for the given proxy URL, or
+ * undefined if no proxy is configured. Pass the result as fetch's
+ * `dispatcher` option to route a request through the proxy. Useful for
+ * platforms (e.g. Telegram) that are unreachable without a proxy in some
+ * regions.
+ */
+export function getProxyDispatcher(proxyUrl) {
+  const url = String(proxyUrl || '').trim()
+  if (!url) return undefined
+  if (!_proxyAgents.has(url)) {
+    try {
+      _proxyAgents.set(url, new ProxyAgent(url))
+    } catch {
+      _proxyAgents.set(url, undefined)
+    }
+  }
+  return _proxyAgents.get(url)
+}
+
 /** POST JSON and parse the response, throwing a useful error on non-2xx. */
-export async function postJson(url, body, headers = {}) {
+export async function postJson(url, body, headers = {}, dispatcher) {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
+    ...(dispatcher ? { dispatcher } : {}),
   })
   const text = await res.text()
   let data = null

@@ -695,6 +695,7 @@ async function ensureTelegramMonitorState() {
 
   await startTelegramMonitor({
     getToken: async () => getPlatformConfig('telegram').values.botToken?.trim() || '',
+    getProxy: async () => getPlatformConfig('telegram').values.proxyUrl?.trim() || '',
     onMessage: async (incoming) => {
       await processPlatformInbound('telegram', { ...incoming, platformId: 'telegram' }, {
         sendOptions: {

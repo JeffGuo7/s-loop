@@ -15,8 +15,9 @@ const PLATFORM_PRESETS = [
     fields: [
       { key: 'botToken', label: 'Bot Token', type: 'password', placeholder: '123456:ABC-DEF1234...', required: true },
       { key: 'chatId', label: 'Chat ID', type: 'text', placeholder: '-1001234567890', required: true },
+      { key: 'proxyUrl', label: '代理 URL（可选）', type: 'text', placeholder: 'http://127.0.0.1:7890', required: false },
     ],
-    values: { botToken: '', chatId: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
+    values: { botToken: '', chatId: '', proxyUrl: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
   },
   {
     id: 'email',
