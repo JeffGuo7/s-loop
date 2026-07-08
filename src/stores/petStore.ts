@@ -87,7 +87,7 @@ export const usePetStore = create<PetStore>()(
         set({ packages: pkgs, packagesLoaded: true })
       },
 
-      hatch: (name, personality = 'Friendly', packageId = 'cloudling') => {
+      hatch: (name, personality = 'Friendly', packageId = 'clawd') => {
         const now = Date.now()
         const p: Pet = {
           id: uid(),

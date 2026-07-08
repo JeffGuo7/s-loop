@@ -1,7 +1,7 @@
 import type { PetPackage, PetTheme, PetAnimationState } from '../types/pet'
 
 const PET_PACKAGES: PetPackage[] = []
-const PET_IDS = ['cloudling', 'clawd']
+const PET_IDS = ['clawd']
 
 let loaded = false
 

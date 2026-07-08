@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { usePetStore } from '../../stores'
 import { getSvgPath } from '../../utils/petTheme'
-import { Sparkles, PawPrint, Trash2, Monitor, MonitorOff, Info, Activity, Cloud } from 'lucide-react'
+import { Sparkles, PawPrint, Trash2, Monitor, MonitorOff, Info, Activity } from 'lucide-react'
 
 const STATE_LABELS: Record<string, string> = {
   idle: 'Idle', yawning: 'Yawning', dozing: 'Dozing',
@@ -28,7 +28,6 @@ export function PetPage({ onToggleWindow }: PetPageProps) {
 
   const [showHatch, setShowHatch] = useState(false)
   const [hatchName, setHatchName] = useState('')
-  const [hatchPackageId, setHatchPackageId] = useState('cloudling')
   const [svgFailed, setSvgFailed] = useState(false)
 
   useEffect(() => { loadPackages() }, [loadPackages])
@@ -69,45 +68,23 @@ export function PetPage({ onToggleWindow }: PetPageProps) {
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-3xl font-bold text-text tracking-tight">
-              Hatch {packages.find(p => p.id === hatchPackageId)?.displayName || 'Pet'}
-            </h2>
+            <h2 className="text-3xl font-bold text-text tracking-tight">Hatch Clawd</h2>
             <p className="text-[14px] text-text-tertiary">Your desktop companion awaits.</p>
           </div>
 
           <div className="space-y-4">
-            {/* Package selector */}
-            {packages.length > 1 && (
-              <div className="flex items-center justify-center gap-3">
-                {packages.map(pkg => (
-                  <button
-                    key={pkg.id}
-                    onClick={() => setHatchPackageId(pkg.id)}
-                    className={`px-5 py-2.5 rounded-xl text-[12px] font-bold tracking-tight transition-all border ${
-                      hatchPackageId === pkg.id
-                        ? 'bg-accent/15 text-accent border-accent/30'
-                        : 'bg-surface-secondary/40 text-text-tertiary border-border-light hover:border-accent/20'
-                    }`}
-                  >
-                    <Cloud size={14} className="inline mr-1.5" />
-                    {pkg.displayName}
-                  </button>
-                ))}
-              </div>
-            )}
-
             <input
               type="text"
               value={hatchName}
               onChange={e => setHatchName(e.target.value)}
               placeholder="Name your pet..."
-              onKeyDown={e => e.key === 'Enter' && hatchName.trim() && hatch(hatchName.trim(), 'Friendly', hatchPackageId)}
+              onKeyDown={e => e.key === 'Enter' && hatchName.trim() && hatch(hatchName.trim())}
               className="w-full px-6 py-4 rounded-2xl bg-surface-secondary/40 border border-border-light focus:border-accent/40 outline-none text-[15px] font-bold text-center tracking-tight transition-all"
               autoFocus
             />
 
             <button
-              onClick={() => hatch(hatchName.trim() || packages.find(p => p.id === hatchPackageId)?.displayName || 'Pet', 'Friendly', hatchPackageId)}
+              onClick={() => hatch(hatchName.trim() || 'Clawd')}
               className="w-full px-8 py-4 rounded-2xl bg-accent text-accent-foreground font-bold text-[15px] shadow-lg shadow-accent/20 hover:shadow-accent/40 transition-all"
             >
               <span className="flex items-center justify-center gap-2">
