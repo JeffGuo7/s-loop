@@ -7,6 +7,8 @@ import { postJson, assertUrl, constantTimeEqual } from './base.mjs'
 export default {
   id: 'wechat',
   inboundMode: 'webhook',
+  // WeChat Work text cap is 2048 UTF-8 bytes; ~600 chars is safe for CJK.
+  maxLength: 600,
 
   async validateConnection(platform) {
     assertUrl(platform.values.webhookUrl?.trim(), '企业微信 Webhook URL')

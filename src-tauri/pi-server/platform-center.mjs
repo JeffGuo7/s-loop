@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAdapter } from './platforms/registry.mjs'
+import { prepareMessage } from './platforms/format.mjs'
 
 const PLATFORM_PRESETS = [
   {
@@ -196,7 +197,13 @@ async function _dispatchMessage(platform, text, options = {}) {
   if (!text?.trim()) {
     throw new Error('消息内容不能为空')
   }
-  await getAdapter(platform.id).dispatch(platform, text, options)
+  const adapter = getAdapter(platform.id)
+  // Format (markdown → platform-appropriate) and split under the size cap.
+  const chunks = prepareMessage(adapter, text)
+  for (const chunk of chunks) {
+    if (!chunk.trim()) continue
+    await adapter.dispatch(platform, chunk, options)
+  }
 }
 
 export function initPlatformCenter(baseDir) {

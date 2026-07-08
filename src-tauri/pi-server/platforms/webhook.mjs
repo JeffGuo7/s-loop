@@ -8,6 +8,9 @@ import { postJson, assertUrl } from './base.mjs'
 export default {
   id: 'webhook',
   inboundMode: 'none',
+  // Webhook payloads are machine-consumed — preserve the raw markdown
+  // rather than flattening it to plain text.
+  formatMessage: (text) => text,
 
   async validateConnection(platform) {
     assertUrl(platform.values.url?.trim(), 'Webhook URL')

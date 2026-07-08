@@ -656,6 +656,12 @@ async function processPlatformInbound(platformId, incoming, options = {}) {
   recordPlatformMessage(platformId, 'received', incoming.text)
   recordPlatformInbound(incoming)
   const sessionId = `${platformId}:${incoming.conversationId}`
+  // Best-effort typing indicator while the AI generates (adapters that
+  // support it, e.g. Telegram). Never block or fail the flow on this.
+  const adapter = tryGetAdapter(platformId)
+  if (adapter?.sendTyping) {
+    adapter.sendTyping(platform, options.sendOptions || {}).catch(() => {})
+  }
   try {
     const reply = await promptPlatformConversation(sessionId, incoming.text)
     if (!reply.trim()) return { ok: true, replied: false }

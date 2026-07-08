@@ -7,6 +7,7 @@ import { postJson } from './base.mjs'
 export default {
   id: 'telegram',
   inboundMode: 'polling',
+  maxLength: 4096,
 
   async validateConnection(platform) {
     const token = platform.values.botToken.trim()
@@ -24,5 +25,15 @@ export default {
     if (options.threadId) payload.message_thread_id = options.threadId
     if (options.replyToMessageId) payload.reply_to_message_id = options.replyToMessageId
     await postJson(`https://api.telegram.org/bot${token}/sendMessage`, payload)
+  },
+
+  // Best-effort "typing…" indicator while the AI generates a reply.
+  async sendTyping(platform, options = {}) {
+    const token = platform.values.botToken.trim()
+    const chatId = String(options.chatId || platform.values.chatId || '').trim()
+    if (!chatId) return
+    const payload = { chat_id: chatId, action: 'typing' }
+    if (options.threadId) payload.message_thread_id = options.threadId
+    await postJson(`https://api.telegram.org/bot${token}/sendChatAction`, payload)
   },
 }

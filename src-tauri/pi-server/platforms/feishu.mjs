@@ -8,6 +8,7 @@ import { postJson, assertUrl, constantTimeEqual } from './base.mjs'
 export default {
   id: 'feishu',
   inboundMode: 'webhook',
+  maxLength: 8000,
 
   async validateConnection(platform) {
     assertUrl(platform.values.webhookUrl?.trim(), '飞书 Webhook URL')

@@ -18,6 +18,7 @@ function buildSignedUrl(rawUrl, secret) {
 export default {
   id: 'dingtalk',
   inboundMode: 'webhook',
+  maxLength: 18000,
 
   async validateConnection(platform) {
     assertUrl(platform.values.webhookUrl?.trim(), '钉钉 Webhook URL')
