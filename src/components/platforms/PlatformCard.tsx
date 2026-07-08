@@ -16,7 +16,7 @@ export function PlatformCard({ platform }: PlatformCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [testMsg, setTestMsg] = useState('')
   const connecting = isConnecting[platform.id] || false
-  const isInbound = ['telegram', 'feishu', 'dingtalk', 'wechat', 'slack', 'discord'].includes(platform.id)
+  const isInbound = ['telegram', 'feishu', 'dingtalk', 'wechat', 'slack', 'discord', 'qqbot'].includes(platform.id)
   const allowAll = platform.values.allowAll === 'true'
   const inboundUrl = ['feishu', 'dingtalk', 'wechat', 'slack', 'discord'].includes(platform.id)
     ? `${getBaseUrl()}/platforms/inbound/${platform.id}`

@@ -11,9 +11,10 @@ import dingtalk from './dingtalk.mjs'
 import wechat from './wechat.mjs'
 import slack from './slack.mjs'
 import discord from './discord.mjs'
+import qqbot from './qqbot.mjs'
 
 const ADAPTERS = new Map(
-  [telegram, email, webhook, feishu, dingtalk, wechat, slack, discord].map((a) => [a.id, a]),
+  [telegram, email, webhook, feishu, dingtalk, wechat, slack, discord, qqbot].map((a) => [a.id, a]),
 )
 
 /** Get an adapter by platform id, or throw if unknown. */

@@ -10,6 +10,7 @@ const PLATFORM_LABELS: Record<PlatformId, string> = {
   wechat: '企业微信',
   slack: 'Slack',
   discord: 'Discord',
+  qqbot: 'QQ Bot',
 }
 
 export function parseSessionModel(model?: string | null): {

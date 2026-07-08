@@ -119,6 +119,21 @@ const PLATFORM_PRESETS = [
     ],
     values: { webhookUrl: '', botToken: '', channelId: '', publicKey: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
   },
+  {
+    id: 'qqbot',
+    name: 'QQ Bot',
+    icon: 'MessageSquare',
+    description: 'QQ 开放平台机器人。需要 App ID 和 Client Secret。支持群聊和私聊。',
+    enabled: false,
+    connected: false,
+    fields: [
+      { key: 'appId', label: 'App ID', type: 'text', placeholder: 'QQ 开放平台应用 ID', required: true },
+      { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: 'QQ 开放平台密钥', required: true },
+      { key: 'chatScope', label: '会话类型', type: 'text', placeholder: 'group 或 c2c', required: false },
+      { key: 'groupId', label: '群号 / 用户 OpenID', type: 'text', placeholder: '目标群号或用户 OpenID', required: false },
+    ],
+    values: { appId: '', clientSecret: '', chatScope: 'group', groupId: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
+  },
 ]
 
 const MESSAGE_LIMIT = 100
