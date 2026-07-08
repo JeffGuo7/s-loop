@@ -130,7 +130,7 @@ export interface PetTheme {
 
 export type PetAnimationState =
   | 'idle' | 'yawning' | 'dozing' | 'collapsing'
-  | 'thinking' | 'working' | 'juggling'
+  | 'thinking' | 'working' | 'juggling' | 'building'
   | 'attention' | 'notification' | 'error'
   | 'sweeping' | 'carrying' | 'sleeping' | 'waking'
   | 'mini-idle' | 'mini-alert' | 'mini-happy'

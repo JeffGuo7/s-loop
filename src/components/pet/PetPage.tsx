@@ -6,11 +6,10 @@ import { Sparkles, PawPrint, Trash2, Monitor, MonitorOff, Info, Activity } from 
 const STATE_LABELS: Record<string, string> = {
   idle: 'Idle', 'idle-look': 'Looking', 'idle-bubble': 'Bubbling', 'idle-reading': 'Reading',
   yawning: 'Yawning', dozing: 'Dozing', collapsing: 'Sleepy',
-  thinking: 'Thinking', working: 'Working', juggling: 'Juggling',
+  thinking: 'Thinking', working: 'Working', juggling: 'Juggling', building: 'Building',
   attention: 'Attentive', notification: 'Notified',
   error: 'Error', sweeping: 'Sweeping', carrying: 'Carrying',
   sleeping: 'Sleeping', waking: 'Waking',
-  building: 'Building',
 }
 
 const MOOD_EMOJI: Record<string, string> = {

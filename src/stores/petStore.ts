@@ -46,6 +46,7 @@ interface PetStore {
   onWorking: () => void
   onError: () => void
   onNotification: () => void
+  onDrag: () => void
 }
 
 export const usePetStore = create<PetStore>()(
@@ -215,8 +216,13 @@ export const usePetStore = create<PetStore>()(
           set({ activeSessionCount: count })
           const pkg = get().packages.find(pk => pk.id === p.packageId)
           const tierSvg = pkg ? getWorkingTierSvg(pkg.theme, count) : null
-          const workState: PetAnimationState = tierSvg === 'clawd-working-juggling.svg' || tierSvg === 'clawd-headphones-groove.svg'
-            ? 'juggling' : 'working'
+          let workState: PetAnimationState = 'working'
+          if (tierSvg) {
+            if (tierSvg.includes('juggling') || tierSvg.includes('headphones')) workState = 'juggling'
+            else if (tierSvg.includes('building')) workState = 'building'
+            else if (tierSvg.includes('debugger')) workState = 'building'
+            else if (tierSvg.includes('wizard')) workState = 'building'
+          }
           set({ pet: { ...p, state: workState, mood: 'neutral', idleAnimationFile: null } })
           emitPetEvent(workState, 'neutral')
         },
@@ -251,6 +257,21 @@ export const usePetStore = create<PetStore>()(
               startSleepSequence()
             }
           }, REACTION_MS)
+        },
+        onDrag: () => {
+          const p = get().pet
+          if (!p) return
+          clearAll()
+          set({ pet: { ...p, state: 'idle', idleAnimationFile: 'clawd-react-drag.svg' } })
+          emitPetEvent('idle', 'happy')
+          _reactionT = setTimeout(() => {
+            const p2 = get().pet
+            if (p2) {
+              set({ pet: { ...p2, idleAnimationFile: null } })
+              scheduleIdleAnimation()
+              startSleepSequence()
+            }
+          }, 2500)
         },
       }
     },

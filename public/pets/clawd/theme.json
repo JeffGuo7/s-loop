@@ -63,6 +63,8 @@
     "waking": ["clawd-wake.svg"]
   },
   "workingTiers": [
+    { "minSessions": 5, "file": "clawd-working-wizard.svg" },
+    { "minSessions": 4, "file": "clawd-working-debugger.svg" },
     { "minSessions": 3, "file": "clawd-working-building.svg" },
     { "minSessions": 2, "file": "clawd-headphones-groove.svg" },
     { "minSessions": 1, "file": "clawd-working-typing.svg" }
@@ -74,7 +76,9 @@
   "idleAnimations": [
     { "file": "clawd-idle-look.svg", "duration": 6500 },
     { "file": "clawd-idle-bubble.svg", "duration": 13500 },
-    { "file": "clawd-idle-reading.svg", "duration": 14000 }
+    { "file": "clawd-idle-reading.svg", "duration": 14000 },
+    { "file": "clawd-idle-living.svg", "duration": 8000 },
+    { "file": "clawd-idle-low-battery.svg", "duration": 9000 }
   ],
   "displayHintMap": {
     "clawd-working-building.svg": "clawd-working-building.svg",

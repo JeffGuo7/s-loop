@@ -98,3 +98,31 @@ export function getWorkingTierSvg(theme: PetTheme, activeSessions: number): stri
   }
   return getThemeSvg(theme, 'working')
 }
+
+// ─── Mini mode ────────────────────────────────────────────
+
+export function getMiniSvg(theme: PetTheme, fullState: PetAnimationState): string | null {
+  if (!theme.miniMode?.supported) return null
+  // Map full-size states to mini states
+  const miniStateMap: Record<string, string> = {
+    idle: 'mini-idle',
+    attention: 'mini-alert',
+    thinking: 'mini-working',
+    working: 'mini-working',
+    juggling: 'mini-working',
+    building: 'mini-working',
+    notification: 'mini-alert',
+    sleeping: 'mini-sleep',
+    error: 'mini-alert',
+  }
+  const miniState = miniStateMap[fullState] || 'mini-idle'
+  const files = theme.miniMode.states[miniState]
+  if (files && files.length > 0) return files[0]
+  return null
+}
+
+export function getMiniSvgPath(pkg: PetPackage, fullState: PetAnimationState): string | null {
+  const file = getMiniSvg(pkg.theme, fullState)
+  if (!file) return null
+  return `${pkg.assetsPath}/${file}`
+}
