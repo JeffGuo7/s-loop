@@ -15,7 +15,7 @@ const PLATFORM_PRESETS = [
       { key: 'botToken', label: 'Bot Token', type: 'password', placeholder: '123456:ABC-DEF1234...', required: true },
       { key: 'chatId', label: 'Chat ID', type: 'text', placeholder: '-1001234567890', required: true },
     ],
-    values: { botToken: '', chatId: '' },
+    values: { botToken: '', chatId: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
   },
   {
     id: 'email',
@@ -58,7 +58,7 @@ const PLATFORM_PRESETS = [
       { key: 'verificationToken', label: '事件 Token', type: 'password', placeholder: '用于校验飞书回调 token', required: false },
       { key: 'encryptKey', label: 'Encrypt Key', type: 'password', placeholder: '用于校验 x-lark-signature', required: false },
     ],
-    values: { webhookUrl: '', verificationToken: '', encryptKey: '' },
+    values: { webhookUrl: '', verificationToken: '', encryptKey: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
   },
   {
     id: 'dingtalk',
@@ -72,7 +72,7 @@ const PLATFORM_PRESETS = [
       { key: 'secret', label: '加签密钥', type: 'password', placeholder: 'SEC...', required: false },
       { key: 'inboundToken', label: '回调 Token', type: 'password', placeholder: '用于校验钉钉回调', required: false },
     ],
-    values: { webhookUrl: '', secret: '', inboundToken: '' },
+    values: { webhookUrl: '', secret: '', inboundToken: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
   },
   {
     id: 'wechat',
@@ -85,7 +85,7 @@ const PLATFORM_PRESETS = [
       { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...', required: true },
       { key: 'inboundToken', label: '回调 Token', type: 'password', placeholder: '用于校验企业微信回调', required: false },
     ],
-    values: { webhookUrl: '', inboundToken: '' },
+    values: { webhookUrl: '', inboundToken: '', allowAll: 'false', allowedUsers: '', rateLimit: '10' },
   },
 ]
 

@@ -16,6 +16,8 @@ export function PlatformCard({ platform }: PlatformCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [testMsg, setTestMsg] = useState('')
   const connecting = isConnecting[platform.id] || false
+  const isInbound = ['telegram', 'feishu', 'dingtalk', 'wechat'].includes(platform.id)
+  const allowAll = platform.values.allowAll === 'true'
   const inboundUrl = ['feishu', 'dingtalk', 'wechat'].includes(platform.id)
     ? `${getBaseUrl()}/platforms/inbound/${platform.id}`
     : ''
@@ -116,6 +118,73 @@ export function PlatformCard({ platform }: PlatformCardProps) {
               </div>
             ))}
           </div>
+
+          {/* Access Control — inbound platforms only */}
+          {isInbound && (
+            <div className="rounded-xl border border-border-light bg-surface-secondary/40 px-4 py-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-text-secondary">
+                    {t('platforms.access.title')}
+                  </p>
+                  <p className="text-[11px] text-text-quaternary mt-0.5">
+                    {t('platforms.access.desc')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Allow all toggle */}
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-[12px] font-medium text-text-secondary">
+                  {t('platforms.access.allowAll')}
+                </span>
+                <button
+                  onClick={() => handleFieldChange('allowAll', allowAll ? 'false' : 'true')}
+                  className={`relative w-10 h-5.5 rounded-full transition-colors ${allowAll ? 'bg-accent' : 'bg-surface-tertiary'}`}
+                  style={{ width: 40, height: 22 }}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${allowAll ? 'translate-x-[18px]' : ''}`}
+                  />
+                </button>
+              </label>
+
+              {/* Whitelist */}
+              {!allowAll && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-text-tertiary">
+                    {t('platforms.access.whitelist')}
+                  </label>
+                  <textarea
+                    value={platform.values.allowedUsers || ''}
+                    onChange={(e) => handleFieldChange('allowedUsers', e.target.value)}
+                    placeholder={t('platforms.access.whitelistPlaceholder')}
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-lg bg-surface border border-border-light focus:border-accent/40 outline-none text-[12px] font-mono resize-none transition-colors"
+                  />
+                  <p className="text-[10px] text-text-quaternary">{t('platforms.access.whitelistHint')}</p>
+                </div>
+              )}
+
+              {/* Rate limit */}
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-medium text-text-secondary">
+                  {t('platforms.access.rateLimit')}
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={platform.values.rateLimit || '10'}
+                    onChange={(e) => handleFieldChange('rateLimit', e.target.value)}
+                    className="w-16 px-2.5 py-1.5 rounded-lg bg-surface border border-border-light focus:border-accent/40 outline-none text-[13px] font-semibold text-center"
+                  />
+                  <span className="text-[11px] text-text-quaternary">{t('platforms.access.perMinute')}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {inboundUrl && (
             <div className="rounded-xl border border-border-light bg-surface-secondary/40 px-4 py-3">

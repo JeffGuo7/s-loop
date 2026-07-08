@@ -259,6 +259,16 @@ const zh = {
       ready: '已就绪，可发送测试消息',
     },
     testPlaceholder: '发送测试消息...',
+    access: {
+      title: '访问控制',
+      desc: '控制谁能在该平台触发 AI 回复。',
+      allowAll: '允许所有人',
+      whitelist: '白名单',
+      whitelistPlaceholder: 'user123、@用户名、chat_id...',
+      whitelistHint: '只有这些用户/群能触发回复。每行一个或用逗号分隔。留空 = 无人（除非开启"允许所有人"）。',
+      rateLimit: '限流',
+      perMinute: '条/分钟',
+    },
     log: {
       title: '消息日志',
       empty: '暂无消息',

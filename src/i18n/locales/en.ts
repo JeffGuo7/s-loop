@@ -259,6 +259,16 @@ const en = {
       ready: 'Ready — send a test message',
     },
     testPlaceholder: 'Send a test message...',
+    access: {
+      title: 'Access Control',
+      desc: 'Control who can trigger the AI on this platform.',
+      allowAll: 'Allow everyone',
+      whitelist: 'Whitelist',
+      whitelistPlaceholder: 'user123, @username, chat_id...',
+      whitelistHint: 'Only these users/chats can trigger replies. One per line or comma-separated. Empty = nobody (until you allow everyone).',
+      rateLimit: 'Rate limit',
+      perMinute: '/ min',
+    },
     log: {
       title: 'Message Log',
       empty: 'No messages yet',

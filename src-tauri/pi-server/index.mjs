@@ -34,6 +34,7 @@ import { runSubagent, runParallel, runChain } from './subagent/index.mjs'
 import { initGoalPersistence, loadGoals, getGoal, createGoal, updateGoal, deleteGoal, saveGoalRunOutput } from './goal-loop/persistence.mjs'
 import { runGoalLoop } from './goal-loop/index.mjs'
 import { tryGetAdapter } from './platforms/registry.mjs'
+import { authorizeInbound } from './platforms/access-control.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -640,6 +641,18 @@ async function promptPlatformConversation(sessionId, content) {
 }
 
 async function processPlatformInbound(platformId, incoming, options = {}) {
+  // Access control + rate limiting before doing any work or invoking the AI.
+  const platform = getPlatformConfig(platformId)
+  const auth = authorizeInbound(platform, incoming)
+  if (!auth.ok) {
+    const who = incoming.username || incoming.fromId || incoming.chatId || 'unknown'
+    console.log(`[pi-server] ${platformId} inbound blocked (${auth.reason}) from ${who}`)
+    // Surface blocked attempts in the message log so the owner can see them
+    // and configure the whitelist — but do NOT reply to the sender.
+    recordPlatformMessage(platformId, 'received', `[已拦截 ${auth.reason}] ${who}: ${incoming.text}`)
+    return { ok: false, blocked: true, reason: auth.reason }
+  }
+
   recordPlatformMessage(platformId, 'received', incoming.text)
   recordPlatformInbound(incoming)
   const sessionId = `${platformId}:${incoming.conversationId}`
