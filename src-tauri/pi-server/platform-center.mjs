@@ -1,7 +1,7 @@
-import { createHmac, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import nodemailer from 'nodemailer'
+import { getAdapter } from './platforms/registry.mjs'
 
 const PLATFORM_PRESETS = [
   {
@@ -175,14 +175,6 @@ function _assertRequired(platform) {
   }
 }
 
-function _assertUrl(value, label) {
-  try {
-    return new URL(value)
-  } catch {
-    throw new Error(`${label} 格式无效`)
-  }
-}
-
 function _appendMessage(platformId, direction, text) {
   const messages = _loadMessages()
   messages.push({
@@ -195,187 +187,16 @@ function _appendMessage(platformId, direction, text) {
   _saveMessages(messages)
 }
 
-async function _postJson(url, body, headers = {}) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    body: JSON.stringify(body),
-  })
-  const text = await res.text()
-  let data = null
-  try {
-    data = text ? JSON.parse(text) : null
-  } catch {
-    data = text
-  }
-  if (!res.ok) {
-    throw new Error(
-      typeof data === 'string'
-        ? data
-        : data?.description || data?.errmsg || data?.msg || `HTTP ${res.status}`,
-    )
-  }
-  return data
-}
-
-async function _connectTelegram(platform) {
-  const token = platform.values.botToken.trim()
-  const result = await fetch(`https://api.telegram.org/bot${token}/getMe`)
-  const data = await result.json()
-  if (!result.ok || !data.ok) {
-    throw new Error(data?.description || 'Telegram Bot Token 校验失败')
-  }
-}
-
-async function _sendTelegram(platform, text, options = {}) {
-  const token = platform.values.botToken.trim()
-  const chatId = String(options.chatId || platform.values.chatId || '').trim()
-  const payload = {
-    chat_id: chatId,
-    text,
-  }
-  if (options.threadId) {
-    payload.message_thread_id = options.threadId
-  }
-  if (options.replyToMessageId) {
-    payload.reply_to_message_id = options.replyToMessageId
-  }
-  await _postJson(`https://api.telegram.org/bot${token}/sendMessage`, payload)
-}
-
-async function _connectEmail(platform) {
-  const transporter = nodemailer.createTransport({
-    host: platform.values.smtpHost.trim(),
-    port: Number(platform.values.smtpPort || 465),
-    secure: Number(platform.values.smtpPort || 465) === 465,
-    auth: {
-      user: platform.values.username.trim(),
-      pass: platform.values.password,
-    },
-  })
-  await transporter.verify()
-}
-
-async function _sendEmail(platform, text) {
-  const transporter = nodemailer.createTransport({
-    host: platform.values.smtpHost.trim(),
-    port: Number(platform.values.smtpPort || 465),
-    secure: Number(platform.values.smtpPort || 465) === 465,
-    auth: {
-      user: platform.values.username.trim(),
-      pass: platform.values.password,
-    },
-  })
-  await transporter.sendMail({
-    from: platform.values.username.trim(),
-    to: platform.values.to.trim(),
-    subject: 'S-Loop Notification',
-    text,
-  })
-}
-
-function _buildDingTalkSignedUrl(rawUrl, secret) {
-  if (!secret) return rawUrl
-  const timestamp = Date.now().toString()
-  const sign = createHmac('sha256', secret).update(`${timestamp}\n${secret}`).digest('base64')
-  const url = new URL(rawUrl)
-  url.searchParams.set('timestamp', timestamp)
-  url.searchParams.set('sign', sign)
-  return url.toString()
-}
-
-async function _sendWebhook(platform, text) {
-  const body = {
-    text,
-    source: 's-loop',
-    platformId: platform.id,
-    timestamp: new Date().toISOString(),
-  }
-  const headers = {}
-  const secret = platform.values.secret?.trim()
-  if (secret) {
-    headers['X-S-Loop-Signature'] = createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex')
-  }
-  await _postJson(platform.values.url.trim(), body, headers)
-}
-
-async function _sendFeishu(platform, text) {
-  await _postJson(platform.values.webhookUrl.trim(), {
-    msg_type: 'text',
-    content: { text },
-  })
-}
-
-async function _sendDingTalk(platform, text) {
-  const url = _buildDingTalkSignedUrl(platform.values.webhookUrl.trim(), platform.values.secret?.trim())
-  await _postJson(url, {
-    msgtype: 'text',
-    text: { content: text },
-  })
-}
-
-async function _sendWechat(platform, text) {
-  await _postJson(platform.values.webhookUrl.trim(), {
-    msgtype: 'text',
-    text: { content: text },
-  })
-}
-
-function _validateWebhookLike(platform, key, label) {
-  _assertUrl(platform.values[key]?.trim(), label)
-}
-
 async function _validateConnection(platform) {
   _assertRequired(platform)
-  switch (platform.id) {
-    case 'telegram':
-      await _connectTelegram(platform)
-      return
-    case 'email':
-      await _connectEmail(platform)
-      return
-    case 'webhook':
-      _validateWebhookLike(platform, 'url', 'Webhook URL')
-      return
-    case 'feishu':
-    case 'dingtalk':
-    case 'wechat':
-      _validateWebhookLike(platform, 'webhookUrl', `${platform.name} Webhook URL`)
-      return
-    default:
-      throw new Error(`Unsupported platform: ${platform.id}`)
-  }
+  await getAdapter(platform.id).validateConnection(platform)
 }
 
 async function _dispatchMessage(platform, text, options = {}) {
   if (!text?.trim()) {
     throw new Error('消息内容不能为空')
   }
-  switch (platform.id) {
-    case 'telegram':
-      await _sendTelegram(platform, text, options)
-      return
-    case 'email':
-      await _sendEmail(platform, text)
-      return
-    case 'webhook':
-      await _sendWebhook(platform, text)
-      return
-    case 'feishu':
-      await _sendFeishu(platform, text)
-      return
-    case 'dingtalk':
-      await _sendDingTalk(platform, text)
-      return
-    case 'wechat':
-      await _sendWechat(platform, text)
-      return
-    default:
-      throw new Error(`Unsupported platform: ${platform.id}`)
-  }
+  await getAdapter(platform.id).dispatch(platform, text, options)
 }
 
 export function initPlatformCenter(baseDir) {

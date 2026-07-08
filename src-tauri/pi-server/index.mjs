@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { Agent } from '@earendil-works/pi-agent-core'
@@ -33,6 +33,7 @@ import { discoverAgents, formatAgentList, loadAgentDefinition } from './subagent
 import { runSubagent, runParallel, runChain } from './subagent/index.mjs'
 import { initGoalPersistence, loadGoals, getGoal, createGoal, updateGoal, deleteGoal, saveGoalRunOutput } from './goal-loop/persistence.mjs'
 import { runGoalLoop } from './goal-loop/index.mjs'
+import { tryGetAdapter } from './platforms/registry.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -562,76 +563,9 @@ async function readRawJsonBody(req, { maxBytes = 64 * 1024, timeoutMs = 5000 } =
 }
 
 function normalizePlatformInbound(platformId, payload) {
-  if (platformId === 'feishu') {
-    if (payload.challenge) {
-      return { challenge: payload.challenge }
-    }
-    const event = payload.event || {}
-    const message = event.message || {}
-    const sender = event.sender || {}
-    let text = ''
-    if (typeof message.content === 'string') {
-      try {
-        const parsed = JSON.parse(message.content)
-        text = parsed?.text || parsed?.content || ''
-      } catch {
-        text = message.content
-      }
-    }
-    if (!text?.trim()) return null
-    const chatId = String(message.chat_id || event.open_chat_id || event.chat_id || '')
-    return {
-      platformId,
-      conversationId: String(message.chat_id || event.open_chat_id || event.chat_id || sender.sender_id?.open_id || sender.sender_id?.union_id || ''),
-      chatId,
-      threadId: message.thread_id || null,
-      messageId: message.message_id || payload.header?.event_id || Date.now(),
-      text: text.trim(),
-      username: sender.sender_id?.open_id || sender.sender_id?.union_id || '',
-    }
-  }
-
-  if (platformId === 'dingtalk') {
-    if (payload.challenge) {
-      return { challenge: payload.challenge }
-    }
-    const text = payload.text?.content || payload.content?.text || payload.message?.text?.content || payload.text
-    if (!String(text || '').trim()) return null
-    const conversationId = String(payload.conversationId || payload.chatbotConversationId || payload.sessionWebhook || payload.senderStaffId || '')
-    return {
-      platformId,
-      conversationId,
-      chatId: conversationId,
-      threadId: null,
-      messageId: payload.msgId || payload.messageId || Date.now(),
-      text: String(text).trim(),
-      username: payload.senderNick || payload.senderStaffId || '',
-    }
-  }
-
-  if (platformId === 'wechat') {
-    const text = payload.text?.content || payload.content || payload.message?.content || payload.msg || ''
-    if (!String(text || '').trim()) return null
-    const conversationId = String(payload.chatid || payload.roomid || payload.from?.id || payload.sender || '')
-    return {
-      platformId,
-      conversationId,
-      chatId: conversationId,
-      threadId: null,
-      messageId: payload.msgid || payload.messageId || Date.now(),
-      text: String(text).trim(),
-      username: payload.from?.name || payload.sender || '',
-    }
-  }
-
-  return null
-}
-
-function constantTimeEqual(left, right) {
-  const a = Buffer.from(String(left || ''), 'utf8')
-  const b = Buffer.from(String(right || ''), 'utf8')
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
+  const adapter = tryGetAdapter(platformId)
+  if (!adapter?.normalizeInbound) return null
+  return adapter.normalizeInbound(payload)
 }
 
 function verifyPlatformInbound(platformId, rawBody, payload, headers) {
@@ -639,47 +573,9 @@ function verifyPlatformInbound(platformId, rawBody, payload, headers) {
   if (!platform?.connected) {
     return { ok: false, error: `${platform?.name || platformId} 未连接` }
   }
-
-  if (platformId === 'feishu') {
-    const verificationToken = platform.values.verificationToken?.trim()
-    const encryptKey = platform.values.encryptKey?.trim()
-    const payloadToken = payload?.header?.token || payload?.token || ''
-    if (verificationToken && !constantTimeEqual(payloadToken, verificationToken)) {
-      return { ok: false, error: '飞书 token 校验失败' }
-    }
-    const signature = headers['x-lark-signature']
-    const timestamp = headers['x-lark-request-timestamp']
-    const nonce = headers['x-lark-request-nonce']
-    if (encryptKey && signature && timestamp && nonce) {
-      const expected = createHash('sha256')
-        .update(`${timestamp}${nonce}${encryptKey}${rawBody}`, 'utf8')
-        .digest('hex')
-      if (!constantTimeEqual(signature, expected)) {
-        return { ok: false, error: '飞书签名校验失败' }
-      }
-    }
-    return { ok: true }
-  }
-
-  if (platformId === 'dingtalk') {
-    const inboundToken = platform.values.inboundToken?.trim()
-    const payloadToken = payload?.token || payload?.headers?.token || ''
-    if (inboundToken && !constantTimeEqual(payloadToken, inboundToken)) {
-      return { ok: false, error: '钉钉 token 校验失败' }
-    }
-    return { ok: true }
-  }
-
-  if (platformId === 'wechat') {
-    const inboundToken = platform.values.inboundToken?.trim()
-    const payloadToken = payload?.token || payload?.headers?.token || ''
-    if (inboundToken && !constantTimeEqual(payloadToken, inboundToken)) {
-      return { ok: false, error: '企业微信 token 校验失败' }
-    }
-    return { ok: true }
-  }
-
-  return { ok: true }
+  const adapter = tryGetAdapter(platformId)
+  if (!adapter?.verifyInbound) return { ok: true }
+  return adapter.verifyInbound(rawBody, payload, headers, platform)
 }
 
 function shouldProcessInbound(incoming) {
@@ -857,8 +753,8 @@ createServer((req, res) => {
     return
   }
 
-  const platformInboundMatch = url.pathname.match(/^\/platforms\/inbound\/(feishu|dingtalk|wechat)$/)
-  if (req.method === 'POST' && platformInboundMatch) {
+  const platformInboundMatch = url.pathname.match(/^\/platforms\/inbound\/([a-z0-9_-]+)$/)
+  if (req.method === 'POST' && platformInboundMatch && tryGetAdapter(platformInboundMatch[1])?.inboundMode === 'webhook') {
     const platformId = platformInboundMatch[1]
     const contentType = String(req.headers['content-type'] || '')
     if (!contentType.includes('application/json')) {
