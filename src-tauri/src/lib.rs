@@ -205,20 +205,38 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[tauri::command]
-fn start_server(state: tauri::State<PiServerState>, app: tauri::AppHandle) -> Result<String, String> {
-    let mut project_dir = resolve_project_dir();
-    // In production, use the app's resource directory as fallback
-    if !std::path::Path::new(&project_dir).join("src-tauri").join("pi-server").join("index.mjs").exists()
-        && !std::path::Path::new(&project_dir).join("pi-server").join("index.mjs").exists()
-    {
-        if let Ok(resource_dir) = app.path().resource_dir() {
-            let resource_str = resource_dir.to_string_lossy().to_string();
-            if std::path::Path::new(&resource_str).join("pi-server").join("index.mjs").exists() {
-                project_dir = resource_str;
-            }
+fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>) -> String {
+    // 1. Dev path: {project_dir}/src-tauri/pi-server/index.mjs
+    let dev = std::path::Path::new(project_dir).join("src-tauri").join("pi-server").join("index.mjs");
+    if dev.exists() { return project_dir.to_string(); }
+
+    // 2. Relative path: {project_dir}/pi-server/index.mjs
+    let rel = std::path::Path::new(project_dir).join("pi-server").join("index.mjs");
+    if rel.exists() { return project_dir.to_string(); }
+
+    // 3. Tauri resource dir
+    if let Some(app) = app_handle {
+        if let Ok(res) = app.path().resource_dir() {
+            let p = res.join("pi-server").join("index.mjs");
+            if p.exists() { return res.to_string_lossy().to_string(); }
         }
     }
+
+    // 4. Exe directory (NSIS installs resources next to the exe)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let p = dir.join("pi-server").join("index.mjs");
+            if p.exists() { return dir.to_string_lossy().to_string(); }
+        }
+    }
+
+    // 5. Fallback to project_dir
+    project_dir.to_string()
+}
+
+#[tauri::command]
+fn start_server(state: tauri::State<PiServerState>, app: tauri::AppHandle) -> Result<String, String> {
+    let project_dir = find_pi_server_entry(&resolve_project_dir(), Some(&app));
     do_start_server(&state, &project_dir)
 }
 
@@ -349,23 +367,7 @@ pub fn run() {
         .setup(move |app| {
             setup_tray(app).map_err(|e| e.to_string())?;
             let state = PiServerState(server_state_arc);
-            // In production, use the app's resource directory as fallback
-            let actual_project_dir = if !std::path::Path::new(&project_dir).join("src-tauri").join("pi-server").join("index.mjs").exists()
-                && !std::path::Path::new(&project_dir).join("pi-server").join("index.mjs").exists()
-            {
-                if let Ok(resource_dir) = app.path().resource_dir() {
-                    let resource_str = resource_dir.to_string_lossy().to_string();
-                    if std::path::Path::new(&resource_str).join("pi-server").join("index.mjs").exists() {
-                        resource_str
-                    } else {
-                        project_dir
-                    }
-                } else {
-                    project_dir
-                }
-            } else {
-                project_dir
-            };
+            let actual_project_dir = find_pi_server_entry(&project_dir, Some(app.handle()));
             tauri::async_runtime::spawn(async move {
                 match do_start_server(&state, &actual_project_dir) {
                     Ok(url) => eprintln!("[s-loop] pi-server started at {url}"),
