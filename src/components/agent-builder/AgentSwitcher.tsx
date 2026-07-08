@@ -53,15 +53,17 @@ export function AgentSwitcher() {
                 >
                   <Copy size={9} />
                 </span>
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    deleteAgent(agent.id)
-                  }}
-                  className="p-0.5 rounded hover:bg-red-500/10 text-text-quaternary hover:text-red-400 transition-colors"
-                >
-                  <Trash2 size={9} />
-                </span>
+                {agent.id !== 'agent_default' && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteAgent(agent.id)
+                    }}
+                    className="p-0.5 rounded hover:bg-red-500/10 text-text-quaternary hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={9} />
+                  </span>
+                )}
               </div>
             )}
           </motion.button>

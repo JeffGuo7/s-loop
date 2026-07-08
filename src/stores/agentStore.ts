@@ -12,9 +12,11 @@ function pickAvatar(): string {
   return DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)]
 }
 
+const DEFAULT_AGENT_ID = 'agent_default'
+
 function createDefaultAgent(): Agent {
   return {
-    id: 'agent_default',
+    id: DEFAULT_AGENT_ID,
     name: 'S-Loop',
     description: '通用助手，理解上下文、调度技能、编排工具。',
     avatar: '🤖',
@@ -32,11 +34,13 @@ function createDefaultAgent(): Agent {
   }
 }
 
+const initialDefaultAgent = createDefaultAgent()
+
 export const useAgentStore = create<AgentStore>()(
   persist(
     (set, get) => ({
-      agents: [],
-      activeAgentId: null,
+      agents: [initialDefaultAgent],
+      activeAgentId: initialDefaultAgent.id,
 
       createAgent: (name, description) => {
         const agent: Agent = {
@@ -72,6 +76,7 @@ export const useAgentStore = create<AgentStore>()(
       },
 
       deleteAgent: (id) => {
+        if (id === DEFAULT_AGENT_ID) return
         set((state) => {
           const remaining = state.agents.filter((a) => a.id !== id)
           return {
@@ -208,20 +213,20 @@ export const useAgentStore = create<AgentStore>()(
         agents: state.agents,
         activeAgentId: state.activeAgentId,
       }),
-      onRehydrateStorage: () => {
-        return (_state, error) => {
-          if (error) return
-          // Check current store state after hydration — create default
-          // if no agents exist (fresh install or cleared storage)
-          const current = useAgentStore.getState()
-          if (!current.agents || current.agents.length === 0) {
-            const defaultAgent = createDefaultAgent()
-            useAgentStore.setState({
-              agents: [defaultAgent],
-              activeAgentId: defaultAgent.id,
-            })
-          }
+      merge: (persisted, current) => {
+        const merged = { ...current, ...(persisted as Partial<AgentStore>) }
+        // Guarantee the default agent always exists and stays first
+        const hasDefault = merged.agents?.some((a) => a.id === DEFAULT_AGENT_ID)
+        if (!merged.agents || merged.agents.length === 0) {
+          merged.agents = [createDefaultAgent()]
+          merged.activeAgentId = DEFAULT_AGENT_ID
+        } else if (!hasDefault) {
+          merged.agents = [createDefaultAgent(), ...merged.agents]
         }
+        if (!merged.activeAgentId) {
+          merged.activeAgentId = merged.agents[0].id
+        }
+        return merged
       },
     }
   )
