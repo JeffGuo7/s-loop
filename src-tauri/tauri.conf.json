@@ -36,8 +36,8 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "pi-server/**/*"
-    ]
+    "resources": {
+      "pi-server/": "./pi-server/"
+    }
   }
 }
