@@ -59,3 +59,42 @@ export function getAllPackages(): PetPackage[] {
 export function getPackageById(id: string): PetPackage | undefined {
   return PET_PACKAGES.find(p => p.id === id)
 }
+
+// ─── Idle animations ──────────────────────────────────────
+// Pick a random idle animation from the theme's idleAnimations list.
+// Returns { stateName, file, duration } or null if none configured.
+
+let _lastIdleAnimIdx = -1
+
+export function getIdleAnimation(theme: PetTheme): { stateName: string; file: string; duration: number } | null {
+  const anims = theme.idleAnimations
+  if (!anims || anims.length === 0) return null
+
+  // Avoid repeating the same animation
+  let idx = Math.floor(Math.random() * anims.length)
+  if (anims.length > 1 && idx === _lastIdleAnimIdx) {
+    idx = (idx + 1) % anims.length
+  }
+  _lastIdleAnimIdx = idx
+
+  const anim = anims[idx]
+  // Derive state name from filename: clawd-idle-look.svg → idle-look
+  const stateName = anim.file.replace(/^clawd-/, '').replace(/\.svg$/, '')
+  return { stateName, file: anim.file, duration: anim.duration }
+}
+
+// ─── Working tiers ────────────────────────────────────────
+// Pick a working animation based on active session count.
+// Falls back to the base 'working' state SVG.
+
+export function getWorkingTierSvg(theme: PetTheme, activeSessions: number): string | null {
+  const tiers = theme.workingTiers
+  if (!tiers || tiers.length === 0) return getThemeSvg(theme, 'working')
+
+  // Sort by minSessions descending, pick the first tier where count >= minSessions
+  const sorted = [...tiers].sort((a, b) => b.minSessions - a.minSessions)
+  for (const tier of sorted) {
+    if (activeSessions >= tier.minSessions) return tier.file
+  }
+  return getThemeSvg(theme, 'working')
+}

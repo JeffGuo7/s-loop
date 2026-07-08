@@ -164,6 +164,7 @@ export interface Pet {
   lastInteraction: number
   level?: number
   xp?: number
+  idleAnimationFile?: string | null
 }
 
 // ─── Pet position ──────────────────────────────────────

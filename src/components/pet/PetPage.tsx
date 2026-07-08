@@ -4,11 +4,13 @@ import { getSvgPath } from '../../utils/petTheme'
 import { Sparkles, PawPrint, Trash2, Monitor, MonitorOff, Info, Activity } from 'lucide-react'
 
 const STATE_LABELS: Record<string, string> = {
-  idle: 'Idle', yawning: 'Yawning', dozing: 'Dozing',
-  collapsing: 'Collapsing', thinking: 'Thinking', working: 'Working',
-  juggling: 'Juggling', attention: 'Attention', notification: 'Notification',
+  idle: 'Idle', 'idle-look': 'Looking', 'idle-bubble': 'Bubbling', 'idle-reading': 'Reading',
+  yawning: 'Yawning', dozing: 'Dozing', collapsing: 'Sleepy',
+  thinking: 'Thinking', working: 'Working', juggling: 'Juggling',
+  attention: 'Attentive', notification: 'Notified',
   error: 'Error', sweeping: 'Sweeping', carrying: 'Carrying',
   sleeping: 'Sleeping', waking: 'Waking',
+  building: 'Building',
 }
 
 const MOOD_EMOJI: Record<string, string> = {
@@ -45,8 +47,12 @@ export function PetPage({ onToggleWindow }: PetPageProps) {
   const svgPath = useMemo(() => {
     if (!pet || !currentPkg) return null
     setSvgFailed(false)
+    // Use idle animation file when pet is idle and an animation is playing
+    if (pet.state === 'idle' && pet.idleAnimationFile) {
+      return `${currentPkg.assetsPath}/${pet.idleAnimationFile}`
+    }
     return getSvgPath(currentPkg, pet.state)
-  }, [currentPkg, pet?.state])
+  }, [currentPkg, pet?.state, pet?.idleAnimationFile])
 
   if (!packagesLoaded) {
     return (
@@ -134,7 +140,10 @@ export function PetPage({ onToggleWindow }: PetPageProps) {
                   ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
                   : 'bg-accent/10 text-accent border-accent/15'
             }`}>
-              {STATE_LABELS[pet.state] || pet.state}
+              {pet.idleAnimationFile && pet.state === 'idle'
+                ? STATE_LABELS[pet.idleAnimationFile.replace(/^clawd-/, '').replace(/\.svg$/, '')] || 'Playing'
+                : STATE_LABELS[pet.state] || pet.state
+              }
             </span>
           </div>
           <p className="text-[14px] text-text-tertiary italic">"{pet.personality}"  {MOOD_EMOJI[pet.mood]}</p>
