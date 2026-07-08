@@ -107,6 +107,9 @@ export function PlatformCard({ platform }: PlatformCardProps) {
                   {field.label}
                   {field.required && <span className="text-red-400 ml-1">*</span>}
                 </label>
+                {field.key === 'chatId' && platform.id === 'telegram' && (
+                  <DetectChatIdButton platform={platform} onDetected={(chatId) => handleFieldChange('chatId', chatId)} />
+                )}
                 <input
                   type={field.type}
                   value={platform.values[field.key] || ''}
@@ -265,6 +268,67 @@ export function PlatformCard({ platform }: PlatformCardProps) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function DetectChatIdButton({ platform, onDetected }: { platform: PlatformConfig; onDetected: (chatId: string) => void }) {
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const handleDetect = async () => {
+    setLoading(true)
+    setMsg('')
+    try {
+      const token = platform.values.botToken?.trim()
+      if (!token) { setMsg('请先填写 Bot Token'); setLoading(false); return }
+
+      // Call Telegram getUpdates directly to find recent messages
+      const url = `https://api.telegram.org/bot${token}/getUpdates?limit=5&allowed_updates=["message"]`
+      const res = await fetch(url)
+      const data = await res.json()
+      if (!data.ok) { setMsg(data.description || 'Bot Token 无效'); setLoading(false); return }
+
+      for (const update of (data.result || [])) {
+        const msg = update.message
+        if (!msg?.chat?.id) continue
+        const chatId = String(msg.chat.id)
+        const username = msg.from?.username || msg.from?.first_name || ''
+
+        // Reply to the user with their chat ID
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `Your Chat ID: \`${chatId}\`\nUsername: @${username}\n\nCopy this Chat ID into S-Loop platform settings.`,
+            parse_mode: 'Markdown',
+          }),
+        })
+
+        onDetected(chatId)
+        setMsg(`Found: ${chatId} (@${username}). Sent confirmation to Telegram.`)
+        setLoading(false)
+        return
+      }
+      setMsg('No messages found. Send any message to your bot on Telegram first, then click Detect again.')
+    } catch {
+      setMsg('Network error. Check proxy or bot token.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="-mt-1 mb-2 flex items-center gap-2">
+      <button
+        onClick={handleDetect}
+        disabled={loading}
+        className="rounded-lg bg-accent/10 px-3 py-1.5 text-[10px] font-bold text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
+      >
+        {loading ? 'Detecting...' : 'Detect Chat ID'}
+      </button>
+      {msg && <span className="text-[10px] text-text-tertiary">{msg}</span>}
     </div>
   )
 }
