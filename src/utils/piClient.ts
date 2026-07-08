@@ -93,6 +93,7 @@ export async function syncRuntimeConfig(config: {
   apiKey?: string
   workspaceDir?: string
   providerConfig?: { api?: string; baseUrl?: string }
+  webSearchConfig?: Record<string, unknown>
   agentSystemPrompt?: string
   agentSkillsBlock?: string
   agentModel?: string

@@ -12,6 +12,7 @@ import { WorkspacePanel } from './components/workspace'
 import { useMCPStore } from './stores/mcpStore'
 import { useSkillStore } from './stores/skillStore'
 import { useAgentStore } from './stores/agentStore'
+import { useWebSearchStore } from './stores/websearchStore'
 import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
@@ -111,6 +112,7 @@ function App() {
       modelID: config.model,
       apiKey: config.apiKey,
       workspaceDir: workspaceDir ?? undefined,
+      webSearchConfig: useWebSearchStore.getState().getActiveConfig() as unknown as Record<string, unknown>,
       ...buildAgentRuntimeConfig(),
     }).catch((err) => {
       console.warn('[app] failed to sync runtime config:', err)

@@ -616,7 +616,7 @@ async function promptPlatformConversation(sessionId, content) {
   const initialMessages = ctx?.messages || []
   if (!wrapper.agent) {
     const cwd = runtimeConfig.workspaceDir || process.cwd()
-    const tools = getTools(cwd)
+    const tools = getTools(cwd, runtimeConfig.webSearchConfig)
     wrapper.agent = new Agent({
       initialState: {
         systemPrompt,
@@ -639,7 +639,7 @@ async function promptPlatformConversation(sessionId, content) {
     wrapper.previousMessageCount = initialMessages.length
   } else {
     wrapper.agent.state.model = model
-    wrapper.agent.state.tools = getTools(runtimeConfig.workspaceDir || process.cwd())
+    wrapper.agent.state.tools = getTools(runtimeConfig.workspaceDir || process.cwd(), runtimeConfig.webSearchConfig)
     if (wrapper.agent.state.systemPrompt !== systemPrompt) {
       wrapper.agent.state.systemPrompt = systemPrompt
     }
@@ -780,6 +780,7 @@ createServer((req, res) => {
       runtimeConfig.apiKey = data.apiKey ?? runtimeConfig.apiKey
       runtimeConfig.workspaceDir = data.workspaceDir || undefined
       if (data.providerConfig) runtimeConfig.providerConfig = data.providerConfig
+      if (data.webSearchConfig) runtimeConfig.webSearchConfig = data.webSearchConfig
       // Active-agent config for autonomous flows (platform replies, cron)
       runtimeConfig.agentSystemPrompt = data.agentSystemPrompt || undefined
       runtimeConfig.agentSkillsBlock = data.agentSkillsBlock || undefined
