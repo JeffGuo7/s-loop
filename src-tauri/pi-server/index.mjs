@@ -596,11 +596,20 @@ function shouldProcessInbound(incoming) {
 
 async function promptPlatformConversation(sessionId, content) {
   const provider = runtimeConfig.providerID || 'anthropic'
-  const modelId = runtimeConfig.modelID || 'claude-sonnet-4-20250514'
+  const modelId = runtimeConfig.agentModel || runtimeConfig.modelID || 'claude-sonnet-4-20250514'
   const model = resolveModel(provider, modelId, runtimeConfig.providerConfig)
   if (!model) {
     throw new Error(`Unknown model "${modelId}" for provider "${provider}"`)
   }
+
+  // Honor the active agent's instructions + skills (synced via /runtime/config).
+  // MCP tools are excluded — they require a live frontend SSE proxy that a
+  // platform message can't rely on. Skills are prompt text, so they work here.
+  const basePrompt = runtimeConfig.agentSystemPrompt
+    || 'You are a helpful assistant. Keep external platform replies concise and readable.'
+  const systemPrompt = runtimeConfig.agentSkillsBlock
+    ? `${basePrompt}\n\n${runtimeConfig.agentSkillsBlock}`
+    : basePrompt
 
   const wrapper = await getOrCreateWrapper(sessionId, true)
   const ctx = wrapper.agent ? null : await wrapper.session.buildContext()
@@ -610,7 +619,7 @@ async function promptPlatformConversation(sessionId, content) {
     const tools = getTools(cwd)
     wrapper.agent = new Agent({
       initialState: {
-        systemPrompt: 'You are a helpful assistant. Keep external platform replies concise and readable.',
+        systemPrompt,
         model,
         tools,
         thinkingLevel: 'off',
@@ -618,12 +627,22 @@ async function promptPlatformConversation(sessionId, content) {
       },
       sessionId,
       getApiKey: async () => runtimeConfig.apiKey || '',
+      beforeToolCall: async ({ toolCall }) => {
+        const permission = checkToolPermission(toolCall.name, runtimeConfig.permissionRules, runtimeConfig.permissionMode)
+        if (!permission.allowed) {
+          return { block: true, reason: permission.reason }
+        }
+        return undefined
+      },
       toolExecution: 'parallel',
     })
     wrapper.previousMessageCount = initialMessages.length
   } else {
     wrapper.agent.state.model = model
     wrapper.agent.state.tools = getTools(runtimeConfig.workspaceDir || process.cwd())
+    if (wrapper.agent.state.systemPrompt !== systemPrompt) {
+      wrapper.agent.state.systemPrompt = systemPrompt
+    }
   }
 
   const promptPromise = wrapper.agent.prompt(content)
@@ -761,6 +780,12 @@ createServer((req, res) => {
       runtimeConfig.apiKey = data.apiKey ?? runtimeConfig.apiKey
       runtimeConfig.workspaceDir = data.workspaceDir || undefined
       if (data.providerConfig) runtimeConfig.providerConfig = data.providerConfig
+      // Active-agent config for autonomous flows (platform replies, cron)
+      runtimeConfig.agentSystemPrompt = data.agentSystemPrompt || undefined
+      runtimeConfig.agentSkillsBlock = data.agentSkillsBlock || undefined
+      runtimeConfig.agentModel = data.agentModel || undefined
+      runtimeConfig.permissionMode = data.permissionMode || undefined
+      runtimeConfig.permissionRules = data.permissionRules || undefined
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ ok: true }))
     }).catch((e) => {

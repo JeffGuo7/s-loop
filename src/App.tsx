@@ -11,10 +11,12 @@ import { useTaskScheduler, useTelegramChatSync } from './hooks'
 import { WorkspacePanel } from './components/workspace'
 import { useMCPStore } from './stores/mcpStore'
 import { useSkillStore } from './stores/skillStore'
+import { useAgentStore } from './stores/agentStore'
 import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
 import { setBaseUrl, syncRuntimeConfig } from './utils/piClient'
+import { buildAgentRuntimeConfig } from './utils/agentRuntime'
 import { getActiveTokens } from './themes'
 
 export type Page = 'chat' | 'tasks' | 'platforms' | 'pet' | 'goal'
@@ -24,6 +26,9 @@ const APP_STORAGE_KEY = 'snotra-storage'
 
 function App() {
   const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, workspaceDir } = useAppStore()
+  const activeAgentId = useAgentStore((s) => s.activeAgentId)
+  const agents = useAgentStore((s) => s.agents)
+  const skills = useSkillStore((s) => s.skills)
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
 
@@ -106,10 +111,11 @@ function App() {
       modelID: config.model,
       apiKey: config.apiKey,
       workspaceDir: workspaceDir ?? undefined,
+      ...buildAgentRuntimeConfig(),
     }).catch((err) => {
       console.warn('[app] failed to sync runtime config:', err)
     })
-  }, [activeProvider, providerConfigs, workspaceDir])
+  }, [activeProvider, providerConfigs, workspaceDir, activeAgentId, agents, skills])
 
   useEffect(() => {
     useMCPStore.getState().refreshAllServers().catch(() => {})

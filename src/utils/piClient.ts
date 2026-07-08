@@ -93,6 +93,11 @@ export async function syncRuntimeConfig(config: {
   apiKey?: string
   workspaceDir?: string
   providerConfig?: { api?: string; baseUrl?: string }
+  agentSystemPrompt?: string
+  agentSkillsBlock?: string
+  agentModel?: string
+  permissionMode?: string
+  permissionRules?: Record<string, unknown>
 }): Promise<void> {
   await fetch(`${_base}/runtime/config`, {
     method: 'POST',
