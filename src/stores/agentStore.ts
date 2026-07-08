@@ -209,9 +209,12 @@ export const useAgentStore = create<AgentStore>()(
         activeAgentId: state.activeAgentId,
       }),
       onRehydrateStorage: () => {
-        return (state, error) => {
-          if (error || !state) return
-          if (!state.agents || state.agents.length === 0) {
+        return (_state, error) => {
+          if (error) return
+          // Check current store state after hydration — create default
+          // if no agents exist (fresh install or cleared storage)
+          const current = useAgentStore.getState()
+          if (!current.agents || current.agents.length === 0) {
             const defaultAgent = createDefaultAgent()
             useAgentStore.setState({
               agents: [defaultAgent],
