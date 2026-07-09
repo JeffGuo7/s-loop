@@ -71,6 +71,16 @@ const zh = {
       serverUnreachable: 'AI 服务器无法访问',
       dismiss: '关闭',
     },
+    toolApproval: {
+      title: '工具调用审批',
+      subtitle: 'Agent 请求使用危险工具',
+      tool: '工具',
+      dangerous: '危险',
+      arguments: '参数',
+      cancel: '取消',
+      reject: '拒绝',
+      approve: '批准',
+    },
     status: {
       kiloConnected: 'AI 服务器已连接',
       kiloOffline: 'AI 服务器离线',

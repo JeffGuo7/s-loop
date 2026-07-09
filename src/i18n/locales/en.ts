@@ -71,6 +71,16 @@ const en = {
       serverUnreachable: 'AI server not reachable',
       dismiss: 'Dismiss',
     },
+    toolApproval: {
+      title: 'Tool Approval',
+      subtitle: 'Agent is requesting to use a dangerous tool',
+      tool: 'Tool',
+      dangerous: 'dangerous',
+      arguments: 'Arguments',
+      cancel: 'Cancel',
+      reject: 'Reject',
+      approve: 'Approve',
+    },
     status: {
       kiloConnected: 'AI Server Connected',
       kiloOffline: 'AI Server Offline',

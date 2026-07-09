@@ -639,7 +639,7 @@ export function ChatView() {
 
       {/* Tool approval dialog */}
       {pendingApproval && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-md" onClick={() => setPendingApproval(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-md" onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, false); setPendingApproval(null) }}>
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -648,7 +648,7 @@ export function ChatView() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top accent bar */}
-            <div className="h-1.5 bg-linear-to-r from-amber-400 to-amber-500" />
+            <div className="h-1.5 bg-gradient-to-r from-amber-400 to-amber-500" />
 
             <div className="p-6 pb-5">
               <div className="flex items-start gap-4 mb-5">
@@ -659,8 +659,8 @@ export function ChatView() {
                   <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-500 animate-pulse" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-[15px] font-bold text-text tracking-tight">批准工具调用</h3>
-                  <p className="text-[12px] text-text-tertiary mt-0.5">Agent 请求使用危险工具</p>
+                  <h3 className="text-[15px] font-bold text-text tracking-tight">{t('chat.toolApproval.title')}</h3>
+                  <p className="text-[12px] text-text-tertiary mt-0.5">{t('chat.toolApproval.subtitle')}</p>
                 </div>
               </div>
 
@@ -668,7 +668,7 @@ export function ChatView() {
               <div className="rounded-xl bg-surface-secondary/40 border border-border-light/60 p-4 mb-5">
                 <div className="flex items-center gap-2.5 mb-3">
                   <code className="text-[13px] font-bold text-accent font-mono">{pendingApproval.toolName}</code>
-                  <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/15">dangerous</span>
+                  <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/15">{t('chat.toolApproval.dangerous')}</span>
                 </div>
                 {pendingApproval.args && (
                   <div>
@@ -681,17 +681,17 @@ export function ChatView() {
 
               {/* Actions */}
               <div className="flex items-center gap-2.5">
-                <button onClick={() => { setPendingApproval(null) }}
+                <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, false); setPendingApproval(null) }}
                   className="flex-1 px-4 py-2.5 rounded-xl border border-border-light text-[12px] font-semibold text-text-tertiary hover:text-text hover:bg-surface-secondary/60 transition-all">
-                  取消
+                  {t('chat.toolApproval.cancel')}
                 </button>
                 <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, false); setPendingApproval(null) }}
                   className="flex-1 px-4 py-2.5 rounded-xl bg-surface text-[12px] font-semibold text-red-500 border border-red-500/20 hover:bg-red-500/5 transition-all">
-                  拒绝
+                  {t('chat.toolApproval.reject')}
                 </button>
                 <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, true); setPendingApproval(null) }}
                   className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-white text-[12px] font-bold shadow-md shadow-accent/20 hover:shadow-lg transition-all">
-                  批准
+                  {t('chat.toolApproval.approve')}
                 </button>
               </div>
             </div>
