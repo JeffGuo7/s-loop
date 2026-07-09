@@ -244,25 +244,6 @@ export function ChatInput({
                 )}
               </div>
             </div>
-
-            <div className="flex items-center justify-between px-8 pb-3 pt-1 text-[9px] font-bold tracking-[0.25em] uppercase transition-all duration-300">
-              <div className={`flex items-center gap-5 transition-opacity ${isHero ? 'opacity-60' : 'opacity-30 group-focus-within:opacity-80'}`}>
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-1.5 h-1.5 rounded-full ${input.trim() || attachments.length > 0 ? 'bg-accent shadow-[0_0_6px_var(--color-accent)]' : 'bg-text-quaternary opacity-30'}`} />
-                  <span className="tracking-widest">
-                    {attachments.length > 0
-                      ? t('chat.input.ref', { count: attachments.length })
-                      : t('chat.input.shiftEnter')}
-                  </span>
-                </div>
-                <div className="w-1 h-1 rounded-full bg-border-light" />
-                <span className="hidden sm:inline tracking-widest">{t('chat.input.enterSend')}</span>
-              </div>
-              <div className={`transition-opacity flex items-center gap-2.5 ${isHero ? 'opacity-60' : 'opacity-30 group-focus-within:opacity-80'}`}>
-                <span className="w-1 h-1 rounded-full bg-border-light" />
-                <span className="tracking-widest">{t('chat.input.intelligence')}</span>
-              </div>
-            </div>
           </div>
         </Card>
       </form>

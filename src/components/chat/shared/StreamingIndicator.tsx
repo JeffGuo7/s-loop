@@ -33,15 +33,13 @@ export function StreamingIndicator({
   }, [])
 
   return (
-    <div className="flex justify-center py-3">
-      <div className="inline-flex items-center gap-3 rounded-full border border-border/50 bg-surface-secondary px-5 py-2 text-[13px] font-bold tracking-tight text-text-secondary shadow-sm">
-        <span className="animate-shimmer text-accent">✦</span>
-        <span>{verb}...</span>
-        <span className="text-text-tertiary opacity-60 ml-1">{formatElapsed(elapsed, t)}</span>
-        {tokenCount !== undefined && tokenCount > 0 && (
-          <span className="text-text-tertiary opacity-60 ml-1">{t('chat.parts.tokens', { count: tokenCount })}</span>
-        )}
-      </div>
+    <div className="flex items-center gap-2 mt-2 text-[11px] text-text-tertiary transition-opacity duration-500">
+      <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+      <span className="font-medium">{verb}…</span>
+      <span className="text-text-quaternary tabular-nums">{formatElapsed(elapsed, t)}</span>
+      {tokenCount !== undefined && tokenCount > 0 && (
+        <span className="text-text-quaternary">{t('chat.parts.tokens', { count: tokenCount })}</span>
+      )}
     </div>
   )
 }

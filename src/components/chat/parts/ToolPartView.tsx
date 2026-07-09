@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Wrench, FileText, Terminal, Globe, Database, FolderOpen, ChevronDown, Activity, Bot } from 'lucide-react'
+import { ChevronDown, CheckCircle2, XCircle } from 'lucide-react'
 import { CopyButton } from '../shared/CopyButton'
-import { Card } from '../../ui'
 import { SubagentPanel } from './SubagentPanel'
 import type { ToolPart } from '../../../types'
 
@@ -10,128 +9,79 @@ interface ToolPartViewProps {
   part: ToolPart
 }
 
-const TOOL_ICONS: Record<string, typeof Wrench> = {
-  read_file: FileText,
-  write_to_file: FileText,
-  apply_diff: FileText,
-  replace_in_file: FileText,
-  list_files: FolderOpen,
-  list_directory: FolderOpen,
-  search_files: FolderOpen,
-  codebase_search: FolderOpen,
-  execute_command: Terminal,
-  run_command: Terminal,
-  browser_action: Globe,
-  navigate: Globe,
-  fetch: Globe,
-  web_fetch: Globe,
-  web_search: Globe,
-  ask_followup: Globe,
-  attempt_completion: Globe,
-  new_task: Globe,
-  use_mcp_tool: Database,
-  access_mcp_resource: Database,
-  insert_content: FileText,
-  search_and_replace: FileText,
-  delegate_task: Bot,
-  delegate_parallel: Bot,
-}
-
-function getToolIcon(toolName: string): typeof Wrench {
-  const lower = toolName.toLowerCase()
-  for (const [key, icon] of Object.entries(TOOL_ICONS)) {
-    if (lower.includes(key)) return icon
-  }
-  return Wrench
-}
-
 function formatOutput(output: unknown): string {
   if (typeof output === 'string') return output
   if (output === null || output === undefined) return ''
-  try {
-    return JSON.stringify(output, null, 2)
-  } catch {
-    return String(output)
-  }
+  try { return JSON.stringify(output, null, 2) } catch { return String(output) }
 }
 
 export function ToolPartView({ part }: ToolPartViewProps) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
-  const toolName = part.name || part.tool
-  const Icon = getToolIcon(toolName)
-  const state = part.state as Record<string, unknown>
+  const toolName = (part.name || part.tool || '').replace(/_/g, ' ')
+  const state = part.state as Record<string, unknown> || {}
   const output = formatOutput(state?.output || state?.error)
-  const isError = !!state?.error
+  const isError = !!state?.error || state?.status === 'error'
   const isRunning = state?.status === 'running'
 
   return (
-    <div className="my-1 animate-fade-in">
-      <Card
-        className={`overflow-hidden transition-all duration-700 border border-black/[0.04] dark:border-white/[0.04] rounded-[12px] ${
-          expanded ? 'ring-2 ring-accent/20 shadow-md' : 'hover:border-accent/30 bg-surface-secondary/30'
-        }`}
+    <div className="my-px group/disclosure">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 -mx-2.5 rounded-lg hover:bg-surface-secondary/50 transition-colors text-left"
       >
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-3 px-4 py-2 hover:bg-surface-secondary/60 transition-all text-left group/toolbtn"
-        >
-          <div className={`p-1.5 rounded-[8px] transition-all duration-500 ${
-            isRunning 
-              ? 'bg-accent text-white animate-pulse' 
-              : expanded 
-                ? 'bg-accent text-white' 
-                : 'bg-surface-tertiary text-text-tertiary group-hover/toolbtn:text-text'
-          }`}>
-            {isRunning ? <Activity size={12} strokeWidth={3} className="animate-spin-slow" /> : <Icon size={12} strokeWidth={3} />}
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] opacity-40 ${isRunning ? 'text-accent' : 'text-text-tertiary'}`}>
-                {isRunning ? t('chat.parts.executing') : isError ? t('chat.parts.failed') : t('chat.parts.call')}
-              </span>
-              <span className="text-[13px] font-bold text-text truncate tracking-tight">
-                {toolName.replace(/_/g, ' ')}
-              </span>
-            </div>
-          </div>
+        {/* Status icon — compact */}
+        <span className="shrink-0 w-4 h-4 flex items-center justify-center">
+          {isRunning ? (
+            <span className="w-3 h-3 rounded-full border-2 border-accent/40 border-t-accent animate-spin" />
+          ) : isError ? (
+            <XCircle size={14} className="text-red-500" strokeWidth={2} />
+          ) : (
+            <CheckCircle2 size={14} className="text-green-500" strokeWidth={2} />
+          )}
+        </span>
 
-          <div className={`transition-all duration-500 ${expanded ? 'rotate-180 text-accent' : 'text-text-quaternary group-hover/toolbtn:text-text-secondary'}`}>
-            <ChevronDown size={16} strokeWidth={3} />
-          </div>
-        </button>
+        {/* Tool name + status label */}
+        <span className="flex-1 min-w-0 flex items-center gap-1.5 text-[11px]">
+          <span className={`font-semibold truncate ${isRunning ? 'text-accent' : 'text-text-secondary'}`}>
+            {toolName}
+          </span>
+          <span className={`shrink-0 text-[9px] font-medium ${isRunning ? 'text-accent/60' : isError ? 'text-red-500/60' : 'text-green-500/60'}`}>
+            {isRunning ? '…' : isError ? 'failed' : 'done'}
+          </span>
+        </span>
 
-        {expanded && (
-          <div className="border-t border-black/[0.04] dark:border-white/[0.04] bg-surface-secondary/40 animate-fade-in">
-            <div className="p-4 space-y-4">
-              {/* Sub-agent panel for delegate tools */}
-              {(toolName === 'delegate_task' || toolName === 'delegate_parallel') ? (
-                <SubagentPanel part={part} />
-              ) : (
-                /* Output Only to keep it simple and stacked */
-                output && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between px-1">
-                      <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${isError ? 'text-red-500/80' : 'text-text-tertiary'}`}>
-                        {isError ? t('chat.parts.error') : t('chat.parts.result')}
-                      </span>
-                      <CopyButton text={output} />
-                    </div>
-                    <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[250px] overflow-y-auto rounded-[8px] p-3 border shadow-inner ${
-                      isError
-                        ? 'bg-red-500/5 border-red-500/10 text-red-500/90'
-                        : 'bg-surface border-black/[0.04] dark:border-white/[0.04] text-text-secondary'
-                    } scrollbar-subtle`}>
-                      {output}
-                    </pre>
-                  </div>
-                )
-              )}
-            </div>
+        {/* Collapse chevron */}
+        <ChevronDown
+          size={12}
+          className={`shrink-0 text-text-quaternary transition-transform ${expanded ? 'rotate-180' : ''} opacity-0 group-hover/disclosure:opacity-100`}
+        />
+      </button>
+
+      {/* Expanded content */}
+      {expanded && output && (
+        <div className="pl-6 animate-fade-in">
+          <div className="rounded-lg bg-surface-secondary/30 border border-border-light/40 overflow-hidden">
+            {['delegate_task', 'delegate_parallel', 'run_subagent'].includes(part.name || part.tool || '') ? (
+              <SubagentPanel part={part} />
+            ) : (
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-[9px] font-semibold uppercase tracking-wide ${isError ? 'text-red-500' : 'text-text-tertiary'}`}>
+                    {isError ? t('chat.parts.error') : t('chat.parts.result')}
+                  </span>
+                  <CopyButton text={output} />
+                </div>
+                <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto rounded-lg p-2.5 ${
+                  isError ? 'bg-red-500/5 text-red-500/90' : 'bg-surface text-text-secondary border border-border-light/40'
+                }`}>
+                  {output}
+                </pre>
+              </div>
+            )}
           </div>
-        )}
-      </Card>
+        </div>
+      )}
     </div>
   )
 }
