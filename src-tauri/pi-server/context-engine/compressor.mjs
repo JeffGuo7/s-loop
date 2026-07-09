@@ -7,6 +7,7 @@ import {
   DEFAULT_COMPACTION_SETTINGS,
   prepareCompaction,
   compact,
+  generateBranchSummary,
 } from '@earendil-works/pi-agent-core'
 import { resolveContextLength } from './token-utils.mjs'
 import { truncateToolResult as truncateToolResultMessage } from './truncate.mjs'
@@ -109,9 +110,25 @@ export class ContextCompressor extends ContextEngine {
       return messages
     }
 
+    // Try branch-aware summarization on the compacted section for richer context.
+    // This gives the model a structured view of tools/delegates/branches that
+    // were active before compaction, in addition to the flat summary.
+    let branchSummary = ''
+    const keptEntries = entries.slice(0, firstKeptIndex)
+    if (keptEntries.length > 2) {
+      try {
+        const branchResult = await generateBranchSummary(keptEntries, { model, apiKey })
+        if (branchResult && typeof branchResult === 'string') {
+          branchSummary = `\n\n## Branch Activity\n\n${branchResult}`
+        }
+      } catch {
+        // Branch summary is best-effort; fall back to flat summary only.
+      }
+    }
+
     const summaryMessage = {
       role: 'user',
-      content: `${SUMMARY_PREFIX}\n\n${summary}\n\n${SUMMARY_END_MARKER}`,
+      content: `${SUMMARY_PREFIX}\n\n${summary}${branchSummary}\n\n${SUMMARY_END_MARKER}`,
     }
 
     const tail = messages.slice(firstKeptIndex)
