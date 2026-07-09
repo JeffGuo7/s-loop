@@ -5,7 +5,7 @@
 [English](README.md)
 
 <p align="center">
-  <img src="/s-loop.png" alt="S-Loop Screenshot" width="800" />
+  <img src="/home.png" alt="S-Loop Screenshot" width="800" />
 </p>
 
 <p align="center">

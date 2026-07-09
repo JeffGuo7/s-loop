@@ -3,7 +3,7 @@
 > AI Desktop Workbench — chat, agent orchestration, scheduled tasks, desktop pet, all in one Tauri 2 app
 
 <p align="center">
-  <img src="/s-loop.png" alt="S-Loop Screenshot" width="800" />
+  <img src="/home.png" alt="S-Loop Screenshot" width="800" />
 </p>
 
 <p align="center">
