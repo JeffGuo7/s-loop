@@ -69,7 +69,8 @@ function parseRuns(rPr: Element | null, texts: string[]): FormattedRun[] {
       run.italic = rPr.getAttribute('i') === '1'
       const sz = rPr.getAttribute('sz')
       if (sz) run.fontSize = parseInt(sz, 10) / 100
-      const fontName = rPr.getAttribute('typeface') || rPr.querySelector('*[local-name()="latin"]')?.getAttribute('typeface')
+      const latin = childrenByLocalName(rPr, 'latin')[0]
+      const fontName = rPr.getAttribute('typeface') || latin?.getAttribute('typeface')
       if (fontName) run.fontName = fontName
     }
     runs.push(run)
