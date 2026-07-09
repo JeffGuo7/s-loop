@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 
 interface PptxPreviewProps {
   filePath: string
@@ -37,6 +37,27 @@ interface SlideData {
   content: SlideContent
 }
 
+/** Find child elements by local name, ignoring XML namespace prefixes. */
+function childrenByLocalName(parent: Element, name: string): Element[] {
+  const result: Element[] = []
+  for (let i = 0; i < parent.children.length; i++) {
+    if (parent.children[i].localName === name) result.push(parent.children[i])
+  }
+  return result
+}
+
+/** Recursively find descendant elements by local name. */
+function queryByLocalName(root: Element, name: string): Element[] {
+  const result: Element[] = []
+  const stack = [...Array.from(root.children)]
+  while (stack.length > 0) {
+    const el = stack.pop()!
+    if (el.localName === name) result.push(el)
+    for (let i = 0; i < el.children.length; i++) stack.push(el.children[i])
+  }
+  return result
+}
+
 function parseRuns(rPr: Element | null, texts: string[]): FormattedRun[] {
   const runs: FormattedRun[] = []
   for (const t of texts) {
@@ -48,7 +69,7 @@ function parseRuns(rPr: Element | null, texts: string[]): FormattedRun[] {
       run.italic = rPr.getAttribute('i') === '1'
       const sz = rPr.getAttribute('sz')
       if (sz) run.fontSize = parseInt(sz, 10) / 100
-      const fontName = rPr.getAttribute('typeface') || rPr.querySelector('a:latin')?.getAttribute('typeface')
+      const fontName = rPr.getAttribute('typeface') || rPr.querySelector('*[local-name()="latin"]')?.getAttribute('typeface')
       if (fontName) run.fontName = fontName
     }
     runs.push(run)
@@ -82,21 +103,16 @@ function slideXmlToContent(xml: string): SlideContent {
   const doc = parser.parseFromString(xml, 'text/xml')
 
   const paragraphs: FormattedRun[][] = []
-  const images: SlideImage[] = []
   const tables: TableCell[][][] = []
 
   // --- Text shapes ---
-  const txBodies = doc.querySelectorAll('p\\:sp p\\:txBody, sp txBody')
-  for (const body of txBodies) {
-    const pElements = body.querySelectorAll('a\\:p, p')
-    for (const pEl of pElements) {
+  for (const txBody of queryByLocalName(doc.documentElement, 'txBody')) {
+    for (const pEl of childrenByLocalName(txBody, 'p')) {
       const runs: FormattedRun[] = []
-      const rElements = pEl.querySelectorAll('a\\:r, r')
-      for (const rEl of rElements) {
-        const rPr = rEl.querySelector('a\\:rPr, rPr')
-        const tElements = rEl.querySelectorAll('a\\:t, t')
-        const texts: string[] = []
-        for (const t of tElements) texts.push(t.textContent || '')
+      for (const rEl of childrenByLocalName(pEl, 'r')) {
+        const rPr = childrenByLocalName(rEl, 'rPr')[0] || null
+        const tEls = childrenByLocalName(rEl, 't')
+        const texts = tEls.map((t) => t.textContent || '')
         runs.push(...parseRuns(rPr, texts))
       }
       if (runs.length > 0) paragraphs.push(runs)
@@ -104,31 +120,24 @@ function slideXmlToContent(xml: string): SlideContent {
   }
 
   // --- Tables ---
-  const tblElements = doc.querySelectorAll('a\\:tbl, tbl')
-  for (const tbl of tblElements) {
+  for (const tbl of queryByLocalName(doc.documentElement, 'tbl')) {
     const table: TableCell[][] = []
-    const rows = tbl.querySelectorAll('a\\:tr, tr')
-    for (const row of rows) {
+    for (const row of childrenByLocalName(tbl, 'tr')) {
       const cells: TableCell[] = []
-      const tcElements = row.querySelectorAll('a\\:tc, tc')
-      for (const tc of tcElements) {
+      for (const tc of childrenByLocalName(row, 'tc')) {
         const cell: TableCell = { runs: [] }
         const rowspan = tc.getAttribute('rowSpan') || tc.getAttribute('rowspan')
         const colspan = tc.getAttribute('gridSpan') || tc.getAttribute('gridspan')
         if (rowspan) cell.rowspan = parseInt(rowspan, 10)
         if (colspan) cell.colspan = parseInt(colspan, 10)
-        const txBodies = tc.querySelectorAll('a\\:txBody, txBody')
-        for (const body of txBodies) {
-          const pElements = body.querySelectorAll('a\\:p, p')
+        for (const txBody of childrenByLocalName(tc, 'txBody')) {
           const cellRuns: FormattedRun[][] = []
-          for (const pEl of pElements) {
+          for (const pEl of childrenByLocalName(txBody, 'p')) {
             const runs: FormattedRun[] = []
-            const rElements = pEl.querySelectorAll('a\\:r, r')
-            for (const rEl of rElements) {
-              const rPr = rEl.querySelector('a\\:rPr, rPr')
-              const tElements = rEl.querySelectorAll('a\\:t, t')
-              const texts: string[] = []
-              for (const t of tElements) texts.push(t.textContent || '')
+            for (const rEl of childrenByLocalName(pEl, 'r')) {
+              const rPr = childrenByLocalName(rEl, 'rPr')[0] || null
+              const tEls = childrenByLocalName(rEl, 't')
+              const texts = tEls.map((t) => t.textContent || '')
               runs.push(...parseRuns(rPr, texts))
             }
             if (runs.length > 0) cellRuns.push(runs)
@@ -142,7 +151,15 @@ function slideXmlToContent(xml: string): SlideContent {
     tables.push(table)
   }
 
-  return { paragraphs, images, tables }
+  return { paragraphs, images: [], tables }
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  const chunks: string[] = []
+  for (let i = 0; i < bytes.length; i += 8192) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)))
+  }
+  return btoa(chunks.join(''))
 }
 
 async function loadSlideImages(
@@ -154,40 +171,34 @@ async function loadSlideImages(
 
   const parser = new DOMParser()
   const relsDoc = parser.parseFromString(relsXml, 'text/xml')
-
-  // Find image relationships: <Relationship Id="rId2" Target="../media/image1.png" Type="...image"...>
-  const relElements = relsDoc.querySelectorAll('Relationship')
-  for (const rel of relElements) {
+  const relsRoot = relsDoc.documentElement
+  for (const rel of childrenByLocalName(relsRoot, 'Relationship')) {
     const type = rel.getAttribute('Type') || ''
     if (!type.includes('image')) continue
     const target = rel.getAttribute('Target') || ''
-    const mediaPath = target.replace(/^.*?\/(media\/.+)$/, '$1')
-    const fullPath = `ppt/${mediaPath}`
+    const mediaName = target.split('/').pop() || ''
+    const fullPath = `ppt/media/${mediaName}`
     const file = zip.file(fullPath)
     if (!file) continue
 
     const blob = await file.async('uint8array')
     const ext = fullPath.split('.').pop() || 'png'
-    const mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'svg' ? 'image/svg+xml' : 'image/png'
-    const bytes = new Uint8Array(blob)
-    let binary = ''
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-    const dataUrl = `data:${mime};base64,${btoa(binary)}`
-    images.push({ dataUrl, ext })
+    const mimeMap: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', bmp: 'image/bmp', webp: 'image/webp' }
+    const mime = mimeMap[ext] || 'image/png'
+    images.push({ dataUrl: `data:${mime};base64,${uint8ToBase64(blob)}`, ext })
   }
-
   return images
 }
 
 export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
   const [slides, setSlides] = useState<SlideData[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
-  const loaded = useRef(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (loaded.current) return
     let cancelled = false
-    loaded.current = true
+    setLoading(true)
+    setCurrentSlide(0)
 
     async function load() {
       try {
@@ -195,11 +206,9 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
         const { invoke } = await import('@tauri-apps/api/core')
         const base64 = await invoke<string>('read_file_base64', { path: filePath })
         const binaryString = atob(base64)
-        const bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
+        const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0))
         const zip = await JSZip.loadAsync(bytes)
 
-        // Find slide files
         const slideFiles: string[] = []
         zip.forEach((relativePath: string) => {
           if (/^ppt\/slides\/slide\d+\.xml$/.test(relativePath)) slideFiles.push(relativePath)
@@ -215,55 +224,41 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
           const xmlContent = await zip.file(slidePath)!.async('text')
           const content = slideXmlToContent(xmlContent)
 
-          // Look for rels file
           const relsPath = slidePath.replace('slides/', 'slides/_rels/') + '.rels'
           const relsFile = zip.file(relsPath)
           const relsXml = relsFile ? await relsFile.async('text') : null
-
-          // Also try to find images in slide: parse slide content for blip refs
           content.images = await loadSlideImages(relsXml, zip)
-
-          // Try to extract images from the slide XML directly (additional fallback)
-          const doc = new DOMParser().parseFromString(xmlContent, 'text/xml')
-          const blipElements = doc.querySelectorAll('a\\:blip, blip')
-          for (const blip of blipElements) {
-            const embed = blip.getAttribute('r:embed') || blip.getAttribute('embed')
-            if (!embed) continue
-            // Check if we already got this from rels
-            const alreadyLoaded = content.images.length > 0
-            if (!alreadyLoaded && relsXml) {
-              const relsDoc = new DOMParser().parseFromString(relsXml, 'text/xml')
-              const rel = relsDoc.querySelector(`Relationship[Id="${embed}"]`)
-              if (rel) {
-                const target = rel.getAttribute('Target') || ''
-                const mediaPath = target.replace(/^.*?\/(media\/.+)$/, '$1')
-                const fullPath = `ppt/${mediaPath}`
-                const file = zip.file(fullPath)
-                if (file) {
-                  const blob = await file.async('uint8array')
-                  const ext = fullPath.split('.').pop() || 'png'
-                  const mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png'
-                  let binary = ''
-                  for (let i = 0; i < blob.length; i++) binary += String.fromCharCode(blob[i])
-                  const dataUrl = `data:${mime};base64,${btoa(binary)}`
-                  content.images.push({ dataUrl, ext })
-                }
-              }
-            }
-          }
 
           slideData.push({ index: slideFiles.indexOf(slidePath) + 1, content })
         }
 
-        if (!cancelled) { setSlides(slideData); onLoaded() }
+        if (!cancelled) {
+          setSlides(slideData)
+          setLoading(false)
+          onLoaded()
+        }
       } catch (err) {
-        if (!cancelled) onError(err instanceof Error ? err.message : String(err))
+        if (!cancelled) {
+          setLoading(false)
+          onError(err instanceof Error ? err.message : String(err))
+        }
       }
     }
 
     load()
     return () => { cancelled = true }
   }, [filePath])
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-[var(--color-surface)]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+          <span className="text-[12px] text-text-tertiary">Loading slides...</span>
+        </div>
+      </div>
+    )
+  }
 
   if (slides.length === 0) return null
   const current = slides[currentSlide]
@@ -293,9 +288,7 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
       {/* Slide canvas */}
       <div className="flex-1 overflow-auto flex items-start justify-center p-6 sm:p-10">
         <div className="w-full max-w-[720px] bg-white dark:bg-white/5 rounded-xl shadow-lg border border-border-light/30 overflow-hidden">
-          {/* Slide content */}
           <div className="p-8 sm:p-12 min-h-[300px]">
-            {/* Images */}
             {current.content.images.length > 0 && (
               <div className="flex flex-wrap gap-4 mb-6 justify-center">
                 {current.content.images.map((img, i) => (
@@ -305,7 +298,6 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
               </div>
             )}
 
-            {/* Tables */}
             {current.content.tables.map((table, ti) => (
               <div key={ti} className="mb-6 overflow-x-auto">
                 <table className="w-full border-collapse rounded-lg overflow-hidden text-[12px]">
@@ -320,7 +312,7 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
                           >
                             {cell.runs.map((para, pi) => (
                               <p key={pi} className={pi < cell.runs.length - 1 ? 'mb-1' : ''}>
-                                {para.map((r, ri) => renderRuns([r], `r-${ri}`, 16))}
+                                {para.map((r, ri) => renderRuns([r], `rt-${ti}-${ri}-${pi}-${ri}`))}
                               </p>
                             ))}
                           </td>
@@ -332,7 +324,6 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
               </div>
             ))}
 
-            {/* Paragraphs */}
             {current.content.paragraphs.length > 0 ? (
               <div className="space-y-3">
                 {current.content.paragraphs.map((runs, i) => (
