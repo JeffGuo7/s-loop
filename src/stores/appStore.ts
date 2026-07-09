@@ -94,8 +94,8 @@ interface AppState {
 }
 
 const DEFAULT_CONFIGS: Record<string, ProviderConfig> = {
-  anthropic: { apiKey: '', model: 'claude-sonnet-4-5-20250929', baseUrl: '' },
-  openai: { apiKey: '', model: 'gpt-4o', baseUrl: '' },
+  anthropic: { apiKey: '', model: '', baseUrl: '' },
+  openai: { apiKey: '', model: '', baseUrl: '' },
 }
 
 function mergeProviderList(currentList: ProviderInfo[], customProviders: ProviderInfo[]) {

@@ -543,7 +543,7 @@ export function ChatView() {
                 {activeSessionId && (() => {
                   const agentStore = useAgentStore.getState()
                   const agent = agentStore.activeAgentId ? agentStore.agents.find(a => a.id === agentStore.activeAgentId) : null
-                  const mode = agent?.permissionMode || 'ask'
+                  const mode = agent?.permissionMode || 'allow'
                   const modeConfig = {
                     allow: { icon: ShieldCheck, label: 'Allow' },
                     ask: { icon: ShieldAlert, label: 'Ask' },
