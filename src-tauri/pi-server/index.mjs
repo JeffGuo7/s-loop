@@ -35,6 +35,7 @@ import { initGoalPersistence, loadGoals, getGoal, createGoal, updateGoal, delete
 import { runGoalLoop } from './goal-loop/index.mjs'
 import { tryGetAdapter } from './platforms/registry.mjs'
 import { authorizeInbound } from './platforms/access-control.mjs'
+import { ToolGuard } from './tool-guardrails.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -1492,6 +1493,16 @@ createServer((req, res) => {
             })
           },
           beforeToolCall: async ({ toolCall }) => {
+            // Guard: prevent model from retrying tools that keep failing
+            const guard = wrapper.toolGuard
+            if (guard) {
+              const guardResult = guard.beforeTool(toolCall.name, toolCall.arguments || {})
+              if (guardResult?.block) {
+                console.log('[pi-server] tool guard BLOCKING:', toolCall.name, guardResult.reason)
+                return { block: true, reason: guardResult.reason }
+              }
+            }
+
             emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments || {} })
             console.log('[pi-server] beforeToolCall:', toolCall.name, 'config.mode:', wrapper.config?.permissionMode)
             const permission = checkToolPermission(toolCall.name, wrapper.config?.permissionRules, wrapper.config?.permissionMode)
@@ -1523,7 +1534,25 @@ createServer((req, res) => {
             }
             return undefined
           },
-          afterToolCall: async ({ result }) => {
+          afterToolCall: async ({ result, toolCall }) => {
+            // Guard tracking: record tool outcome
+            const guard = wrapper.toolGuard
+            if (guard && toolCall?.name) {
+              const isError = result?.isError === true
+              const suffix = guard.afterTool(toolCall.name, toolCall.arguments || {}, isError)
+              if (suffix && result?.content?.[0]?.type === 'text') {
+                // Append the guard message to the tool result text
+                const text = result.content[0].text || ''
+                return { content: [{ type: 'text', text: text + suffix }] }
+              }
+            }
+
+            // Structured error results for AI reasoning
+            if (result?.isError && result?.content?.[0]?.type === 'text') {
+              const raw = result.content[0].text || ''
+              return { content: [{ type: 'text', text: JSON.stringify({ status: 'error', error: raw.slice(0, 300), hint: 'This tool call failed. Do NOT retry the same call. Diagnose the cause, then try a different approach.' }, null, 2) }] }
+            }
+
             const truncated = truncateContent(result.content)
             if (truncated !== result.content) {
               return { content: truncated }
@@ -1553,6 +1582,7 @@ createServer((req, res) => {
         wrapper.agent = agent
         wrapper.contextEngine = contextEngine
         wrapper.previousMessageCount = initialMessages.length
+        wrapper.toolGuard = new ToolGuard()
         wrapper.config = { workspaceDir, webSearchConfig, permissionMode, permissionRules, providerConfig: effectiveProviderConfig }
         sessions.set(sessionId, wrapper)
         console.log('[pi-server] Tools:', tools.length, '| Provider:', provider, '| Model:', modelId)
