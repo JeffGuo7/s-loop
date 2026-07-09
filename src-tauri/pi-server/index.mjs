@@ -36,6 +36,7 @@ import { runGoalLoop } from './goal-loop/index.mjs'
 import { tryGetAdapter } from './platforms/registry.mjs'
 import { authorizeInbound } from './platforms/access-control.mjs'
 import { ToolGuard } from './tool-guardrails.mjs'
+import { checkCommandSafety, checkSensitivePath } from './security.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -1503,7 +1504,28 @@ createServer((req, res) => {
               }
             }
 
-            emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments || {} })
+            // Command safety: unconditionally block hardline-dangerous commands
+            const args = toolCall.arguments || {}
+            const cmd = args.command || args.cmd || ''
+            const isShellTool = toolCall.name === 'bash' || toolCall.name === 'shell' || toolCall.name === 'execute_command'
+            if (isShellTool && cmd) {
+              const safety = checkCommandSafety(cmd)
+              if (!safety.allowed) {
+                console.log('[pi-server] COMMAND SAFETY BLOCK:', safety.reason)
+                return { block: true, reason: safety.reason }
+              }
+            }
+            // File path safety: block writes to sensitive host paths
+            const isEditTool = ['edit', 'write', 'apply_diff', 'replace_in_file', 'delete', 'remove'].includes(toolCall.name)
+            if (isEditTool && args.path) {
+              const sensitive = checkSensitivePath(args.path)
+              if (sensitive.blocked) {
+                console.log('[pi-server] SENSITIVE PATH BLOCK:', sensitive.label)
+                return { block: true, reason: `Write blocked: ${sensitive.label}. This host path cannot be modified by the AI.` }
+              }
+            }
+
+            emit('tool_call', { id: toolCall.id, name: toolCall.name, args: args })
             console.log('[pi-server] beforeToolCall:', toolCall.name, 'config.mode:', wrapper.config?.permissionMode)
             const permission = checkToolPermission(toolCall.name, wrapper.config?.permissionRules, wrapper.config?.permissionMode)
             console.log('[pi-server] beforeToolCall result:', JSON.stringify(permission))
