@@ -11,6 +11,83 @@ pub struct PiServerProcess {
 
 pub struct PiServerState(pub Arc<Mutex<Option<PiServerProcess>>>);
 
+/// Marker file used to detect a fully extracted pi-server. We write it last so
+/// a crash mid-extract leaves an incomplete directory that we will rebuild.
+const EXTRACT_OK_MARKER: &str = ".extract-ok";
+
+/// Ensure the pi-server directory exists under `base_dir`, extracting the
+/// bundled `pi-server.zip` archive on first launch. Returns true when
+/// `base_dir/pi-server/index.mjs` is usable afterwards.
+///
+/// In dev, the pi-server source directory is already present and the zip does
+/// not exist, so this is a no-op (returns true).
+pub fn ensure_pi_server_extracted(base_dir: &std::path::Path) -> Result<bool, String> {
+    let pi_server_dir = base_dir.join("pi-server");
+    let index_mjs = pi_server_dir.join("index.mjs");
+    let marker = pi_server_dir.join(EXTRACT_OK_MARKER);
+
+    // Already extracted and intact — fast path.
+    if index_mjs.exists() && marker.exists() {
+        return Ok(true);
+    }
+
+    let zip_path = base_dir.join("pi-server.zip");
+    if !zip_path.exists() {
+        // No archive and no extracted dir: caller will report not-found.
+        return Ok(index_mjs.exists());
+    }
+
+    // Stale or partial extraction — start clean.
+    if pi_server_dir.exists() {
+        std::fs::remove_dir_all(&pi_server_dir)
+            .map_err(|e| format!("failed to remove stale pi-server dir: {e}"))?;
+    }
+    std::fs::create_dir_all(&pi_server_dir)
+        .map_err(|e| format!("failed to create pi-server dir: {e}"))?;
+
+    let file = std::fs::File::open(&zip_path)
+        .map_err(|e| format!("failed to open pi-server.zip: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("failed to read pi-server.zip: {e}"))?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("zip entry {i} read error: {e}"))?;
+        let rel = entry.name().to_string();
+        // Guard against path traversal in the archive (zipslip).
+        let dest = pi_server_dir.join(&rel);
+        let canonical_base = pi_server_dir.canonicalize().unwrap_or_else(|_| pi_server_dir.clone());
+        if !dest
+            .canonicalize()
+            .unwrap_or_else(|_| dest.clone())
+            .starts_with(&canonical_base)
+        {
+            return Err(format!("zip entry escapes pi-server dir: {rel}"));
+        }
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&dest)
+                .map_err(|e| format!("failed to create dir {}: {e}", dest.display()))?;
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("failed to create parent for {}: {e}", dest.display()))?;
+        }
+        let mut out = std::fs::File::create(&dest)
+            .map_err(|e| format!("failed to create {}: {e}", dest.display()))?;
+        std::io::copy(&mut entry, &mut out)
+            .map_err(|e| format!("failed to write {}: {e}", dest.display()))?;
+    }
+
+    // Write the completion marker last so a partial extract is detectable.
+    std::fs::write(&marker, b"ok")
+        .map_err(|e| format!("failed to write marker: {e}"))?;
+
+    Ok(index_mjs.exists())
+}
+
 fn dirs_home() -> PathBuf {
     std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))

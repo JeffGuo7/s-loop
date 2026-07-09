@@ -5,7 +5,7 @@ mod skill_installer;
 mod skills_cli;
 
 use crate::mcp_manager::MCPManager;
-use crate::pi_server::{PiServerProcess, PiServerState};
+use crate::pi_server::{ensure_pi_server_extracted, PiServerProcess, PiServerState};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::menu::{Menu, MenuItem};
@@ -205,6 +205,20 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn pi_server_in(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    // Accept both the subdir layout (pi-server/index.mjs, the one we ship)
+    // and the flat layout (index.mjs at the root).
+    let subdir = dir.join("pi-server").join("index.mjs");
+    if subdir.exists() {
+        return Some(subdir);
+    }
+    let flat = dir.join("index.mjs");
+    if flat.exists() {
+        return Some(flat);
+    }
+    None
+}
+
 fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>) -> String {
     // 1. Dev path: {project_dir}/src-tauri/pi-server/index.mjs
     let dev = std::path::Path::new(project_dir).join("src-tauri").join("pi-server").join("index.mjs");
@@ -218,19 +232,36 @@ fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>
     let root = std::path::Path::new(project_dir).join("index.mjs");
     if root.exists() { return project_dir.to_string(); }
 
-    // 4. Tauri resource_dir
+    // 4. Tauri resource_dir (subdir or flat layout). The bundled pi-server.zip
+    //    is extracted here on first launch.
     if let Some(app) = app_handle {
         if let Ok(res) = app.path().resource_dir() {
-            let p = res.join("index.mjs");
-            if p.exists() { return res.to_string_lossy().to_string(); }
+            if let Err(e) = ensure_pi_server_extracted(&res) {
+                eprintln!("[s-loop] pi-server extract from resource_dir failed: {e}");
+            }
+            if pi_server_in(&res).is_some() {
+                return res.to_string_lossy().to_string();
+            }
         }
     }
 
-    // 5. Exe directory
+    // 5. Exe directory — the reliable fallback for a packaged app whose
+    //    current_dir() is unrelated to the install location (e.g. launched
+    //    from a shortcut with cwd = home or System32). The bundled
+    //    pi-server.zip is extracted next to the exe on first launch.
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let p = dir.join("index.mjs");
-            if p.exists() { return dir.to_string_lossy().to_string(); }
+            if let Err(e) = ensure_pi_server_extracted(dir) {
+                eprintln!("[s-loop] pi-server extract from exe dir failed: {e}");
+            }
+            if pi_server_in(dir).is_some() {
+                // current_exe() may carry the \\?\ verbatim prefix on Windows;
+                // pi_server::start strips it too, but keep the returned path
+                // clean for any other consumer.
+                let clean = dir.to_string_lossy();
+                let clean = clean.trim_start_matches(r"\\?\");
+                return clean.to_string();
+            }
         }
     }
 
