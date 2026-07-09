@@ -12,7 +12,8 @@
     "test:coverage": "vitest run --coverage",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "publish:release": "node scripts/publish-release.mjs"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
