@@ -31,7 +31,7 @@ export function PlatformCard({ platform }: PlatformCardProps) {
   // Load known contacts when card is expanded
   useEffect(() => {
     if (!expanded || !isInbound) return
-    fetch(`${Pi.getBaseUrl()}/platforms/contacts`)
+    fetch(`${getBaseUrl()}/platforms/contacts`)
       .then((r) => r.json())
       .then((data) => setContacts(Array.isArray(data) ? data : []))
       .catch(() => {})
