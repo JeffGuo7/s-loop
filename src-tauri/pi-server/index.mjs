@@ -20,6 +20,8 @@ import {
   sendPlatformMessage,
   testPlatform,
   updatePlatformConfig,
+  recordPlatformContact,
+  getPlatformContacts,
 } from './platform-center.mjs'
 import { initTelegramMonitor, startTelegramMonitor, stopTelegramMonitor } from './telegram-monitor.mjs'
 import {
@@ -678,6 +680,8 @@ async function processPlatformInbound(platformId, incoming, options = {}) {
 
   recordPlatformMessage(platformId, 'received', incoming.text)
   recordPlatformInbound(incoming)
+  // Track who messaged us so the owner can manage access visually
+  recordPlatformContact(platformId, incoming.username || '', String(incoming.fromId || ''), String(incoming.chatId || ''))
   // Session id doubles as part of a session filename, so it must be
   // filesystem-safe. Colons (from platform:conversation:thread) are
   // illegal in Windows filenames — replace any unsafe char with '_'.
@@ -852,6 +856,13 @@ createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/platforms') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(getPlatformSnapshot()))
+    return
+  }
+
+  // GET /platforms/contacts — known inbound senders for visual access control
+  if (req.method === 'GET' && url.pathname === '/platforms/contacts') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(getPlatformContacts()))
     return
   }
 

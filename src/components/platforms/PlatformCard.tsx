@@ -1,10 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePlatformStore } from '../../stores'
 import { Send, Check, Loader2, Link, Link2Off, ChevronDown } from 'lucide-react'
 import { MagicButton } from '../ui'
 import type { PlatformConfig } from '../../types/platform'
 import { getBaseUrl } from '../../utils/piClient'
+
+interface ContactEntry {
+  key: string
+  username: string
+  fromId: string
+  chatId: string
+  lastSeen: number
+}
 
 interface PlatformCardProps {
   platform: PlatformConfig
@@ -18,6 +26,17 @@ export function PlatformCard({ platform }: PlatformCardProps) {
   const connecting = isConnecting[platform.id] || false
   const isInbound = ['telegram', 'feishu', 'dingtalk', 'wechat', 'slack', 'discord', 'qqbot'].includes(platform.id)
   const allowAll = platform.values.allowAll === 'true'
+  const [contacts, setContacts] = useState<ContactEntry[]>([])
+
+  // Load known contacts when card is expanded
+  useEffect(() => {
+    if (!expanded || !isInbound) return
+    fetch(`${Pi.getBaseUrl()}/platforms/contacts`)
+      .then((r) => r.json())
+      .then((data) => setContacts(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [expanded, isInbound])
+
   const inboundUrl = ['feishu', 'dingtalk', 'wechat', 'slack', 'discord'].includes(platform.id)
     ? `${getBaseUrl()}/platforms/inbound/${platform.id}`
     : ''
@@ -152,19 +171,49 @@ export function PlatformCard({ platform }: PlatformCardProps) {
                 </button>
               </label>
 
-              {/* Whitelist */}
+              {/* Whitelist — visual contact list */}
               {!allowAll && (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-text-tertiary">
                     {t('platforms.access.whitelist')}
                   </label>
-                  <textarea
-                    value={platform.values.allowedUsers || ''}
-                    onChange={(e) => handleFieldChange('allowedUsers', e.target.value)}
-                    placeholder={t('platforms.access.whitelistPlaceholder')}
-                    rows={2}
-                    className="w-full px-3 py-2 rounded-lg bg-surface border border-border-light focus:border-accent/40 outline-none text-[12px] font-mono resize-none transition-colors"
-                  />
+                  {contacts.length === 0 ? (
+                    <p className="text-[11px] text-text-quaternary">暂无已知联系人。有人给 bot 发消息后会出现在这里。</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {contacts.map((c) => {
+                        const allowed = platform.values.allowedUsers || ''
+                        const isAllowed = allowed.split(/[\n,]/).map(s => s.trim()).includes(c.fromId) ||
+                                         allowed.split(/[\n,]/).map(s => s.trim()).includes(c.chatId) ||
+                                         allowed.split(/[\n,]/).map(s => s.trim()).includes(c.username)
+                        return (
+                          <label key={c.key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface border border-border-light/60 hover:border-accent/20 transition-colors cursor-pointer">
+                            <div className="min-w-0">
+                              <span className="text-[12px] font-medium text-text truncate block">
+                                {c.username ? `@${c.username}` : c.key}
+                              </span>
+                              <span className="text-[10px] text-text-quaternary font-mono">{c.fromId || c.chatId}</span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const current = platform.values.allowedUsers || ''
+                                const entries = current.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
+                                const id = c.fromId || c.chatId || c.username
+                                const newEntries = isAllowed
+                                  ? entries.filter(e => e !== c.fromId && e !== c.chatId && e !== c.username)
+                                  : [...entries, id]
+                                handleFieldChange('allowedUsers', newEntries.join('\n'))
+                              }}
+                              className={`shrink-0 relative w-9 h-5 rounded-full transition-colors ${isAllowed ? 'bg-accent' : 'bg-surface-tertiary'}`}
+                              style={{ width: 36, height: 22 }}
+                            >
+                              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${isAllowed ? 'translate-x-[14px]' : ''}`} />
+                            </button>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
                   <p className="text-[10px] text-text-quaternary">{t('platforms.access.whitelistHint')}</p>
                 </div>
               )}

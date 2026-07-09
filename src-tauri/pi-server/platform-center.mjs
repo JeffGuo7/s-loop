@@ -321,3 +321,48 @@ export function clearPlatformMessages() {
   _saveMessages([])
   return _snapshot()
 }
+
+// ── Contact registry (for visual access control) ──────────────────
+
+let _contactsFile = ''
+
+function _initContacts() {
+  if (!_contactsFile) {
+    _contactsFile = join(_platformDir, 'contacts.json')
+  }
+}
+
+function _loadContacts() {
+  _initContacts()
+  return _readJson(_contactsFile, { contacts: {} }).contacts || {}
+}
+
+function _saveContacts(contacts) {
+  _initContacts()
+  writeFileSync(_contactsFile, JSON.stringify({ contacts, updatedAt: new Date().toISOString() }, null, 2), 'utf-8')
+}
+
+/** Record a known inbound contact for the visual access-control list. */
+export function recordPlatformContact(platformId, username, fromId, chatId) {
+  const contacts = _loadContacts()
+  const key = fromId || chatId || username
+  if (!key) return
+  const existing = contacts[key]
+  contacts[key] = {
+    username: username || existing?.username || '',
+    fromId: fromId || existing?.fromId || '',
+    chatId: chatId || existing?.chatId || '',
+    firstSeen: existing?.firstSeen || Date.now(),
+    lastSeen: Date.now(),
+  }
+  _saveContacts(contacts)
+}
+
+/** List known contacts for a platform (returns sorted by lastSeen desc). */
+export function getPlatformContacts(platformId) {
+  const contacts = _loadContacts()
+  return Object.entries(contacts)
+    .filter(([, c]) => c.fromId || c.username)
+    .map(([key, c]) => ({ key, ...c }))
+    .sort((a, b) => b.lastSeen - a.lastSeen)
+}
