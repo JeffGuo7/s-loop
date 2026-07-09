@@ -482,12 +482,14 @@ async function callMcpTool(wrapper, sessionId, serverName, toolName, args, signa
   }
 }
 
-const DANGEROUS_CATEGORIES = new Set(['bash', 'edit', 'write', 'delete', 'remove', 'execute', 'shell'])
+const DANGEROUS_CATEGORIES = new Set(['bash', 'edit', 'delete', 'remove', 'execute', 'shell'])
 
 function getToolCategory(toolName) {
   const lower = toolName.toLowerCase()
   if (lower.includes('bash') || lower.includes('shell') || lower.includes('exec')) return 'bash'
-  if (lower.includes('edit') || lower.includes('write') || lower.includes('delete') || lower.includes('remove')) return 'edit'
+  // write (create new content) is safe; edit/delete/remove modify existing files
+  if (lower.includes('write') && !lower.includes('delete') && !lower.includes('remove')) return 'write'
+  if (lower.includes('edit') || lower.includes('delete') || lower.includes('remove')) return 'edit'
   if (lower.includes('grep')) return 'grep'
   if (lower.includes('find') || lower.includes('glob')) return 'glob'
   if (lower.includes('ls') || lower.includes('list')) return 'list'
