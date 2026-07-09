@@ -1,10 +1,9 @@
-# S-Loop (Snotra)
+# S-Loop
 
 > AI Desktop Workbench — chat, agent orchestration, scheduled tasks, desktop pet, all in one Tauri 2 app
 
 <p align="center">
-  <!-- TODO: replace with app demo GIF/WebP -->
-  <img src="" alt="S-Loop Screenshot" width="800" />
+  <img src="/s-loop.png" alt="S-Loop Screenshot" width="800" />
 </p>
 
 <p align="center">
@@ -12,12 +11,14 @@
   <a href="https://github.com/JeffGuo7/s-loop/blob/master/LICENSE"><img src="https://img.shields.io/github/license/JeffGuo7/s-loop?color=blue" alt="License"></a>
   <a href="https://github.com/JeffGuo7/s-loop/releases"><img src="https://img.shields.io/github/v/release/JeffGuo7/s-loop?include_prereleases&label=release" alt="Release"></a>
   <a href="https://github.com/JeffGuo7/s-loop/stargazers"><img src="https://img.shields.io/github/stars/JeffGuo7/s-loop?style=flat" alt="Stars"></a>
-  <a href="https://github.com/JeffGuo7/s-loop"><img src="https://img.shields.io/github/repo-size/JeffGuo7/s-loop" alt="Repo Size"></a>
+  <a href="https://github.com/JeffGuo7/s-loop/releases/latest"><img src="https://img.shields.io/badge/download-windows%20.exe-blue?logo=windows" alt="Download Windows"></a>
 </p>
 
 [中文文档](README.zh-CN.md)
 
 ## Quick Start
+
+### Development
 
 ```bash
 git clone https://github.com/JeffGuo7/s-loop.git
@@ -28,9 +29,16 @@ npm run tauri:dev
 
 > Prerequisites: Node.js ≥ 18, Rust ≥ 1.85 (MSVC), npm
 
-## Features
+### Download (Windows)
 
-<!-- TODO: add screenshots for each module -->
+Download the latest installer from the [Releases page](https://github.com/JeffGuo7/s-loop/releases/latest).
+
+| Format | File |
+|--------|------|
+| Installer (recommended) | `S-Loop_<version>_x64-setup.exe` |
+| Portable | `S-Loop_<version>_x64_en-US.msi` |
+
+## Features
 
 | Module | Description |
 |--------|-------------|
@@ -39,7 +47,7 @@ npm run tauri:dev
 | **MCP Servers** | stdio MCP process management, auto tool discovery, Rust-managed lifecycle |
 | **Skills** | Local SKILL.md scanning, remote install from ClawHub, CLI integration, ZIP drag-and-drop |
 | **Scheduled Tasks** | Cron / interval / one-shot, bind Agent + Skills, deliver to chat or platform |
-| **Platform Hub** | Telegram (bidirectional sync), Email, Webhook, Feishu, DingTalk, WeCom |
+| **Platform Hub** | Telegram (bidirectional sync), Email, Webhook, Feishu, DingTalk, WeCom, Slack, Discord, QQ Bot |
 | **Desktop Pet** | SVG animated pet, transparent overlay window, multi-state, theme packs |
 | **Web Search** | Bing / Brave / SearXNG / Tavily / Exa — 5 engines, zero-config default |
 | **Themes** | 9 color palettes × dark/light, glassmorphism, CSS variable driven |
