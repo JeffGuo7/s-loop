@@ -365,6 +365,17 @@ pub fn run() {
         ])
         .manage(MCPManager::new())
         .setup(move |app| {
+            // Handle close → minimize (hide) behavior: clicking X should
+            // hide the window to system tray, not quit the app.
+            if let Some(window) = app.get_webview_window("main") {
+                let win = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win.hide();
+                    }
+                });
+            }
             setup_tray(app).map_err(|e| e.to_string())?;
             let state = PiServerState(server_state_arc);
             let actual_project_dir = find_pi_server_entry(&project_dir, Some(app.handle()));

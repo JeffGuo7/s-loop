@@ -138,10 +138,11 @@ impl PiServerProcess {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
-            // DETACHED_PROCESS (0x8) ensures the child doesn't inherit or create
-            // a console window. CREATE_NO_WINDOW (0x08000000) is an older flag
-            // that can be less reliable with Node.js on newer Windows builds.
-            cmd.creation_flags(0x00000008);
+            // CREATE_NO_WINDOW (0x08000000): prevents the Node.js console
+            // process from creating a visible window. We DON'T use
+            // DETACHED_PROCESS here because that breaks the stdin pipe,
+            // which pi-server uses to detect parent process exit.
+            cmd.creation_flags(0x08000000);
         }
 
         cmd.stdin(Stdio::piped());
