@@ -11,7 +11,7 @@
  */
 
 import { Agent } from '@earendil-works/pi-agent-core'
-import { getModel } from '@earendil-works/pi-ai/compat'
+import { getModel } from '@earendil-works/pi-ai'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 import { webSearch } from './searchProviders.mjs'
 import { createSessionRepo, findSession } from './session-store.mjs'
