@@ -18,6 +18,12 @@ export interface McpToolRequest {
   arguments: Record<string, unknown>
 }
 
+export interface ToolApprovalRequest {
+  requestId: string
+  toolName: string
+  args: Record<string, unknown>
+}
+
 export interface PiStreamCallbacks {
   onText: (pid: string, delta: string) => void
   onThinking: (delta: string) => void
@@ -25,6 +31,7 @@ export interface PiStreamCallbacks {
   onToolResult: (id: string, name: string, result: any) => void
   onToolUpdate?: (id: string, name: string, partialResult: any) => void
   onMcpToolRequest?: (request: McpToolRequest) => void
+  onToolApproval?: (request: ToolApprovalRequest) => void
   onDone: () => void
   onResult?: (text: string) => void
   onError?: (msg: string) => void
@@ -232,6 +239,9 @@ export async function prompt(
                 case 'mcp_tool_request':
                   cb?.onMcpToolRequest?.(data)
                   break
+                case 'tool_approval_request':
+                  cb?.onToolApproval?.(data)
+                  break
                 case 'result':
                   resultText = data.text || ''
                   cb?.onResult?.(resultText)
@@ -299,6 +309,18 @@ export async function sendMcpToolResponse(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ requestId, result, error }),
+  })
+}
+
+export async function sendToolApproval(
+  sessionId: string,
+  requestId: string,
+  approved: boolean,
+): Promise<void> {
+  await fetch(`${_base}/session/${sessionId}/tool-approval`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId, approved }),
   })
 }
 

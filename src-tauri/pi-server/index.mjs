@@ -1391,6 +1391,27 @@ createServer((req, res) => {
     return
   }
 
+  const toolApprovalMatch = url.pathname.match(/^\/session\/([^/]+)\/tool-approval$/)
+  if (req.method === 'POST' && toolApprovalMatch) {
+    readJsonBody(req).then(({ requestId, approved }) => {
+      const sessionWrapper = sessions.get(toolApprovalMatch[1])
+      const resolver = sessionWrapper?.pendingToolApprovals?.get(requestId)
+      if (!resolver) {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Approval request not found or expired' }))
+        return
+      }
+      resolver(approved === true)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+    }).catch((e) => {
+      console.error('[pi-server] failed to handle tool approval:', e)
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message || 'Bad request' }))
+    })
+    return
+  }
+
   const abortMatch = url.pathname.match(/^\/session\/([^/]+)\/abort$/)
   if (req.method === 'POST' && abortMatch) {
     const abortSessionId = abortMatch[1]
@@ -1470,10 +1491,31 @@ createServer((req, res) => {
           },
           beforeToolCall: async ({ toolCall }) => {
             emit('tool_call', { id: toolCall.id, name: toolCall.name, args: toolCall.arguments || {} })
-            console.log('[pi-server] beforeToolCall:', toolCall.name, 'config.mode:', wrapper.config?.permissionMode, 'config.rules:', JSON.stringify(wrapper.config?.permissionRules || {}))
+            console.log('[pi-server] beforeToolCall:', toolCall.name, 'config.mode:', wrapper.config?.permissionMode)
             const permission = checkToolPermission(toolCall.name, wrapper.config?.permissionRules, wrapper.config?.permissionMode)
             console.log('[pi-server] beforeToolCall result:', JSON.stringify(permission))
             if (!permission.allowed) {
+              // In 'ask' mode, dangerous tools require explicit user approval
+              if (wrapper.config?.permissionMode === 'ask' && permission.reason?.includes('requires explicit approval')) {
+                const requestId = `tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                wrapper.pendingToolApprovals = wrapper.pendingToolApprovals || new Map()
+                const approvalPromise = new Promise((resolve) => {
+                  const timeout = setTimeout(() => {
+                    wrapper.pendingToolApprovals?.delete(requestId)
+                    resolve(false)
+                  }, 60_000)
+                  wrapper.pendingToolApprovals.set(requestId, (approved) => {
+                    clearTimeout(timeout)
+                    resolve(approved)
+                  })
+                })
+                console.log('[pi-server] emitting tool-approval-request:', requestId, toolCall.name)
+                emit('tool_approval_request', { requestId, toolName: toolCall.name, args: toolCall.arguments })
+                const approved = await approvalPromise
+                console.log('[pi-server] tool approval result:', requestId, approved)
+                if (!approved) return { block: true, reason: '用户拒绝' }
+                return undefined
+              }
               console.log('[pi-server] BLOCKING tool:', toolCall.name, 'reason:', permission.reason)
               return { block: true, reason: permission.reason }
             }

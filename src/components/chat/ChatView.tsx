@@ -42,6 +42,7 @@ export function ChatView() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [dragTargetZone, setDragTargetZone] = useState<'message' | 'input'>('message')
   const [showPermissionPopup, setShowPermissionPopup] = useState(false)
+  const [pendingApproval, setPendingApproval] = useState<{ requestId: string; toolName: string; args: any; piSessionId: string } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const streamUnsubsRef = useRef(new Map<string, () => void>())
 
@@ -100,6 +101,9 @@ export function ChatView() {
         } catch (err) {
           await Pi.sendMcpToolResponse(piSessionId, request.requestId, null, err instanceof Error ? err.message : String(err))
         }
+      },
+      onToolApproval: (request) => {
+        setPendingApproval({ ...request, piSessionId })
       },
       onDone: () => {
         unsubscribe()
@@ -632,6 +636,47 @@ export function ChatView() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Tool approval dialog */}
+      {pendingApproval && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setPendingApproval(null)}>
+          <div className="w-full max-w-sm bg-surface rounded-2xl shadow-2xl p-6 animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                <ShieldAlert size={20} className="text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-[15px] font-bold text-text">批准工具调用</h3>
+                <p className="text-[11px] text-text-tertiary">Agent 请求使用危险工具</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-surface-secondary/50 border border-border-light p-4 mb-5 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">工具</span>
+                <code className="text-[13px] font-bold text-accent font-mono">{pendingApproval.toolName}</code>
+              </div>
+              {pendingApproval.args && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">参数</span>
+                  <pre className="mt-1 text-[11px] font-mono text-text-secondary bg-surface border border-border-light/70 rounded-lg p-2.5 max-h-32 overflow-auto whitespace-pre-wrap">
+                    {JSON.stringify(pendingApproval.args, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, false); setPendingApproval(null) }}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-border-light text-[12px] font-bold text-text-tertiary hover:text-text hover:bg-surface-secondary transition-all">
+                拒绝
+              </button>
+              <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, true); setPendingApproval(null) }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-white text-[12px] font-bold shadow shadow-accent/20 hover:shadow-lg transition-all">
+                <ShieldCheck size={14} className="inline mr-1.5" />批准
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
