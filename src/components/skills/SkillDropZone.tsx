@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { getErrorMessage } from '../../utils/errors'
 import { useTranslation } from 'react-i18next'
 import { useSkillStore } from '../../stores/skillStore'
 import { FileArchive, Loader2, Check, AlertCircle } from 'lucide-react'
@@ -61,7 +62,7 @@ export function SkillDropZone() {
       setTimeout(reset, 2000)
     } catch (err) {
       setStatus('error')
-      setStatusText(err instanceof Error ? err.message : t('skills.zipParseError'))
+      setStatusText(getErrorMessage(err, t('skills.zipParseError')))
       setTimeout(reset, 3000)
     }
   }, [t, installSkillZip, reset])

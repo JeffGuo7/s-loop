@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getErrorMessage } from '../../utils/errors'
 
 interface PptxPreviewProps {
   filePath: string
@@ -241,7 +242,7 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
       } catch (err) {
         if (!cancelled) {
           setLoading(false)
-          onError(err instanceof Error ? err.message : String(err))
+          onError(getErrorMessage(err))
         }
       }
     }

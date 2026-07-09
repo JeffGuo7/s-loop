@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { getBaseUrl } from '../utils/piClient'
 import { sendPlatformMessage } from '../utils/platformClient'
+import { getErrorMessage } from '../utils/errors'
+import { jsonRequest } from '../utils/http'
 import type { ScheduledTask, TaskDelivery, TaskSchedule } from '../types/task'
 import type { PlatformId } from '../types/platform'
 import type { KiloMessage } from '../types'
@@ -88,34 +90,22 @@ async function deliverTaskResults(tasks: ScheduledTask[]) {
         }
         useAppStore.getState().addMessage(sessionId, message)
 
-        await fetch(`${BASE()}/tasks/${task.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deliverSessionId: sessionId,
-            deliveredRunId: task.lastRunId,
-            deliveryError: undefined,
-          }),
-        })
+        await fetch(`${BASE()}/tasks/${task.id}`, jsonRequest({
+          deliverSessionId: sessionId,
+          deliveredRunId: task.lastRunId,
+          deliveryError: undefined,
+        }, { method: 'PUT' }))
       } else {
         await sendPlatformMessage(task.deliver as PlatformId, latest)
-        await fetch(`${BASE()}/tasks/${task.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deliveredRunId: task.lastRunId,
-            deliveryError: undefined,
-          }),
-        })
+        await fetch(`${BASE()}/tasks/${task.id}`, jsonRequest({
+          deliveredRunId: task.lastRunId,
+          deliveryError: undefined,
+        }, { method: 'PUT' }))
       }
     } catch (err) {
-      await fetch(`${BASE()}/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          deliveryError: err instanceof Error ? err.message : String(err),
-        }),
-      }).catch(() => {})
+      await fetch(`${BASE()}/tasks/${task.id}`, jsonRequest({
+        deliveryError: getErrorMessage(err),
+      }, { method: 'PUT' })).catch(() => {})
     }
   }
 }
@@ -136,23 +126,19 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
       const finalTasks = refreshed.ok ? await refreshed.json() : tasks
       set({ tasks: finalTasks, loading: false })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err), loading: false })
+      set({ error: getErrorMessage(err), loading: false })
     }
   },
 
   createTask: async (data) => {
     try {
-      const res = await fetch(`${BASE()}/tasks/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
+      const res = await fetch(`${BASE()}/tasks/create`, jsonRequest(data))
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const task = await res.json()
       set((s) => ({ tasks: [...s.tasks, task] }))
       return task
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
       return null
     }
   },
@@ -162,7 +148,7 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
       await fetch(`${BASE()}/tasks/${id}`, { method: 'DELETE' })
       set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }))
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
     }
   },
 
@@ -170,14 +156,10 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
     const task = get().tasks.find((t) => t.id === id)
     if (!task) return
     try {
-      await fetch(`${BASE()}/tasks/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !task.enabled }),
-      })
+      await fetch(`${BASE()}/tasks/${id}`, jsonRequest({ enabled: !task.enabled }, { method: 'PUT' }))
       set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, enabled: !t.enabled } : t)) }))
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
     }
   },
 
@@ -187,19 +169,15 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
       const state = appStore.useAppStore.getState()
       const apiKey = state.providerConfigs[state.activeProvider]?.apiKey || ''
       const model = state.providerConfigs[state.activeProvider]?.model || ''
-      await fetch(`${BASE()}/tasks/run/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey,
-          defaultProvider: state.activeProvider,
-          defaultModel: model,
-          projectDir: state.workspaceDir || undefined,
-        }),
-      })
+      await fetch(`${BASE()}/tasks/run/${id}`, jsonRequest({
+        apiKey,
+        defaultProvider: state.activeProvider,
+        defaultModel: model,
+        projectDir: state.workspaceDir || undefined,
+      }))
       setTimeout(() => get().refresh(), 2000)
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
     }
   },
 

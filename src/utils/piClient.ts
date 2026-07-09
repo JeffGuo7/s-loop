@@ -1,4 +1,7 @@
 import type { PermissionAction, PermissionRule } from '../types/agent'
+import { getErrorMessage } from './errors'
+import { jsonRequest } from './http'
+import { readSSEStream } from './sse'
 
 const DEFAULT_BASE = 'http://127.0.0.1:4096'
 let _base = DEFAULT_BASE
@@ -107,11 +110,7 @@ export async function syncRuntimeConfig(config: {
   permissionMode?: string
   permissionRules?: Record<string, unknown>
 }): Promise<void> {
-  await fetch(`${_base}/runtime/config`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config),
-  })
+  await fetch(`${_base}/runtime/config`, jsonRequest(config))
 }
 
 export function subscribeStream(
@@ -174,12 +173,7 @@ export async function prompt(
     if (options?.providerAPI) body.providerAPI = options.providerAPI
     if (options?.providerConfig) body.providerConfig = options.providerConfig
 
-    const res = await fetch(`${_base}/session/${sessionId}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
+    const res = await fetch(`${_base}/session/${sessionId}/message`, jsonRequest(body, { signal: controller.signal }))
 
     if (!res.ok) {
       const text = await res.text()
@@ -189,87 +183,53 @@ export async function prompt(
     const reader = res.body?.getReader()
     if (!reader) return { text: '', error: 'No response body' }
 
-    const decoder = new TextDecoder()
-    let buffer = ''
     let resultText = ''
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-
-      // Parse SSE events
-      let lineEnd = buffer.indexOf('\n')
-      while (lineEnd !== -1) {
-        const line = buffer.slice(0, lineEnd)
-        buffer = buffer.slice(lineEnd + 1)
-        lineEnd = buffer.indexOf('\n')
-
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith(':')) continue
-
-        if (trimmed.startsWith('event: ')) {
-          const eventType = trimmed.slice(7)
-          // Read next line for data
-          const nextEnd = buffer.indexOf('\n')
-          const dataLine = nextEnd === -1 ? buffer.trim() : buffer.slice(0, nextEnd).trim()
-          if (dataLine.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(dataLine.slice(6))
-              const cb = _streams.get(sessionId)?.callbacks
-              switch (eventType) {
-                case 'text_delta':
-                  cb?.onText(data.pid || '', data.delta)
-                  break
-                case 'thinking_delta':
-                  cb?.onThinking(data.delta)
-                  break
-                case 'tool_call':
-                case 'tool_execution_start':
-                  cb?.onToolCall(data.id, data.name, data.args)
-                  break
-                case 'tool_result':
-                case 'tool_execution_end':
-                  cb?.onToolResult(data.id, data.name, data.result)
-                  break
-                case 'tool_execution_update':
-                  cb?.onToolUpdate?.(data.id, data.name, data.partialResult)
-                  break
-                case 'mcp_tool_request':
-                  cb?.onMcpToolRequest?.(data)
-                  break
-                case 'tool_approval_request':
-                  cb?.onToolApproval?.(data)
-                  break
-                case 'result':
-                  resultText = data.text || ''
-                  cb?.onResult?.(resultText)
-                  break
-                case 'error':
-                  resultText = `Error: ${data.message}`
-                  cb?.onError?.(data.message)
-                  break
-              }
-              if (eventType === 'done') {
-                cb?.onDone()
-                return { text: resultText }
-              }
-            } catch { /* skip invalid JSON */ }
-          }
-          // Consume the data line
-          if (nextEnd !== -1) {
-            buffer = buffer.slice(nextEnd + 1)
-            lineEnd = buffer.indexOf('\n')
-          }
-        }
+    await readSSEStream(reader, (eventType, data) => {
+      const cb = _streams.get(sessionId)?.callbacks
+      switch (eventType) {
+        case 'text_delta':
+          cb?.onText(data.pid || '', data.delta)
+          break
+        case 'thinking_delta':
+          cb?.onThinking(data.delta)
+          break
+        case 'tool_call':
+        case 'tool_execution_start':
+          cb?.onToolCall(data.id, data.name, data.args)
+          break
+        case 'tool_result':
+        case 'tool_execution_end':
+          cb?.onToolResult(data.id, data.name, data.result)
+          break
+        case 'tool_execution_update':
+          cb?.onToolUpdate?.(data.id, data.name, data.partialResult)
+          break
+        case 'mcp_tool_request':
+          cb?.onMcpToolRequest?.(data)
+          break
+        case 'tool_approval_request':
+          cb?.onToolApproval?.(data)
+          break
+        case 'result':
+          resultText = data.text || ''
+          cb?.onResult?.(resultText)
+          break
+        case 'error':
+          resultText = `Error: ${data.message}`
+          cb?.onError?.(data.message)
+          break
       }
-    }
+      if (eventType === 'done') {
+        cb?.onDone()
+        return true
+      }
+    })
 
     return { text: resultText }
   } catch (err) {
     if ((err as any)?.name === 'AbortError') return { text: '' }
-    return { text: '', error: err instanceof Error ? err.message : String(err) }
+    return { text: '', error: getErrorMessage(err) }
   } finally {
     const current = _streams.get(sessionId)
     if (current?.abortController === controller) {
@@ -305,11 +265,7 @@ export async function sendMcpToolResponse(
   result?: unknown,
   error?: string,
 ): Promise<void> {
-  await fetch(`${_base}/session/${sessionId}/mcp-response`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requestId, result, error }),
-  })
+  await fetch(`${_base}/session/${sessionId}/mcp-response`, jsonRequest({ requestId, result, error }))
 }
 
 export async function sendToolApproval(
@@ -317,11 +273,7 @@ export async function sendToolApproval(
   requestId: string,
   approved: boolean,
 ): Promise<void> {
-  await fetch(`${_base}/session/${sessionId}/tool-approval`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requestId, approved }),
-  })
+  await fetch(`${_base}/session/${sessionId}/tool-approval`, jsonRequest({ requestId, approved }))
 }
 
 export interface SubagentInfo {
@@ -362,14 +314,10 @@ export async function saveSubagent(
   },
 ): Promise<{ ok: boolean; path?: string; error?: string }> {
   try {
-    const res = await fetch(`${_base}/subagents/${encodeURIComponent(name)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
+    const res = await fetch(`${_base}/subagents/${encodeURIComponent(name)}`, jsonRequest(data))
     return await res.json()
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, error: getErrorMessage(err) }
   }
 }
 
@@ -383,7 +331,7 @@ export async function deleteSubagent(
     const res = await fetch(url, { method: 'DELETE' })
     return await res.json()
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, error: getErrorMessage(err) }
   }
 }
 
@@ -444,11 +392,7 @@ export async function createGoal(data: {
   maxIterations?: number
 }): Promise<GoalState | null> {
   try {
-    const res = await fetch(`${_base}/goals/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
+    const res = await fetch(`${_base}/goals/create`, jsonRequest(data))
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -496,49 +440,17 @@ export async function runGoal(
         return
       }
 
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        let lineEnd = buffer.indexOf('\n')
-        while (lineEnd !== -1) {
-          const line = buffer.slice(0, lineEnd)
-          buffer = buffer.slice(lineEnd + 1)
-          lineEnd = buffer.indexOf('\n')
-
-          const trimmed = line.trim()
-          if (!trimmed || trimmed.startsWith(':')) continue
-
-          if (trimmed.startsWith('event: ')) {
-            const eventType = trimmed.slice(7)
-            const nextEnd = buffer.indexOf('\n')
-            const dataLine = nextEnd === -1 ? buffer.trim() : buffer.slice(0, nextEnd).trim()
-            if (dataLine.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(dataLine.slice(6))
-                if (eventType === 'goal_event') {
-                  callbacks.onEvent(data)
-                } else if (eventType === 'done') {
-                  callbacks.onDone()
-                  return
-                }
-              } catch { /* skip */ }
-            }
-            if (nextEnd !== -1) {
-              buffer = buffer.slice(nextEnd + 1)
-              lineEnd = buffer.indexOf('\n')
-            }
-          }
+      await readSSEStream(reader, (eventType, data) => {
+        if (eventType === 'goal_event') {
+          callbacks.onEvent(data)
+        } else if (eventType === 'done') {
+          callbacks.onDone()
+          return true
         }
-      }
+      })
     } catch (err) {
       if ((err as any)?.name !== 'AbortError') {
-        callbacks.onError?.(err instanceof Error ? err.message : String(err))
+        callbacks.onError?.(getErrorMessage(err))
       }
     }
   }

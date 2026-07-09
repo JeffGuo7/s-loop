@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { getErrorMessage } from '../../utils/errors'
 
 interface PdfPreviewProps {
   filePath: string
@@ -40,7 +41,7 @@ export function PdfPreview({ filePath, onLoaded, onError }: PdfPreviewProps) {
         if (!cancelled) onLoaded()
       } catch (err) {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : String(err))
+          onError(getErrorMessage(err))
         }
       }
     }

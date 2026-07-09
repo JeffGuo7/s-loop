@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { getErrorMessage } from '../../../utils/errors'
 import { useTranslation } from 'react-i18next'
 import { Play, Square, Terminal, Copy, Check, AlertCircle } from 'lucide-react'
 
@@ -47,7 +48,7 @@ export function CodeRunBlock({ code, language }: CodeRunBlockProps) {
 
       setOutput(outputLines.join('\n') || '(no output)')
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(getErrorMessage(err))
     } finally {
       setRunning(false)
     }

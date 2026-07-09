@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { getErrorMessage } from '../../utils/errors'
 import { useTranslation } from 'react-i18next'
 import { useAppStore, useAgentStore, useWebSearchStore, usePetStore } from '../../stores'
 import { useSkillStore } from '../../stores/skillStore'
@@ -99,7 +100,7 @@ export function ChatView() {
           })
           await Pi.sendMcpToolResponse(piSessionId, request.requestId, result)
         } catch (err) {
-          await Pi.sendMcpToolResponse(piSessionId, request.requestId, null, err instanceof Error ? err.message : String(err))
+          await Pi.sendMcpToolResponse(piSessionId, request.requestId, null, getErrorMessage(err))
         }
       },
       onToolApproval: (request) => {

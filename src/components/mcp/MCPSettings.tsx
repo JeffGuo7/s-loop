@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getErrorMessage } from '../../utils/errors'
 import { useTranslation } from 'react-i18next';
 import {
   Server,
@@ -374,7 +375,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
         }
         onClose();
       } catch (err) {
-        setJsonError(err instanceof Error ? err.message : t('mcp.invalidJson'));
+        setJsonError(getErrorMessage(err, t('mcp.invalidJson')));
       }
       return;
     }

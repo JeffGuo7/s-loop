@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getErrorMessage } from '../../utils/errors'
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useTaskStore, useAppStore } from '../../stores';
@@ -95,7 +96,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
       await createTask({ name: name.trim(), prompt: prompt.trim(), schedule, provider: activeProvider, model: providerConfigs[activeProvider]?.model || '', apiKey: providerConfigs[activeProvider]?.apiKey || '', workspaceDir: workspaceDir || undefined, deliver, enabled: true });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getErrorMessage(err));
     } finally { setSaving(false); }
   };
 

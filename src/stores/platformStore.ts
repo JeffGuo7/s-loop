@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getErrorMessage } from '../utils/errors'
 import type { PlatformConfig, PlatformId, PlatformMessage } from '../types/platform'
 import { PLATFORM_PRESETS } from '../types/platform'
 import {
@@ -41,7 +42,7 @@ export const usePlatformStore = create<PlatformState>()((set, get) => ({
         error: null,
       })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
     }
   },
 
@@ -70,7 +71,7 @@ export const usePlatformStore = create<PlatformState>()((set, get) => ({
     } catch (err) {
       set((state) => ({
         isConnecting: { ...state.isConnecting, [id]: false },
-        error: err instanceof Error ? err.message : String(err),
+        error: getErrorMessage(err),
       }))
     }
   },
@@ -84,7 +85,7 @@ export const usePlatformStore = create<PlatformState>()((set, get) => ({
         error: null,
       })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
     }
   },
 
@@ -97,7 +98,7 @@ export const usePlatformStore = create<PlatformState>()((set, get) => ({
         error: null,
       })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
       throw err
     }
   },
@@ -111,7 +112,7 @@ export const usePlatformStore = create<PlatformState>()((set, get) => ({
         error: null,
       })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
     }
   },
 
@@ -127,7 +128,7 @@ export const usePlatformStore = create<PlatformState>()((set, get) => ({
       })
       return null
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Test failed'
+      const message = getErrorMessage(err, 'Test failed')
       set({ error: message })
       return message
     }

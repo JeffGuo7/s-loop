@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getErrorMessage } from '../utils/errors'
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import type { MCPServerConfig, MCPServerStatus, MCPTool } from '../types/mcp';
@@ -160,7 +161,7 @@ export const useMCPStore = create<MCPState>()(
         } catch (error) {
           get().setServerStatus(name, {
             status: 'error',
-            error: error instanceof Error ? error.message : String(error),
+            error: getErrorMessage(error),
             tools: [],
             resources: [],
           });

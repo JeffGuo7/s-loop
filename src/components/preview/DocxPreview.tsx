@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getErrorMessage } from '../../utils/errors'
 
 interface DocxPreviewProps {
   filePath: string
@@ -31,7 +32,7 @@ export function DocxPreview({ filePath, onLoaded, onError }: DocxPreviewProps) {
         }
       } catch (err) {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : String(err))
+          onError(getErrorMessage(err))
         }
       }
     }

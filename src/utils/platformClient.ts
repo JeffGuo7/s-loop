@@ -1,4 +1,5 @@
 import { getBaseUrl } from './piClient'
+import { jsonRequest } from './http'
 import type { PlatformId, PlatformSnapshot } from '../types/platform'
 
 const BASE = () => getBaseUrl()
@@ -17,19 +18,11 @@ export function loadPlatformSnapshot() {
 }
 
 export function savePlatformConfig(id: PlatformId, values: Record<string, string>) {
-  return request(`/platforms/${id}/config`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values }),
-  })
+  return request(`/platforms/${id}/config`, jsonRequest({ values }))
 }
 
 export function connectPlatform(id: PlatformId, values: Record<string, string>) {
-  return request(`/platforms/${id}/connect`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values }),
-  })
+  return request(`/platforms/${id}/connect`, jsonRequest({ values }))
 }
 
 export function disconnectPlatform(id: PlatformId) {
@@ -39,19 +32,11 @@ export function disconnectPlatform(id: PlatformId) {
 }
 
 export function sendPlatformMessage(id: PlatformId, text: string) {
-  return request(`/platforms/${id}/send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
+  return request(`/platforms/${id}/send`, jsonRequest({ text }))
 }
 
 export function testPlatformMessage(id: PlatformId, text?: string) {
-  return request(`/platforms/${id}/test`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
+  return request(`/platforms/${id}/test`, jsonRequest({ text }))
 }
 
 export function clearPlatformMessages() {

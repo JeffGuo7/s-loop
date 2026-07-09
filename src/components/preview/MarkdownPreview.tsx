@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getErrorMessage } from '../../utils/errors'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -28,7 +29,7 @@ export function MarkdownPreview({ filePath, onLoaded, onError }: MarkdownPreview
         }
       } catch (err) {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : String(err))
+          onError(getErrorMessage(err))
         }
       }
     }

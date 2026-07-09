@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import { getBaseUrl } from '../utils/piClient'
+import { getErrorMessage } from '../utils/errors'
+import { jsonRequest } from '../utils/http'
+import { readSSEStream } from '../utils/sse'
 import type { GoalState, GoalSSEEvent, GoalStep } from '../types/goal'
 
 interface GoalStoreState {
@@ -38,23 +41,19 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
       const goals = await res.json()
       set({ goals, loading: false })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err), loading: false })
+      set({ error: getErrorMessage(err), loading: false })
     }
   },
 
   createGoal: async (goal) => {
     try {
-      const res = await fetch(`${BASE()}/goals/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal }),
-      })
+      const res = await fetch(`${BASE()}/goals/create`, jsonRequest({ goal }))
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const created = await res.json()
       set((s) => ({ goals: [created, ...s.goals] }))
       return created
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
       return null
     }
   },
@@ -64,7 +63,7 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
       await fetch(`${BASE()}/goals/${encodeURIComponent(id)}`, { method: 'DELETE' })
       set((s) => ({ goals: s.goals.filter((g) => g.id !== id) }))
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      set({ error: getErrorMessage(err) })
     }
   },
 
@@ -99,95 +98,63 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
         return
       }
 
-      const decoder = new TextDecoder()
-      let buffer = ''
+      await readSSEStream(reader, (eventType, data) => {
+        if (eventType === 'goal_event') {
+          set((s) => ({ liveEvents: [...s.liveEvents, data] }))
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        let lineEnd = buffer.indexOf('\n')
-        while (lineEnd !== -1) {
-          const line = buffer.slice(0, lineEnd)
-          buffer = buffer.slice(lineEnd + 1)
-          lineEnd = buffer.indexOf('\n')
-
-          const trimmed = line.trim()
-          if (!trimmed || trimmed.startsWith(':')) continue
-
-          if (trimmed.startsWith('event: ')) {
-            const eventType = trimmed.slice(7)
-            const nextEnd = buffer.indexOf('\n')
-            const dataLine = nextEnd === -1 ? buffer.trim() : buffer.slice(0, nextEnd).trim()
-            if (dataLine.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(dataLine.slice(6))
-                if (eventType === 'goal_event') {
-                  set((s) => ({ liveEvents: [...s.liveEvents, data] }))
-
-                  if (data.type === 'goal_step_start') {
-                    set((s) => {
-                      if (!s.activeGoal) return s
-                      const newStep: GoalStep = {
-                        agent: data.agent,
-                        task: data.task,
-                        status: 'running',
-                      }
-                      return {
-                        activeGoal: {
-                          ...s.activeGoal,
-                          steps: [...s.activeGoal.steps, newStep],
-                        },
-                      }
-                    })
-                  } else if (data.type === 'goal_step_end') {
-                    set((s) => {
-                      if (!s.activeGoal) return s
-                      const steps = s.activeGoal.steps.map((step, i) =>
-                        i === data.stepIndex
-                          ? { ...step, status: data.result?.exitCode === 0 ? 'completed' as const : 'failed' as const, result: data.result }
-                          : step
-                      ) as GoalStep[]
-                      return { activeGoal: { ...s.activeGoal, steps } }
-                    })
-                  } else if (data.type === 'goal_done') {
-                    if (data.goalState) {
-                      set(() => ({
-                        activeGoal: data.goalState,
-                        isRunning: false,
-                      }))
-                    } else {
-                      set((s) => ({
-                        activeGoal: s.activeGoal ? { ...s.activeGoal, status: 'completed' as const } : null,
-                        isRunning: false,
-                      }))
-                    }
-                    get().fetchGoals()
-                  } else if (data.type === 'goal_error') {
-                    set((s) => ({
-                      error: data.message,
-                      isRunning: false,
-                      activeGoal: s.activeGoal ? { ...s.activeGoal, status: 'failed' as const, finalResult: data.message } : null,
-                    }))
-                  }
-                } else if (eventType === 'done') {
-                  set({ isRunning: false, abortFn: null })
-                  return
-                }
-              } catch { /* skip */ }
+          if (data.type === 'goal_step_start') {
+            set((s) => {
+              if (!s.activeGoal) return s
+              const newStep: GoalStep = {
+                agent: data.agent,
+                task: data.task,
+                status: 'running',
+              }
+              return {
+                activeGoal: {
+                  ...s.activeGoal,
+                  steps: [...s.activeGoal.steps, newStep],
+                },
+              }
+            })
+          } else if (data.type === 'goal_step_end') {
+            set((s) => {
+              if (!s.activeGoal) return s
+              const steps = s.activeGoal.steps.map((step, i) =>
+                i === data.stepIndex
+                  ? { ...step, status: data.result?.exitCode === 0 ? 'completed' as const : 'failed' as const, result: data.result }
+                  : step
+              ) as GoalStep[]
+              return { activeGoal: { ...s.activeGoal, steps } }
+            })
+          } else if (data.type === 'goal_done') {
+            if (data.goalState) {
+              set(() => ({
+                activeGoal: data.goalState,
+                isRunning: false,
+              }))
+            } else {
+              set((s) => ({
+                activeGoal: s.activeGoal ? { ...s.activeGoal, status: 'completed' as const } : null,
+                isRunning: false,
+              }))
             }
-            if (nextEnd !== -1) {
-              buffer = buffer.slice(nextEnd + 1)
-              lineEnd = buffer.indexOf('\n')
-            }
+            get().fetchGoals()
+          } else if (data.type === 'goal_error') {
+            set((s) => ({
+              error: data.message,
+              isRunning: false,
+              activeGoal: s.activeGoal ? { ...s.activeGoal, status: 'failed' as const, finalResult: data.message } : null,
+            }))
           }
+        } else if (eventType === 'done') {
+          set({ isRunning: false, abortFn: null })
+          return true
         }
-      }
+      })
     } catch (err) {
       if ((err as any)?.name !== 'AbortError') {
-        set({ error: err instanceof Error ? err.message : String(err), isRunning: false })
+        set({ error: getErrorMessage(err), isRunning: false })
       }
     }
   },

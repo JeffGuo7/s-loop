@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getErrorMessage } from '../../utils/errors'
 import * as XLSX from 'xlsx'
 
 interface ExcelPreviewProps {
@@ -46,7 +47,7 @@ export function ExcelPreview({ filePath, onLoaded, onError }: ExcelPreviewProps)
         }
       } catch (err) {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : String(err))
+          onError(getErrorMessage(err))
         }
       }
     }

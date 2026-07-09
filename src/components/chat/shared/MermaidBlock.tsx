@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getErrorMessage } from '../../../utils/errors'
 
 interface MermaidBlockProps {
   code: string
@@ -29,7 +30,7 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to render mermaid diagram')
+          setError(getErrorMessage(err, 'Failed to render mermaid diagram'))
           setRendered(false)
         }
       }

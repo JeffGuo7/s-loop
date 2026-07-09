@@ -1,4 +1,5 @@
 import { useState, type ReactElement, type ReactNode } from 'react'
+import { getErrorMessage } from '../../utils/errors'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronRight,
@@ -196,7 +197,7 @@ export function WorkspacePanel() {
         setFeedback(result.message)
       }
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : t('agentStudio.feedback.remoteComingSoon'))
+      setFeedback(getErrorMessage(error, t('agentStudio.feedback.remoteComingSoon')))
     } finally {
       setBusyInstallKey(null)
     }
@@ -219,7 +220,7 @@ export function WorkspacePanel() {
       })))
     } catch (error) {
       setRemoteSkills([])
-      setRemoteSkillsError(error instanceof Error ? error.message : t('agentStudio.library.remoteSearchError'))
+      setRemoteSkillsError(getErrorMessage(error, t('agentStudio.library.remoteSearchError')))
     } finally {
       setRemoteSkillsLoading(false)
     }
@@ -245,7 +246,7 @@ export function WorkspacePanel() {
       setFeedback(t('agentStudio.feedback.remoteInstalled', { name: item.name }))
       setShowMcpPicker(false)
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : t('agentStudio.feedback.remoteComingSoon'))
+      setFeedback(getErrorMessage(error, t('agentStudio.feedback.remoteComingSoon')))
     } finally {
       setBusyInstallKey(null)
     }

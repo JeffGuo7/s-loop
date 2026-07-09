@@ -5,6 +5,7 @@ import { Send, Check, Loader2, Link, Link2Off, ChevronDown } from 'lucide-react'
 import { MagicButton } from '../ui'
 import type { PlatformConfig } from '../../types/platform'
 import { getBaseUrl } from '../../utils/piClient'
+import { jsonRequest } from '../../utils/http'
 
 interface ContactEntry {
   key: string
@@ -345,15 +346,11 @@ function DetectChatIdButton({ platform, onDetected }: { platform: PlatformConfig
         const username = msg.from?.username || msg.from?.first_name || ''
 
         // Reply to the user with their chat ID
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `Your Chat ID: \`${chatId}\`\nUsername: @${username}\n\nCopy this Chat ID into S-Loop platform settings.`,
-            parse_mode: 'Markdown',
-          }),
-        })
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, jsonRequest({
+          chat_id: chatId,
+          text: `Your Chat ID: \`${chatId}\`\nUsername: @${username}\n\nCopy this Chat ID into S-Loop platform settings.`,
+          parse_mode: 'Markdown',
+        }))
 
         onDetected(chatId)
         setMsg(`Found: ${chatId} (@${username}). Sent confirmation to Telegram.`)

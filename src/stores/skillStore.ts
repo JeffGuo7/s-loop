@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getErrorMessage } from '../utils/errors'
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import type { SkillInfo } from '../types/skill';
@@ -227,7 +228,7 @@ export const useSkillStore = create<SkillState>()(
           });
         } catch (error) {
           set({
-            scanError: error instanceof Error ? error.message : 'Unknown scanning error',
+            scanError: getErrorMessage(error, 'Unknown scanning error'),
           });
         } finally {
           get().setScanning(false);
