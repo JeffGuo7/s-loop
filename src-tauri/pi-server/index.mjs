@@ -1429,6 +1429,33 @@ createServer((req, res) => {
     return
   }
 
+  // DELETE /session/:id — remove session from disk and memory
+  const deleteSessionMatch = url.pathname.match(/^\/session\/([^/]+)$/)
+  if (req.method === 'DELETE' && deleteSessionMatch) {
+    const deleteSid = deleteSessionMatch[1]
+    ;(async () => {
+      try {
+        const wrapper = sessions.get(deleteSid)
+        if (wrapper) {
+          if (wrapper.agent) { try { wrapper.agent.abort() } catch {} }
+          rejectPendingMcpRequests(wrapper, 'session deleted')
+          sessions.delete(deleteSid)
+        }
+        // Also remove from session repo (disk)
+        const list = await sessionRepo.list()
+        const meta = list.find((m) => m.id === deleteSid)
+        if (meta) { await sessionRepo.delete(meta) }
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        console.error('[pi-server] failed to delete session:', e)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    })()
+    return
+  }
+
   const m = url.pathname.match(/^\/session\/([^/]+)\/message$/)
   if (req.method !== 'POST' || !m) { res.writeHead(404); res.end('Not found'); return }
 

@@ -188,6 +188,8 @@ export const useAppStore = create<AppState>()(
           ),
         })
         db.deleteSession(id).catch(console.warn)
+        // Also delete the session file from disk (pi-server)
+        import('../utils/piClient').then((pi) => pi.deleteSession(id).catch(() => {}))
       },
 
       setActiveSession: (id) => {
@@ -218,6 +220,8 @@ export const useAppStore = create<AppState>()(
           streamingMessage: {},
         })
         Promise.all(ids.map(sid => db.deleteSession(sid))).catch(console.warn)
+        // Also delete session files from disk
+        import('../utils/piClient').then((pi) => Promise.all(ids.map(sid => pi.deleteSession(sid).catch(() => {}))).catch(() => {}))
       },
 
       // ---- Message actions ----

@@ -387,6 +387,10 @@ export async function deleteSubagent(
   }
 }
 
+export async function deleteSession(sessionId: string): Promise<void> {
+  await fetch(`${_base}/session/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }).catch(() => {})
+}
+
 // ─── Goal API ─────────────────────────────────────────────
 
 export interface GoalState {
