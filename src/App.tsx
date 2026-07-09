@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { Sidebar, TitleBar } from './components/layout'
 import { ChatView } from './components/chat'
 import { SettingsModal } from './components/settings'
@@ -82,6 +83,8 @@ function App() {
     }
   }, [colorScheme, theme])
 
+  const [serverError, setServerError] = useState<string | null>(null)
+
   useEffect(() => {
     if (!inTauri) return
 
@@ -93,9 +96,12 @@ function App() {
         const url = await invoke<string>('start_server')
         if (!cancelled && url) {
           setBaseUrl(url)
+          setServerError(null)
         }
       } catch (err) {
-        console.warn('[app] failed to resolve pi-server url:', err)
+        const msg = String(err)
+        console.error('[app] pi-server start failed:', msg)
+        if (!cancelled) setServerError(msg)
       }
     })()
 
@@ -223,6 +229,23 @@ function App() {
   return (
     <div className="app-shell flex h-screen w-screen overflow-hidden bg-bg relative">
       <TitleBar />
+
+      {serverError && (
+        <div className="fixed top-12 left-0 right-0 z-50 mx-4">
+          <div className="max-w-2xl mx-auto rounded-2xl border-2 border-red-500/30 bg-red-500/10 backdrop-blur-xl px-6 py-4 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-black text-red-400 uppercase tracking-wider">Server Startup Failed</p>
+                <p className="mt-1 text-[11px] text-red-300/80 font-mono break-all leading-relaxed">{serverError}</p>
+                <p className="mt-2 text-[10px] text-text-tertiary">
+                  Make sure Node.js is installed and the pi-server directory exists next to the app executable.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-accent/5 rounded-full blur-[160px] opacity-60" />
