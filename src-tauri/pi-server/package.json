@@ -1,6 +1,9 @@
 {
   "type": "module",
   "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.80.3",
+    "@earendil-works/pi-ai": "^0.80.3",
+    "@earendil-works/pi-coding-agent": "^0.80.3",
     "cheerio": "^1.2.0",
     "nodemailer": "^6.9.0",
     "puppeteer-core": "^24.0.0"
