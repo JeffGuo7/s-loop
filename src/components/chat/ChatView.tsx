@@ -639,42 +639,63 @@ export function ChatView() {
 
       {/* Tool approval dialog */}
       {pendingApproval && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setPendingApproval(null)}>
-          <div className="w-full max-w-sm bg-surface rounded-2xl shadow-2xl p-6 animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                <ShieldAlert size={20} className="text-amber-500" />
-              </div>
-              <div>
-                <h3 className="text-[15px] font-bold text-text">批准工具调用</h3>
-                <p className="text-[11px] text-text-tertiary">Agent 请求使用危险工具</p>
-              </div>
-            </div>
-            <div className="rounded-xl bg-surface-secondary/50 border border-border-light p-4 mb-5 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">工具</span>
-                <code className="text-[13px] font-bold text-accent font-mono">{pendingApproval.toolName}</code>
-              </div>
-              {pendingApproval.args && (
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">参数</span>
-                  <pre className="mt-1 text-[11px] font-mono text-text-secondary bg-surface border border-border-light/70 rounded-lg p-2.5 max-h-32 overflow-auto whitespace-pre-wrap">
-                    {JSON.stringify(pendingApproval.args, null, 2)}
-                  </pre>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-md" onClick={() => setPendingApproval(null)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-sm bg-white dark:bg-surface rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top accent bar */}
+            <div className="h-1.5 bg-linear-to-r from-amber-400 to-amber-500" />
+
+            <div className="p-6 pb-5">
+              <div className="flex items-start gap-4 mb-5">
+                <div className="relative shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
+                    <ShieldAlert size={18} className="text-amber-500" />
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-500 animate-pulse" />
                 </div>
-              )}
+                <div className="min-w-0">
+                  <h3 className="text-[15px] font-bold text-text tracking-tight">批准工具调用</h3>
+                  <p className="text-[12px] text-text-tertiary mt-0.5">Agent 请求使用危险工具</p>
+                </div>
+              </div>
+
+              {/* Tool card */}
+              <div className="rounded-xl bg-surface-secondary/40 border border-border-light/60 p-4 mb-5">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <code className="text-[13px] font-bold text-accent font-mono">{pendingApproval.toolName}</code>
+                  <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/15">dangerous</span>
+                </div>
+                {pendingApproval.args && (
+                  <div>
+                    <pre className="text-[11px] font-mono text-text-secondary/80 bg-surface border border-border-light/40 rounded-lg p-3 max-h-36 overflow-auto whitespace-pre-wrap leading-relaxed">
+                      {JSON.stringify(pendingApproval.args, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2.5">
+                <button onClick={() => { setPendingApproval(null) }}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-border-light text-[12px] font-semibold text-text-tertiary hover:text-text hover:bg-surface-secondary/60 transition-all">
+                  取消
+                </button>
+                <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, false); setPendingApproval(null) }}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-surface text-[12px] font-semibold text-red-500 border border-red-500/20 hover:bg-red-500/5 transition-all">
+                  拒绝
+                </button>
+                <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, true); setPendingApproval(null) }}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-white text-[12px] font-bold shadow-md shadow-accent/20 hover:shadow-lg transition-all">
+                  批准
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, false); setPendingApproval(null) }}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-border-light text-[12px] font-bold text-text-tertiary hover:text-text hover:bg-surface-secondary transition-all">
-                拒绝
-              </button>
-              <button onClick={() => { Pi.sendToolApproval(pendingApproval.piSessionId, pendingApproval.requestId, true); setPendingApproval(null) }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-accent text-white text-[12px] font-bold shadow shadow-accent/20 hover:shadow-lg transition-all">
-                <ShieldCheck size={14} className="inline mr-1.5" />批准
-              </button>
-            </div>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>
