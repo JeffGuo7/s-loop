@@ -210,27 +210,31 @@ fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>
     let dev = std::path::Path::new(project_dir).join("src-tauri").join("pi-server").join("index.mjs");
     if dev.exists() { return project_dir.to_string(); }
 
-    // 2. Relative path: {project_dir}/pi-server/index.mjs
+    // 2. Relative subdir: {project_dir}/pi-server/index.mjs
     let rel = std::path::Path::new(project_dir).join("pi-server").join("index.mjs");
     if rel.exists() { return project_dir.to_string(); }
 
-    // 3. Tauri resource dir
+    // 3. Root level: {project_dir}/index.mjs (pi-server files extracted to install root)
+    let root = std::path::Path::new(project_dir).join("index.mjs");
+    if root.exists() { return project_dir.to_string(); }
+
+    // 4. Tauri resource_dir
     if let Some(app) = app_handle {
         if let Ok(res) = app.path().resource_dir() {
-            let p = res.join("pi-server").join("index.mjs");
+            let p = res.join("index.mjs");
             if p.exists() { return res.to_string_lossy().to_string(); }
         }
     }
 
-    // 4. Exe directory (NSIS installs resources next to the exe)
+    // 5. Exe directory
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let p = dir.join("pi-server").join("index.mjs");
+            let p = dir.join("index.mjs");
             if p.exists() { return dir.to_string_lossy().to_string(); }
         }
     }
 
-    // 5. Fallback to project_dir
+    // 6. Fallback
     project_dir.to_string()
 }
 

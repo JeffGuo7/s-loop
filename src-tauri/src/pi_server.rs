@@ -117,17 +117,20 @@ impl PiServerProcess {
 
         let mut cmd = Command::new(&node_path);
 
-        // Resolve pi-server entry point — check both dev and production paths
+        // Resolve pi-server entry point — check dev, production, and root paths
         let dev_path = format!("{}/src-tauri/pi-server/index.mjs", project_dir);
         let prod_path = format!("{}/pi-server/index.mjs", project_dir);
+        let root_path = format!("{}/index.mjs", project_dir);
         let entry = if std::path::Path::new(&dev_path).exists() {
             dev_path
         } else if std::path::Path::new(&prod_path).exists() {
             prod_path
+        } else if std::path::Path::new(&root_path).exists() {
+            root_path
         } else {
             return Err(format!(
-                "pi-server not found at {} or {}. project_dir={}",
-                dev_path, prod_path, project_dir
+                "pi-server not found at {}, {} or {}. project_dir={}",
+                dev_path, prod_path, root_path, project_dir
             ));
         };
 
