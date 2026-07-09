@@ -102,6 +102,15 @@ impl PiServerProcess {
     }
 
     pub fn start(project_dir: &str, port: u16) -> Result<Self, String> {
+        // Normalize away the \\?\ verbatim prefix when present. Under it,
+        // forward slashes are not treated as separators and some Node
+        // path APIs behave unexpectedly; the plain path works everywhere.
+        let project_dir_owned: String = {
+            let p = project_dir.trim_start_matches(r"\\?\");
+            p.to_string()
+        };
+        let project_dir = &project_dir_owned;
+
         if !std::path::Path::new(project_dir).exists() {
             return Err(format!("Project directory not found: {}", project_dir));
         }
@@ -117,24 +126,32 @@ impl PiServerProcess {
 
         let mut cmd = Command::new(&node_path);
 
-        // Resolve pi-server entry point — check dev, production, and root paths
-        let dev_path = format!("{}/src-tauri/pi-server/index.mjs", project_dir);
-        let prod_path = format!("{}/pi-server/index.mjs", project_dir);
-        let root_path = format!("{}/index.mjs", project_dir);
-        let entry = if std::path::Path::new(&dev_path).exists() {
+        // Resolve pi-server entry point — check dev, production, and root paths.
+        // Use Path::join, not format! with "/": on Windows the project_dir may
+        // carry the \\?\ verbatim prefix (from current_exe()), under which
+        // forward slashes are NOT separators and .exists() silently fails even
+        // though the file is present.
+        let base = PathBuf::from(project_dir);
+        let dev_path = base.join("src-tauri").join("pi-server").join("index.mjs");
+        let prod_path = base.join("pi-server").join("index.mjs");
+        let root_path = base.join("index.mjs");
+        let entry = if dev_path.exists() {
             dev_path
-        } else if std::path::Path::new(&prod_path).exists() {
+        } else if prod_path.exists() {
             prod_path
-        } else if std::path::Path::new(&root_path).exists() {
+        } else if root_path.exists() {
             root_path
         } else {
             return Err(format!(
                 "pi-server not found at {}, {} or {}. project_dir={}",
-                dev_path, prod_path, root_path, project_dir
+                dev_path.display(),
+                prod_path.display(),
+                root_path.display(),
+                project_dir
             ));
         };
 
-        cmd.args([&entry]);
+        cmd.arg(&entry);
         cmd.env("PI_SERVER_PORT", port.to_string());
         cmd.current_dir(project_dir);
 
