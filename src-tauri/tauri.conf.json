@@ -38,6 +38,11 @@
     ],
     "resources": {
       "pi-server.zip": "./pi-server.zip"
+    },
+    "windows": {
+      "nsis": {
+        "installerHooks": "./post-install.nsh"
+      }
     }
   }
 }
