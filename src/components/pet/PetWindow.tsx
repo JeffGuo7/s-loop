@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { usePetStore } from '../../stores'
 import { getSvgPath, getMiniSvgPath } from '../../utils/petTheme'
-import type { PetAnimationState } from '../../types/pet'
+import type { PetAnimationState, PetMood } from '../../types/pet'
 
 export function PetWindow() {
   const pet = usePetStore(s => s.pet)
@@ -29,16 +29,42 @@ export function PetWindow() {
     }
   }, [loaded, packagesLoaded])
 
-  // ─── Real-time sync via Zustand subscribe (replaces polling + Tauri events) ───
+  // ─── Real-time sync: Zustand subscribe (same window) + Tauri events (cross-window) ───
   useEffect(() => {
-    // Subscribe to store changes for instant sync (no polling delay)
+    // 1. Subscribe to local Zustand store for instant same-window sync
     const unsubscribe = store.subscribe((state) => {
       if (!state.pet) return
       setDisplayState(state.pet.state)
       setDisplayAnimFile(state.pet.idleAnimationFile || null)
     })
 
-    return () => unsubscribe()
+    // 2. Listen for Tauri cross-window events (from main window's pet store)
+    let unlisten: (() => void) | null = null
+    const setupTauriListener = async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event')
+        const fn = await listen<{ state: PetAnimationState; mood: PetMood; idleAnimationFile?: string | null }>(
+          'pet-state',
+          (event) => {
+            // Only update if the state is different to avoid loops
+            setDisplayState(prev => {
+              if (prev === event.payload.state) return prev
+              return event.payload.state
+            })
+            setDisplayAnimFile(event.payload.idleAnimationFile || null)
+          }
+        )
+        unlisten = fn
+      } catch {
+        // Not in Tauri environment
+      }
+    }
+    setupTauriListener()
+
+    return () => {
+      unsubscribe()
+      if (unlisten) unlisten()
+    }
   }, [])
 
   const currentPkg = useMemo(() =>
