@@ -11,7 +11,8 @@
   <a href="https://github.com/JeffGuo7/s-loop/blob/master/LICENSE"><img src="https://img.shields.io/github/license/JeffGuo7/s-loop?color=blue" alt="License"></a>
   <a href="https://github.com/JeffGuo7/s-loop/releases"><img src="https://img.shields.io/github/v/release/JeffGuo7/s-loop?include_prereleases&label=release" alt="Release"></a>
   <a href="https://github.com/JeffGuo7/s-loop/stargazers"><img src="https://img.shields.io/github/stars/JeffGuo7/s-loop?style=flat" alt="Stars"></a>
-  <a href="https://github.com/JeffGuo7/s-loop/releases/latest"><img src="https://img.shields.io/badge/download-windows%20.exe-blue?logo=windows" alt="Download Windows"></a>
+  <a href="https://github.com/JeffGuo7/s-loop/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20.exe-blue?logo=windows" alt="Download Windows"></a>
+<a href="https://github.com/JeffGuo7/s-loop/releases/latest"><img src="https://img.shields.io/github/downloads/JeffGuo7/s-loop/total?color=blue" alt="Downloads"></a>
 </p>
 
 [中文文档](README.zh-CN.md)
@@ -36,7 +37,6 @@ Download the latest installer from the [Releases page](https://github.com/JeffGu
 | Format | File |
 |--------|------|
 | Installer (recommended) | `S-Loop_<version>_x64-setup.exe` |
-| Portable | `S-Loop_<version>_x64_en-US.msi` |
 
 ## Features
 
@@ -93,16 +93,6 @@ Download the latest installer from the [Releases page](https://github.com/JeffGu
 │                                                               │
 └───────────────────────────────────────────────────────────────┘
 ```
-
-## Star History
-
-<a href="https://star-history.com/#JeffGuo7/s-loop&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=JeffGuo7/s-loop&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=JeffGuo7/s-loop&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=JeffGuo7/s-loop&type=Date" width="600" />
-  </picture>
-</a>
 
 ## License
 
