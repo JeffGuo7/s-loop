@@ -37,6 +37,7 @@ Download the latest installer from the [Releases page](https://github.com/JeffGu
 | Format | File |
 |--------|------|
 | Installer (recommended) | `S-Loop_<version>_x64-setup.exe` |
+| Portable | `S-Loop_<version>_x64_en-US.msi` |
 
 ## Features
 

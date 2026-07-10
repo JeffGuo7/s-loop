@@ -37,6 +37,7 @@ npm run tauri:dev
 | 格式 | 文件 |
 |------|------|
 | 安装版（推荐） | `S-Loop_<version>_x64-setup.exe` |
+| 绿色版 | `S-Loop_<version>_x64_en-US.msi` |
 
 ## 功能概览
 
