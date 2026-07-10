@@ -18,6 +18,7 @@ const zh = {
     currentWorkspace: '当前目录',
     noWorkspace: '尚未选择目录',
     enterWorkspacePath: '输入工作区路径',
+    refreshDirectory: '刷新目录',
     dragExplorerHint: '可拖拽到对话区',
     fileTreeReady: '直接展开与拖拽',
     filesEmptyTitle: '切到文件树',

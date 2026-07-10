@@ -18,6 +18,7 @@ const en = {
     currentWorkspace: 'Current folder',
     noWorkspace: 'No folder selected',
     enterWorkspacePath: 'Enter workspace path',
+    refreshDirectory: 'Refresh directory',
     dragExplorerHint: 'Drag files into chat',
     fileTreeReady: 'Expand and drag',
     filesEmptyTitle: 'Switch to file tree',

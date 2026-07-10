@@ -17,6 +17,8 @@ import {
   MessagesSquare,
   FolderTree,
   RefreshCw,
+  RotateCcw,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -56,8 +58,6 @@ export function Sidebar({
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
   const { t } = useTranslation()
-  const [showPathInput, setShowPathInput] = useState(false)
-  const [pathInput, setPathInput] = useState('')
 
   const handleNewChat = useCallback(() => {
     createSession()
@@ -114,10 +114,8 @@ export function Sidebar({
 
   const applyWorkspaceDir = useCallback((dir: string) => {
     setWorkspaceDir(dir)
-    setShowPathInput(false)
-    setPathInput('')
     setLeftPanelMode('files')
-  }, [setLeftPanelMode, setPathInput, setWorkspaceDir])
+  }, [setLeftPanelMode, setWorkspaceDir])
 
   const handleSelectDir = useCallback(async () => {
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
@@ -129,7 +127,6 @@ export function Sidebar({
         if (dir) applyWorkspaceDir(dir)
         return
       } catch {
-        setShowPathInput(true)
         return
       }
     }
@@ -146,13 +143,7 @@ export function Sidebar({
       }
     }
 
-    setShowPathInput(true)
   }, [applyWorkspaceDir])
-
-  const handleSubmitPath = useCallback(() => {
-    if (!pathInput.trim()) return
-    applyWorkspaceDir(pathInput.trim())
-  }, [applyWorkspaceDir, pathInput])
 
   const handleClearWorkspace = useCallback(() => {
     setWorkspaceDir(null)
@@ -443,73 +434,47 @@ export function Sidebar({
           )
           })}
         </div>
+      ) : collapsed ? (
+        /* ── Collapsed + Files: nothing to show, just a spacer ── */
+        <div className="flex-1" />
       ) : (
-        <div className="flex flex-1 min-h-0 flex-col px-4 pb-4">
-          <div className="mb-3 rounded-2xl border border-border-light/70 bg-white/72 p-2.5 shadow-sm backdrop-blur-xl dark:bg-white/5">
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="text-[9px] font-black uppercase tracking-[0.16em] text-accent/55">
-                  {t('sidebar.currentWorkspace')}
-                </div>
-                <div className="mt-1 truncate text-[11px] font-medium text-text-secondary" title={workspaceDir || t('sidebar.noWorkspace')}>
-                  {workspaceDir || t('sidebar.noWorkspace')}
-                </div>
+        <div className="flex flex-1 min-h-0 flex-col px-3 pb-3">
+          {/* ── Path bar ── */}
+          <div className="mb-2">
+            <div className="flex items-center gap-1 rounded-xl border border-border-light/60 bg-white/55 px-2.5 py-1.5 shadow-xs backdrop-blur-sm transition-all duration-200 hover:border-border-hover dark:bg-white/[0.04]">
+              <FolderOpen size={11} strokeWidth={2.2} className="shrink-0 text-accent/60" />
+              <div className="min-w-0 flex-1 truncate text-[11px] font-medium tracking-tight text-text-secondary" title={workspaceDir || t('sidebar.noWorkspace')}>
+                {workspaceDir
+                  ? (workspaceDir.split(/[/\\]/).filter(Boolean).pop() || workspaceDir)
+                  : t('sidebar.noWorkspace')}
               </div>
-              <button
-                onClick={handleSelectDir}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white shadow-sm shadow-accent/15 transition-all duration-300 hover:-translate-y-0.5"
-                title={workspaceDir ? t('sidebar.switchWorkspace') : t('sidebar.pickWorkspace')}
-              >
-                <FolderOpen size={14} strokeWidth={2.2} />
-              </button>
-              <button
-                onClick={() => setShowPathInput((prev) => !prev)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-light bg-surface-secondary/70 text-text-tertiary transition-all duration-300 hover:text-accent"
-                title={t('sidebar.enterWorkspacePath')}
-              >
-                <RefreshCw size={13} strokeWidth={2.1} />
-              </button>
-              {workspaceDir && (
+              <div className="flex items-center gap-0.5">
+                {/* Refresh directory */}
+                <button
+                  onClick={() => { useAppStore.getState().incrementFileTreeVersion() }}
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-text-quaternary transition-all duration-200 hover:bg-accent/10 hover:text-accent"
+                  title={t('sidebar.refreshDirectory')}
+                >
+                  <RotateCcw size={11} strokeWidth={2.2} />
+                </button>
+                {/* Switch workspace */}
+                <button
+                  onClick={handleSelectDir}
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-text-quaternary transition-all duration-200 hover:bg-accent/10 hover:text-accent"
+                  title={t('sidebar.switchWorkspace')}
+                >
+                  <RefreshCw size={11} strokeWidth={2.2} />
+                </button>
+                {/* Clear workspace */}
                 <button
                   onClick={handleClearWorkspace}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-light bg-surface-secondary/70 text-text-tertiary transition-all duration-300 hover:bg-red-500/10 hover:text-red-500"
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-text-quaternary transition-all duration-200 hover:bg-red-500/10 hover:text-red-500"
                   title={t('sidebar.resetWorkspace')}
                 >
-                  <Trash2 size={13} strokeWidth={2.1} />
-                </button>
-              )}
-            </div>
-
-            {showPathInput && (
-              <div className="mt-2.5 flex items-center gap-2">
-                <input
-                  type="text"
-                  value={pathInput}
-                  onChange={(e) => setPathInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSubmitPath()}
-                  placeholder={t('workspace.pathPlaceholder')}
-                  className="min-w-0 flex-1 rounded-lg border border-border-light bg-white/90 px-3 py-2 text-[11px] font-mono text-text outline-none transition-all focus:border-accent/30 dark:bg-white/5"
-                />
-                <button
-                  onClick={handleSubmitPath}
-                  disabled={!pathInput.trim()}
-                  className="rounded-lg bg-accent px-3 py-2 text-[11px] font-black text-white disabled:opacity-40"
-                >
-                  {t('workspace.confirm')}
+                  <X size={11} strokeWidth={2.2} />
                 </button>
               </div>
-            )}
-          </div>
-
-          <div className="mb-2 flex items-center justify-between px-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-accent/60">
-              {t('sidebar.dragExplorerHint')}
-            </span>
-            {workspaceDir && (
-              <span className="text-[10px] font-medium text-text-tertiary">
-                {t('sidebar.fileTreeReady')}
-              </span>
-            )}
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden rounded-[22px] border border-border-light/70 bg-white/68 shadow-sm backdrop-blur-xl dark:bg-white/5">
