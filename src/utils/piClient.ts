@@ -44,6 +44,11 @@ export interface McpToolDef {
   inputSchema: Record<string, unknown>
 }
 
+export interface ImageData {
+  data: string
+  mimeType: string
+}
+
 export interface PromptResult {
   text: string
   error?: string
@@ -153,6 +158,7 @@ export async function prompt(
     permissionRules?: PermissionRule
     providerAPI?: string
     providerConfig?: { api?: string; baseUrl?: string }
+    images?: ImageData[]
   },
 ): Promise<PromptResult> {
   const controller = new AbortController()
@@ -173,6 +179,7 @@ export async function prompt(
     if (options?.permissionRules) body.permissionRules = options.permissionRules
     if (options?.providerAPI) body.providerAPI = options.providerAPI
     if (options?.providerConfig) body.providerConfig = options.providerConfig
+    if (options?.images && options.images.length > 0) body.images = options.images
 
     const res = await fetch(`${_base}/session/${sessionId}/message`, {
       method: 'POST',

@@ -5,6 +5,7 @@ import { useSkillStore } from '../../stores/skillStore'
 import { useMCPStore } from '../../stores/mcpStore'
 import { useFilePreviewStore } from '../../stores/filePreviewStore'
 import { invoke } from '@tauri-apps/api/core'
+import type { ImageAttachment } from './ChatInput'
 import { Cpu, Sparkles, Paperclip, FolderTree, MessagesSquare, ShieldCheck, ShieldAlert, ShieldOff, Bot, ChevronUp } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
@@ -128,9 +129,10 @@ export function ChatView() {
   }, [leftPanelMode, setLeftPanelMode, sidebarCollapsed, toggleSidebar])
 
   const handleSubmit = useCallback(
-    async (content: string) => {
+    async (content: string, images?: ImageAttachment[]) => {
       const sid = useAppStore.getState().activeSessionId
-      if (!content || !sid) return
+      if ((!content || !content.trim()) && (!images || images.length === 0)) return
+      if (!sid) return
       setError(null)
 
       if (isReadOnlySession) {
@@ -264,6 +266,7 @@ export function ChatView() {
         providerConfig: providerInfo?.api
           ? { api: providerInfo.api, baseUrl: providerConfig?.baseUrl }
           : undefined,
+        images,  // pass image data to pi-server
       })
 
       if (result.error) {
@@ -366,6 +369,28 @@ export function ChatView() {
     const fileData = e.dataTransfer.getData('application/x-s-loop-file')
     if (fileData) {
       const { path, name, isDir } = JSON.parse(fileData)
+
+      // Check if it's an image file dropped from FileTree
+      const imageExts = /\.(png|jpg|jpeg|gif|webp|bmp)$/i
+      if (!isDir && imageExts.test(name)) {
+        // Read image via Tauri and send as multimodal content
+        try {
+          const base64 = await invoke<string>('read_file_base64', { path })
+          const mimeType = name.endsWith('.png') ? 'image/png' :
+            name.endsWith('.gif') ? 'image/gif' :
+            name.endsWith('.webp') ? 'image/webp' :
+            name.endsWith('.bmp') ? 'image/bmp' :
+            'image/jpeg'
+          const text = `[Image: ${name}](${path})`
+          if (!useAppStore.getState().activeSessionId) {
+            useAppStore.getState().createSession()
+          }
+          handleSubmit(text, [{ data: base64, mimeType }])
+        } catch {
+          handleSubmit(`[File: ${name}](${path})`)
+        }
+        return
+      }
 
       let content = ''
       if (isDir) {

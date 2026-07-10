@@ -1477,7 +1477,7 @@ createServer((req, res) => {
   req.on('end', async () => {
     const wrapper = await getOrCreateWrapper(sessionId)
     if (!wrapper) { res.writeHead(404); res.end('Session not found'); return }
-    const { content, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
+    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
     console.log('[pi-server] session message — permissionMode:', permissionMode, 'permissionRules:', JSON.stringify(permissionRules))
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
@@ -1669,9 +1669,14 @@ createServer((req, res) => {
         console.log('[pi-server] Total timeout (120s) — stopping retries')
       }, 120_000)
 
+      // Convert frontend images {data, mimeType}[] to ImageContent[] for pi-agent-core
+      const imageContents = Array.isArray(images) && images.length > 0
+        ? images.map(img => ({ type: 'image', data: img.data, mimeType: img.mimeType }))
+        : undefined
+
       try {
         await withRetry(
-          () => wrapper.agent.prompt(content),
+          () => imageContents ? wrapper.agent.prompt(content, imageContents) : wrapper.agent.prompt(content),
           {
             maxRetries: 3,
             signal: totalAc.signal,

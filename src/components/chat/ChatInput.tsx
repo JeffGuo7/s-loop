@@ -7,10 +7,17 @@ import { Button, Card } from '../ui'
 interface FileAttachment {
   path: string
   name: string
+  data?: string       // base64 for images
+  mimeType?: string   // MIME type for images
+}
+
+export interface ImageAttachment {
+  data: string
+  mimeType: string
 }
 
 interface ChatInputProps {
-  onSubmit: (content: string) => void
+  onSubmit: (content: string, images?: ImageAttachment[]) => void
   onAbort?: () => void
   isStreaming?: boolean
   disabled?: boolean
@@ -96,9 +103,14 @@ export function ChatInput({
     if (!input.trim() && attachments.length === 0) return
 
     const parts: string[] = []
+    const images: ImageAttachment[] = []
 
     // File references — rendered as styled chips via Markdown
     for (const att of attachments) {
+      // Images with base64 data are sent as multimodal content
+      if (att.data && att.mimeType?.startsWith('image/')) {
+        images.push({ data: att.data, mimeType: att.mimeType })
+      }
       parts.push(`[File: ${att.name}](${att.path || '#'})`)
     }
 
@@ -112,7 +124,7 @@ export function ChatInput({
       }
     }
 
-    onSubmit(parts.join('\n'))
+    onSubmit(parts.join('\n'), images.length > 0 ? images : undefined)
     setInput('')
     setAttachments([])
   }, [input, attachments, onSubmit])
@@ -159,9 +171,13 @@ export function ChatInput({
         if (file) {
           const ext = item.type.split('/')[1] || 'png'
           const name = file.name || `paste-${Date.now()}.${ext}`
+          const mimeType = item.type
           // Create a local object URL for preview (will be revoked on submit)
           const localUrl = URL.createObjectURL(file)
-          newAttachments.push({ path: localUrl, name })
+          // Read blob to base64 for submission
+          const buffer = await file.arrayBuffer()
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)))
+          newAttachments.push({ path: localUrl, name, data: base64, mimeType })
         }
       }
     }
