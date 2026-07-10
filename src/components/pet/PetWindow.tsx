@@ -39,14 +39,15 @@ export function PetWindow() {
     })
 
     // 2. Listen for Tauri cross-window events (from main window's pet store)
-    let unlisten: (() => void) | null = null
+    const unlisteners: (() => void)[] = []
     const setupTauriListener = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event')
-        const fn = await listen<{ state: PetAnimationState; mood: PetMood; idleAnimationFile?: string | null }>(
+
+        // Pet animation state events
+        const unlisten1 = await listen<{ state: PetAnimationState; mood: PetMood; idleAnimationFile?: string | null }>(
           'pet-state',
           (event) => {
-            // Only update if the state is different to avoid loops
             setDisplayState(prev => {
               if (prev === event.payload.state) return prev
               return event.payload.state
@@ -54,7 +55,20 @@ export function PetWindow() {
             setDisplayAnimFile(event.payload.idleAnimationFile || null)
           }
         )
-        unlisten = fn
+        unlisteners.push(unlisten1)
+
+        // Pet window visibility events (keep in sync so pet window's store
+        // doesn't overwrite main window's visibility state via persist)
+        const unlisten2 = await listen<{ visible: boolean }>(
+          'pet-visibility',
+          (event) => {
+            const s = store.getState()
+            if (s.petWindowVisible !== event.payload.visible) {
+              s.setPetWindowVisible(event.payload.visible)
+            }
+          }
+        )
+        unlisteners.push(unlisten2)
       } catch {
         // Not in Tauri environment
       }
@@ -63,7 +77,7 @@ export function PetWindow() {
 
     return () => {
       unsubscribe()
-      if (unlisten) unlisten()
+      unlisteners.forEach(fn => fn())
     }
   }, [])
 

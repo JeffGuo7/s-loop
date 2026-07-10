@@ -150,7 +150,15 @@ export const usePetStore = create<PetStore>()(
         }),
         setMood: (mood) => set(s => s.pet ? { pet: { ...s.pet, mood } } : {}),
         setShowPet: (show) => set({ showPet: show }),
-        setPetWindowVisible: (visible) => set({ petWindowVisible: visible }),
+        setPetWindowVisible: (visible) => {
+          const prev = get().petWindowVisible
+          if (prev === visible) return
+          set({ petWindowVisible: visible })
+          // Broadcast visibility to pet window so it doesn't overwrite with stale value
+          if (_emit) {
+            _emit('pet-visibility', { visible }).catch(() => {})
+          }
+        },
         setPetPosition: (pos) => set({ petPosition: pos }),
 
         loadPackages: async () => {
