@@ -28,10 +28,15 @@ function messagesToEntries(messages) {
 export class ContextEngine {
   constructor(options = {}) {
     this.contextLength = options.contextLength || 200_000
+    // Scale reserve tokens with context: ~8% for response buffer,
+    // but at least 16K and at most 80K.
+    const scaledReserve = Math.min(Math.max(16384, Math.floor(this.contextLength * 0.08)), 80000)
+    // Keep more recent chat for larger models: ~10% or at least 20K
+    const scaledKeep = Math.max(20000, Math.floor(this.contextLength * 0.1))
     this.settings = {
       enabled: options.enabled ?? true,
-      reserveTokens: options.reserveTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens,
-      keepRecentTokens: options.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
+      reserveTokens: options.reserveTokens ?? scaledReserve,
+      keepRecentTokens: options.keepRecentTokens ?? scaledKeep,
     }
     this.lastTotalTokens = 0
     this.compressionCount = 0

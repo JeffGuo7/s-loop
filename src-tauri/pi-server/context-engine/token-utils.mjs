@@ -73,15 +73,22 @@ export function resolveContextLength(model, fallback = 200_000) {
   if (model?.contextLength) return model.contextLength
   // Common model family defaults
   const id = (model?.id || '').toLowerCase()
+  if (id.includes('claude-opus-4-8')) return 1_000_000
+  if (id.includes('claude-sonnet-4-6')) return 1_000_000
+  if (id.includes('claude-opus')) return 200_000
   if (id.includes('claude-3-opus')) return 200_000
-  if (id.includes('claude-3-5-sonnet')) return 200_000
   if (id.includes('claude-sonnet-4')) return 200_000
+  if (id.includes('claude-3-5-sonnet')) return 200_000
   if (id.includes('claude-3-sonnet')) return 200_000
   if (id.includes('claude-3-haiku')) return 200_000
+  if (id.includes('claude-haiku-3-5')) return 200_000
   if (id.includes('gpt-4o')) return 128_000
   if (id.includes('gpt-4-turbo')) return 128_000
   if (id.includes('gpt-4-32k')) return 32_768
   if (id.includes('gpt-4')) return 8_192
   if (id.includes('deepseek')) return 64_000
+  if (id.includes('gemini-2.5')) return 1_000_000
+  if (id.includes('gemini-2.0')) return 1_000_000
+  if (id.includes('gemini-1.5')) return 1_000_000
   return fallback
 }
