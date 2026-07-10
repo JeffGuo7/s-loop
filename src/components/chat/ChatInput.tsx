@@ -33,7 +33,14 @@ export function ChatInput({
   const composingRef = useRef(false)
 
   const removeAttachment = useCallback((index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index))
+    setAttachments((prev) => {
+      const removed = prev[index]
+      // Revoke object URLs for pasted images to avoid memory leaks
+      if (removed?.path?.startsWith('blob:')) {
+        URL.revokeObjectURL(removed.path)
+      }
+      return prev.filter((_, i) => i !== index)
+    })
   }, [])
 
   // File attachments are now added via drag-and-drop only
@@ -59,6 +66,8 @@ export function ChatInput({
       // OS file drop — only filename available, no real path
       const files = Array.from(e.dataTransfer.files)
       for (const file of files) {
+        // Skip .zip files — they're handled by SkillDropZone
+        if (file.name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') continue
         newAttachments.push({ path: file.name, name: file.name })
       }
     }
@@ -96,6 +105,13 @@ export function ChatInput({
     const userText = input.trim()
     if (userText) parts.push(userText)
 
+    // Revoke all blob URLs before submitting
+    for (const att of attachments) {
+      if (att.path?.startsWith('blob:')) {
+        URL.revokeObjectURL(att.path)
+      }
+    }
+
     onSubmit(parts.join('\n'))
     setInput('')
     setAttachments([])
@@ -127,6 +143,33 @@ export function ChatInput({
 
   const handleCompositionEnd = useCallback(() => {
     composingRef.current = false
+  }, [])
+
+  // ── Paste support (images / screenshots from clipboard) ──
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    const newAttachments: FileAttachment[] = []
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) {
+          const ext = item.type.split('/')[1] || 'png'
+          const name = file.name || `paste-${Date.now()}.${ext}`
+          // Create a local object URL for preview (will be revoked on submit)
+          const localUrl = URL.createObjectURL(file)
+          newAttachments.push({ path: localUrl, name })
+        }
+      }
+    }
+
+    if (newAttachments.length > 0) {
+      e.preventDefault()
+      setAttachments((prev) => [...prev, ...newAttachments])
+    }
   }, [])
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -201,6 +244,7 @@ export function ChatInput({
                 <TextArea
                   ref={textareaRef}
                   onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
                   onCompositionStart={handleCompositionStart}
                   onCompositionEnd={handleCompositionEnd}
                   placeholder={attachments.length > 0 ? t('chat.input.placeholderWithFiles') : (placeholder || t('chat.input.placeholder'))}

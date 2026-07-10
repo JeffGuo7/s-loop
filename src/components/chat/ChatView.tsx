@@ -362,31 +362,48 @@ export function ChatView() {
     e.preventDefault()
     setIsDragOver(false)
 
+    // 1) Internal FileTree drag — has full path info
     const fileData = e.dataTransfer.getData('application/x-s-loop-file')
-    if (!fileData) return
+    if (fileData) {
+      const { path, name, isDir } = JSON.parse(fileData)
 
-    const { path, name, isDir } = JSON.parse(fileData)
-
-    let content = ''
-    if (isDir) {
-      try {
-        const files = await listFilesRecursive(path)
-        const summary = files.length > 0
-          ? files.map(f => `- ${f}`).join('\n')
-          : '(empty folder)'
-        content = `[Folder: ${name}](${path})\n\n\`\`\`\n${summary}\n\`\`\``
-      } catch {
-        content = `[Folder: ${name}](${path})`
+      let content = ''
+      if (isDir) {
+        try {
+          const files = await listFilesRecursive(path)
+          const summary = files.length > 0
+            ? files.map(f => `- ${f}`).join('\n')
+            : '(empty folder)'
+          content = `[Folder: ${name}](${path})\n\n\`\`\`\n${summary}\n\`\`\``
+        } catch {
+          content = `[Folder: ${name}](${path})`
+        }
+      } else {
+        content = `[File: ${name}](${path})`
       }
-    } else {
-      content = `[File: ${name}](${path})`
+
+      if (!useAppStore.getState().activeSessionId) {
+        useAppStore.getState().createSession()
+      }
+
+      handleSubmit(content)
+      return
     }
 
-    if (!useAppStore.getState().activeSessionId) {
-      useAppStore.getState().createSession()
+    // 2) OS file drop (from desktop / file manager) — no real path, only file name
+    // In Tauri, we could potentially read the file, but for now just reference by name
+    const files = Array.from(e.dataTransfer?.files || [])
+    if (files.length > 0) {
+      // Skip .zip files — they're handled by SkillDropZone
+      const nonZipFiles = files.filter(f => !f.name.endsWith('.zip') && f.type !== 'application/zip' && f.type !== 'application/x-zip-compressed')
+      if (nonZipFiles.length > 0) {
+        const refs = nonZipFiles.map(f => `[File: ${f.name}](os-file://${f.name})`).join('\n')
+        if (!useAppStore.getState().activeSessionId) {
+          useAppStore.getState().createSession()
+        }
+        handleSubmit(refs)
+      }
     }
-
-    handleSubmit(content)
   }, [handleSubmit])
 
   const streamingMessages = useAppStore((state) => state.streamingMessage)

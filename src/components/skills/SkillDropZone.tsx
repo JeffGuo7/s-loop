@@ -19,8 +19,23 @@ export function SkillDropZone() {
   const handleDragOver = useCallback((e: DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (e.dataTransfer?.types && Array.from(e.dataTransfer.types).some(t => t === 'Files')) {
-      setDragging(true)
+
+    // Only show skill drop overlay when dragging a .zip file
+    if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+      const hasZip = Array.from(e.dataTransfer.items).some(
+        item => item.kind === 'file' && (
+          item.type === 'application/zip' ||
+          item.type === 'application/x-zip-compressed' ||
+          item.type === 'application/octet-stream'
+        )
+      )
+      // If we can reliably check MIME types and no zip is found, hide overlay
+      setDragging(hasZip)
+    } else {
+      // Fallback: if items unavailable, only show for 'Files' type (broad match)
+      if (e.dataTransfer?.types && Array.from(e.dataTransfer.types).some(t => t === 'Files')) {
+        setDragging(true)
+      }
     }
   }, [])
 
