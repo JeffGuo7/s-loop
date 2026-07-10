@@ -23,7 +23,7 @@
 
 ```bash
 git clone https://github.com/JeffGuo7/s-loop.git
-cd Snotra
+cd s-loop
 npm install
 npm run tauri:dev
 ```
