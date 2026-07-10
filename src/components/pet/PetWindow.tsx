@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { usePetStore } from '../../stores'
 import { getSvgPath, getMiniSvgPath } from '../../utils/petTheme'
-import type { PetAnimationState, PetMood } from '../../types/pet'
+import type { PetAnimationState } from '../../types/pet'
 
 export function PetWindow() {
   const pet = usePetStore(s => s.pet)
@@ -29,36 +29,23 @@ export function PetWindow() {
     }
   }, [loaded, packagesLoaded])
 
-  // Poll pet state for idle animations (Tauri events only send state changes)
+  // ─── Real-time sync via Zustand subscribe (replaces polling + Tauri events) ───
   useEffect(() => {
-    const interval = setInterval(() => {
-      const s = store.getState()
-      if (!s.pet) return
-      setDisplayState(s.pet.state)
-      setDisplayAnimFile(s.pet.idleAnimationFile || null)
-    }, 500)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Listen for Tauri pet-state events
-  useEffect(() => {
-    let unlisten: (() => void) | null = null
-    const setup = async () => {
-      try {
-        const { listen } = await import('@tauri-apps/api/event')
-        const fn = await listen<{ state: PetAnimationState; mood: PetMood }>(
-          'pet-state',
-          (event) => {
-            setDisplayState(event.payload.state)
-          }
-        )
-        unlisten = fn
-      } catch {
-        // Not in Tauri, use store directly
-      }
+    // Initialize from current store state
+    const initial = store.getState()
+    if (initial.pet) {
+      setDisplayState(initial.pet.state)
+      setDisplayAnimFile(initial.pet.idleAnimationFile || null)
     }
-    setup()
-    return () => { if (unlisten) unlisten() }
+
+    // Subscribe to store changes for instant sync (no polling delay)
+    const unsubscribe = store.subscribe((state) => {
+      if (!state.pet) return
+      setDisplayState(state.pet.state)
+      setDisplayAnimFile(state.pet.idleAnimationFile || null)
+    })
+
+    return () => unsubscribe()
   }, [])
 
   const currentPkg = useMemo(() =>

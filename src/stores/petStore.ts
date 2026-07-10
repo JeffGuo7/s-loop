@@ -13,14 +13,6 @@ const REACTION_MS = 1_500
 
 function uid(): string { return Math.random().toString(36).slice(2, 11) }
 
-function emitPetEvent(state: PetAnimationState, mood: PetMood) {
-  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-    import('@tauri-apps/api/event').then(({ emit }) => {
-      emit('pet-state', { state, mood }).catch(() => {})
-    }).catch(() => {})
-  }
-}
-
 interface PetStore {
   pet: Pet | null
   packages: PetPackage[]
@@ -130,7 +122,6 @@ export const usePetStore = create<PetStore>()(
 
         setState: (state) => set(s => {
           if (!s.pet) return {}
-          emitPetEvent(state, s.pet.mood)
           return { pet: { ...s.pet, state } }
         }),
         setMood: (mood) => set(s => s.pet ? { pet: { ...s.pet, mood } } : {}),
@@ -157,8 +148,11 @@ export const usePetStore = create<PetStore>()(
             lastInteraction: now,
           }
           set({ pet: p, showPet: true })
-          scheduleIdleAnimation()
-          startSleepSequence()
+          // Use setTimeout to ensure state is flushed before scheduling
+          setTimeout(() => {
+            scheduleIdleAnimation()
+            startSleepSequence()
+          }, 0)
           return p
         },
 
@@ -170,12 +164,10 @@ export const usePetStore = create<PetStore>()(
           clearAll()
           if (p.state === 'sleeping' || p.state === 'collapsing' || p.state === 'dozing') {
             set({ pet: { ...p, state: 'waking', lastInteraction: Date.now(), mood: 'happy' } })
-            emitPetEvent('waking', 'happy')
             _reactionT = setTimeout(() => {
               const p2 = get().pet
               if (p2) {
                 set({ pet: { ...p2, state: 'idle', mood: 'happy', idleAnimationFile: null } })
-                emitPetEvent('idle', 'happy')
                 scheduleIdleAnimation()
                 startSleepSequence()
               }
@@ -183,12 +175,10 @@ export const usePetStore = create<PetStore>()(
             return
           }
           set({ pet: { ...p, state: 'attention', lastInteraction: Date.now(), mood: 'happy' } })
-          emitPetEvent('attention', 'happy')
           _reactionT = setTimeout(() => {
             const p2 = get().pet
             if (p2) {
               set({ pet: { ...p2, state: 'idle', mood: 'happy', idleAnimationFile: null } })
-              emitPetEvent('idle', 'happy')
               scheduleIdleAnimation()
               startSleepSequence()
             }
@@ -202,13 +192,11 @@ export const usePetStore = create<PetStore>()(
           // Use ultrathink for multi-session deep thinking
           const thinkingFile = get().activeSessionCount >= 2 ? 'clawd-working-ultrathink.svg' : null
           set({ pet: { ...p, state: 'thinking', mood: 'neutral', idleAnimationFile: thinkingFile } })
-          emitPetEvent('thinking', 'neutral')
         },
         onResponded: () => {
           const p = get().pet
           if (!p) return
           set({ pet: { ...p, state: 'idle', mood: 'happy', idleAnimationFile: null }, activeSessionCount: 0 })
-          emitPetEvent('idle', 'happy')
           scheduleIdleAnimation()
           startSleepSequence()
         },
@@ -228,19 +216,16 @@ export const usePetStore = create<PetStore>()(
             else if (tierSvg.includes('wizard')) workState = 'building'
           }
           set({ pet: { ...p, state: workState, mood: 'neutral', idleAnimationFile: null } })
-          emitPetEvent(workState, 'neutral')
         },
         onError: () => {
           const p = get().pet
           if (!p) return
           clearAll()
           set({ pet: { ...p, state: 'idle', mood: 'sleepy', idleAnimationFile: 'clawd-dizzy.svg' } })
-          emitPetEvent('error', 'sleepy')
           _reactionT = setTimeout(() => {
             const p2 = get().pet
             if (p2) {
               set({ pet: { ...p2, idleAnimationFile: null } })
-              emitPetEvent('idle', 'neutral')
               scheduleIdleAnimation()
               startSleepSequence()
             }
@@ -251,12 +236,10 @@ export const usePetStore = create<PetStore>()(
           if (!p) return
           clearAll()
           set({ pet: { ...p, state: 'notification', mood: 'excited', idleAnimationFile: null } })
-          emitPetEvent('notification', 'excited')
           _reactionT = setTimeout(() => {
             const p2 = get().pet
             if (p2) {
               set({ pet: { ...p2, state: 'idle', idleAnimationFile: null } })
-              emitPetEvent('idle', p2.mood)
               scheduleIdleAnimation()
               startSleepSequence()
             }
@@ -267,7 +250,6 @@ export const usePetStore = create<PetStore>()(
           if (!p) return
           clearAll()
           set({ pet: { ...p, state: 'idle', idleAnimationFile: 'clawd-react-drag.svg' } })
-          emitPetEvent('idle', 'happy')
           _reactionT = setTimeout(() => {
             const p2 = get().pet
             if (p2) {
@@ -282,7 +264,6 @@ export const usePetStore = create<PetStore>()(
           if (!p) return
           clearAll()
           set({ pet: { ...p, state: 'idle', idleAnimationFile: 'clawd-react-double.svg' } })
-          emitPetEvent('idle', 'excited')
           _reactionT = setTimeout(() => {
             const p2 = get().pet
             if (p2) {
@@ -297,7 +278,6 @@ export const usePetStore = create<PetStore>()(
           if (!p) return
           clearAll()
           set({ pet: { ...p, state: 'idle', idleAnimationFile: 'clawd-react-annoyed.svg' } })
-          emitPetEvent('idle', 'sleepy')
           _reactionT = setTimeout(() => {
             const p2 = get().pet
             if (p2) {
