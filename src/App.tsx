@@ -118,6 +118,9 @@ function App() {
       modelID: config.model,
       apiKey: config.apiKey,
       workspaceDir: workspaceDir ?? undefined,
+      providerConfig: {
+        supportsVision: config.supportsVision === true,
+      },
       webSearchConfig: useWebSearchStore.getState().getActiveConfig() as unknown as Record<string, unknown>,
       ...buildAgentRuntimeConfig(),
     }).catch((err) => {

@@ -168,6 +168,7 @@ export interface ProviderConfig {
   apiKey: string
   model: string
   baseUrl: string
+  supportsVision?: boolean
 }
 
 export interface ProviderInfo {

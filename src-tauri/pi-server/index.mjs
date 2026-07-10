@@ -67,6 +67,8 @@ const runtimeConfig = {
 function createCustomModel(providerID, modelID, providerConfig = {}) {
   const api = providerConfig.api || 'openai-completions'
   const baseUrl = providerConfig.baseUrl || ''
+  // Custom models can declare vision support via providerConfig.supportsVision
+  const supportsVision = providerConfig.supportsVision === true
   return {
     id: modelID,
     name: modelID,
@@ -74,7 +76,7 @@ function createCustomModel(providerID, modelID, providerConfig = {}) {
     provider: providerID,
     baseUrl,
     reasoning: false,
-    input: ['text'],
+    input: supportsVision ? ['text', 'image'] : ['text'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
     contextLength: 128000,
@@ -1669,14 +1671,24 @@ createServer((req, res) => {
         console.log('[pi-server] Total timeout (120s) — stopping retries')
       }, 120_000)
 
+      // Detect model vision capability: model.input.includes('image') means vision-capable
+      const supportsVision = model?.input && Array.isArray(model.input) && model.input.includes('image')
+
       // Convert frontend images {data, mimeType}[] to ImageContent[] for pi-agent-core
       const imageContents = Array.isArray(images) && images.length > 0
         ? images.map(img => ({ type: 'image', data: img.data, mimeType: img.mimeType }))
         : undefined
 
+      // If images provided but model doesn't support vision, drop them and warn
+      const willUseImages = imageContents && supportsVision
+      if (imageContents && !supportsVision) {
+        console.log('[pi-server] Model does not support images, dropping', imageContents.length, 'image(s)')
+        emit('status', { type: 'warning', message: `Model does not support image inputs — removing images.` })
+      }
+
       try {
         await withRetry(
-          () => imageContents ? wrapper.agent.prompt(content, imageContents) : wrapper.agent.prompt(content),
+          () => willUseImages ? wrapper.agent.prompt(content, imageContents) : wrapper.agent.prompt(content),
           {
             maxRetries: 3,
             signal: totalAc.signal,

@@ -113,10 +113,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   }, [expandedProvider])
 
-  const handleConfigChange = (id: string, field: string, value: string) => {
+  const handleConfigChange = (id: string, field: string, value: string | boolean) => {
     setLocalConfigs((prev) => ({
       ...prev,
-      [id]: { ...(prev[id] || { apiKey: '', model: '', baseUrl: '' }), [field]: value },
+      [id]: { ...(prev[id] || { apiKey: '', model: '', baseUrl: '', supportsVision: false }), [field]: value },
     }))
   }
 
@@ -152,7 +152,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   }, [providerList, searchQuery])
 
   const provider = providerList.find((p) => p.id === expandedProvider)
-  const cfg = expandedProvider ? localConfigs[expandedProvider] || { apiKey: '', model: '', baseUrl: '' } : null
+  const cfg = expandedProvider ? localConfigs[expandedProvider] || { apiKey: '', model: '', baseUrl: '', supportsVision: false } : null
 
   const modelsForProvider = expandedProvider ? (providerModels[expandedProvider] || []) : []
 
@@ -513,6 +513,23 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                               placeholder="https://your-custom-proxy.com/v1"
                               className="w-full px-8 py-6 rounded-[28px] bg-white/40 dark:bg-white/5 border border-border-light text-[15px] font-mono text-text outline-none focus:bg-white/80 dark:focus:bg-white/10 focus:border-accent/50 focus:ring-[16px] focus:ring-accent-subtle transition-all duration-500 shadow-sm"
                             />
+                          </div>
+
+                          {/* Vision capability toggle */}
+                          <div className="flex items-center gap-4 mt-2 ml-2">
+                            <button
+                              onClick={() => handleConfigChange(expandedProvider, 'supportsVision', !cfg.supportsVision)}
+                              className={`relative w-11 h-6 rounded-full transition-all duration-300 ${
+                                cfg.supportsVision ? 'bg-accent' : 'bg-surface-tertiary border border-border-light'
+                              }`}
+                            >
+                              <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-300 ${
+                                cfg.supportsVision ? 'translate-x-5' : 'translate-x-0'
+                              }`} />
+                            </button>
+                            <span className="text-[12px] font-bold tracking-tight text-text-secondary">
+                              Supports Vision (Image Input)
+                            </span>
                           </div>
                         </div>
                       </div>

@@ -104,7 +104,7 @@ export async function syncRuntimeConfig(config: {
   modelID: string
   apiKey?: string
   workspaceDir?: string
-  providerConfig?: { api?: string; baseUrl?: string }
+  providerConfig?: { api?: string; baseUrl?: string; supportsVision?: boolean }
   webSearchConfig?: Record<string, unknown>
   agentSystemPrompt?: string
   agentSkillsBlock?: string
@@ -157,7 +157,7 @@ export async function prompt(
     permissionMode?: PermissionAction
     permissionRules?: PermissionRule
     providerAPI?: string
-    providerConfig?: { api?: string; baseUrl?: string }
+    providerConfig?: { api?: string; baseUrl?: string; supportsVision?: boolean }
     images?: ImageData[]
   },
 ): Promise<PromptResult> {

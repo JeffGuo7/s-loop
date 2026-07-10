@@ -451,7 +451,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           providerConfigs: {
             ...state.providerConfigs,
-            [id]: { ...(state.providerConfigs[id] || { apiKey: '', model: '', baseUrl: '' }), ...config },
+            [id]: { ...(state.providerConfigs[id] || { apiKey: '', model: '', baseUrl: '', supportsVision: false }), ...config },
           },
         }))
       },

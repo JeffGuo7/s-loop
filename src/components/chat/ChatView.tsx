@@ -263,9 +263,11 @@ export function ChatView() {
         permissionMode: activeAgent?.permissionMode,
         permissionRules: activeAgent?.permissionRules,
         providerAPI: providerInfo?.api,
-        providerConfig: providerInfo?.api
-          ? { api: providerInfo.api, baseUrl: providerConfig?.baseUrl }
-          : undefined,
+        providerConfig: {
+          ...(providerInfo?.api ? { api: providerInfo.api } : {}),
+          baseUrl: providerConfig?.baseUrl || '',
+          supportsVision: providerConfig?.supportsVision === true,
+        },
         images,  // pass image data to pi-server
       })
 
