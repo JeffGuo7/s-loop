@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/JeffGuo7/s-loop/actions/workflows/ci.yml"><img src="https://github.com/JeffGuo7/s-loop/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/JeffGuo7/s-loop/blob/master/LICENSE"><img src="https://img.shields.io/github/license/JeffGuo7/s-loop?color=blue" alt="License"></a>
+  <a href="https://github.com/JeffGuo7/s-loop/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   <a href="https://github.com/JeffGuo7/s-loop/releases"><img src="https://img.shields.io/github/v/release/JeffGuo7/s-loop?include_prereleases&label=release" alt="Release"></a>
   <a href="https://github.com/JeffGuo7/s-loop/stargazers"><img src="https://img.shields.io/github/stars/JeffGuo7/s-loop?style=flat" alt="Stars"></a>
   <a href="https://github.com/JeffGuo7/s-loop/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20.exe-blue?logo=windows" alt="Download Windows"></a>
