@@ -1,7 +1,7 @@
 // Token estimation helpers for context compression.
 // Uses conservative character heuristics when real usage is unavailable.
 
-export const CHARS_PER_TOKEN = 4
+export const CHARS_PER_TOKEN = 2
 export const IMAGE_TOKEN_ESTIMATE = 1600
 
 function countChars(value) {
