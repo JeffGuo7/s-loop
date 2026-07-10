@@ -31,13 +31,6 @@ export function PetWindow() {
 
   // ─── Real-time sync via Zustand subscribe (replaces polling + Tauri events) ───
   useEffect(() => {
-    // Initialize from current store state
-    const initial = store.getState()
-    if (initial.pet) {
-      setDisplayState(initial.pet.state)
-      setDisplayAnimFile(initial.pet.idleAnimationFile || null)
-    }
-
     // Subscribe to store changes for instant sync (no polling delay)
     const unsubscribe = store.subscribe((state) => {
       if (!state.pet) return
