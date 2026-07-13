@@ -15,14 +15,20 @@ const srcDir = join(root, "src-tauri", "pi-server");
 const outZip = join(root, "src-tauri", "pi-server.zip");
 
 // Skip files/dirs that are not needed at runtime or would bloat the archive.
-// "extensions" is user-installed packages, not part of the distribution.
-const SKIP_NAMES = new Set([".git", ".DS_Store", "Thumbs.db", "extensions", "extensions-manifest.json"]);
+// "extensions" is the user-installed packages dir at the pi-server root — not
+// part of the distribution. But extensions/ directories inside node_modules
+// (e.g. @earendil-works/pi-coding-agent/dist/core/extensions/) MUST be kept.
+const SKIP_NAMES = new Set([".git", ".DS_Store", "Thumbs.db"]);
+const SKIP_ROOT_NAMES = new Set(["extensions", "extensions-manifest.json"]);
 // Within node_modules, skip type-only and source-map artifacts the runtime
 // never loads (also keeps paths short).
 const SKIP_EXTS = new Set([".d.ts", ".d.ts.map", ".js.map", ".ts.map", ".ts"]);
 
 function shouldSkip(relPath, name, isDir) {
+  // Skip at any depth
   if (SKIP_NAMES.has(name)) return true;
+  // Skip only at the pi-server root (relPath has no separator)
+  if (SKIP_ROOT_NAMES.has(name) && !relPath.includes("/")) return true;
   if (isDir) return false;
   // Only apply extension skips inside node_modules to avoid touching our own
   // source .ts files (there are none under pi-server root anyway, but be safe).

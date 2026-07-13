@@ -120,9 +120,13 @@ fn find_node_cmd() -> Option<String> {
     let home = dirs_home();
     let candidates: Vec<PathBuf> = if cfg!(target_os = "windows") {
         vec![
+            // winget / official installer
             r"C:\Program Files\nodejs\node.exe".into(),
             r"C:\Program Files (x86)\nodejs\node.exe".into(),
-            home.join("AppData").join("Roaming").join("npm").join("node.exe"),
+            // nvm-windows alias (symlink or shim that always points to the active version)
+            r"C:\ProgramData\nodejs\node.exe".into(),
+            // alternate drive installs
+            r"D:\Program Files\nodejs\node.exe".into(),
         ]
     } else {
         vec![
@@ -139,12 +143,12 @@ fn find_node_cmd() -> Option<String> {
         }
     }
 
-    // 3. nvm: search ~/.nvm/versions/node/*/bin/node
-    let nvm_versions = home.join(".nvm").join("versions").join("node");
-    if nvm_versions.exists() {
-        if let Ok(entries) = std::fs::read_dir(&nvm_versions) {
+    // 3. nvm-windows: search %PROGRAMDATA%\nvm\v*\node.exe
+    let nvm_win = std::path::Path::new(r"C:\ProgramData\nvm");
+    if nvm_win.exists() {
+        if let Ok(entries) = std::fs::read_dir(nvm_win) {
             for entry in entries.flatten() {
-                let node = entry.path().join("bin").join("node");
+                let node = entry.path().join("node.exe");
                 if node.exists() {
                     return Some(node.to_string_lossy().to_string());
                 }
@@ -152,7 +156,20 @@ fn find_node_cmd() -> Option<String> {
         }
     }
 
-    // 4. fnm: search ~/.local/share/fnm/node-versions/*/installation/bin/node
+    // 4. Unix nvm: search ~/.nvm/versions/node/*/bin/node
+    let nvm_versions = home.join(".nvm").join("versions").join("node");
+    if nvm_versions.exists() {
+        if let Ok(entries) = std::fs::read_dir(&nvm_versions) {
+            for entry in entries.flatten() {
+                let node = entry.path().join("bin").join(node_name);
+                if node.exists() {
+                    return Some(node.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // 5. fnm: search ~/.local/share/fnm/node-versions/*/installation/bin/node
     let fnm_versions = if cfg!(target_os = "macos") {
         home.join("Library").join("Application Support").join("fnm").join("node-versions")
     } else {
@@ -161,10 +178,20 @@ fn find_node_cmd() -> Option<String> {
     if fnm_versions.exists() {
         if let Ok(entries) = std::fs::read_dir(&fnm_versions) {
             for entry in entries.flatten() {
-                let node = entry.path().join("installation").join("bin").join("node");
+                let node = entry.path().join("installation").join("bin").join(node_name);
                 if node.exists() {
                     return Some(node.to_string_lossy().to_string());
                 }
+            }
+        }
+    }
+
+    // 6. Last resort: scan PATH environment variable for node
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join(node_name);
+            if candidate.exists() {
+                return Some(candidate.to_string_lossy().to_string());
             }
         }
     }
@@ -204,10 +231,6 @@ impl PiServerProcess {
         let mut cmd = Command::new(&node_path);
 
         // Resolve pi-server entry point — check dev, production, and root paths.
-        // Use Path::join, not format! with "/": on Windows the project_dir may
-        // carry the \\?\ verbatim prefix (from current_exe()), under which
-        // forward slashes are NOT separators and .exists() silently fails even
-        // though the file is present.
         let base = PathBuf::from(project_dir);
         let dev_path = base.join("src-tauri").join("pi-server").join("index.mjs");
         let prod_path = base.join("pi-server").join("index.mjs");
@@ -235,10 +258,6 @@ impl PiServerProcess {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
-            // CREATE_NO_WINDOW (0x08000000): prevents the Node.js console
-            // process from creating a visible window. We DON'T use
-            // DETACHED_PROCESS here because that breaks the stdin pipe,
-            // which pi-server uses to detect parent process exit.
             cmd.creation_flags(0x08000000);
         }
 
@@ -246,7 +265,15 @@ impl PiServerProcess {
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
-        let mut child = cmd.spawn().map_err(|e| format!("Failed to start pi-server: {e}"))?;
+        let mut child = cmd.spawn().map_err(|e| {
+            format!(
+                "Failed to start pi-server: {e}\n\
+                 Tried to run: {} {}\n\
+                 Make sure Node.js is installed (https://nodejs.org) and the pi-server directory exists next to the app executable.",
+                node_path,
+                entry.display()
+            )
+        })?;
 
         let stdout = child.stdout.take().ok_or("No stdout")?;
         let stderr = child.stderr.take().ok_or("No stderr")?;
