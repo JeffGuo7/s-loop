@@ -19,6 +19,7 @@ import {
   RefreshCw,
   RotateCcw,
   X,
+  Puzzle,
   type LucideIcon,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -536,6 +537,13 @@ export function Sidebar({
             label={t('sidebar.pet')}
             active={currentPage === 'pet'}
             onClick={() => onNavigate('pet')}
+            collapsed={collapsed}
+          />
+          <NavItem
+            icon={Puzzle}
+            label={t('sidebar.extensions')}
+            active={currentPage === 'extensions'}
+            onClick={() => onNavigate('extensions')}
             collapsed={collapsed}
           />
         </div>

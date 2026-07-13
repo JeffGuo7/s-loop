@@ -7,6 +7,7 @@ import { TasksPage } from './components/tasks'
 import { PlatformCenter } from './components/platforms'
 import { PetPage } from './components/pet'
 import { GoalPage } from './components/goal/GoalPage'
+import { ExtensionsPage } from './components/extensions/ExtensionsPage'
 import { useAppStore, usePetStore } from './stores'
 import { useTaskScheduler, useTelegramChatSync } from './hooks'
 import { WorkspacePanel } from './components/workspace'
@@ -21,7 +22,7 @@ import { setBaseUrl, syncRuntimeConfig } from './utils/piClient'
 import { buildAgentRuntimeConfig } from './utils/agentRuntime'
 import { getActiveTokens } from './themes'
 
-export type Page = 'chat' | 'tasks' | 'platforms' | 'pet' | 'goal'
+export type Page = 'chat' | 'tasks' | 'platforms' | 'pet' | 'goal' | 'extensions'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const APP_STORAGE_KEY = 'snotra-storage'
@@ -282,6 +283,11 @@ function App() {
           {currentPage === 'goal' && (
             <div className="w-full h-full flex flex-col">
               <GoalPage />
+            </div>
+          )}
+          {currentPage === 'extensions' && (
+            <div className="w-full h-full flex flex-col">
+              <ExtensionsPage />
             </div>
           )}
         </div>

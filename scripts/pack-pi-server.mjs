@@ -15,7 +15,8 @@ const srcDir = join(root, "src-tauri", "pi-server");
 const outZip = join(root, "src-tauri", "pi-server.zip");
 
 // Skip files/dirs that are not needed at runtime or would bloat the archive.
-const SKIP_NAMES = new Set([".git", ".DS_Store", "Thumbs.db"]);
+// "extensions" is user-installed packages, not part of the distribution.
+const SKIP_NAMES = new Set([".git", ".DS_Store", "Thumbs.db", "extensions", "extensions-manifest.json"]);
 // Within node_modules, skip type-only and source-map artifacts the runtime
 // never loads (also keeps paths short).
 const SKIP_EXTS = new Set([".d.ts", ".d.ts.map", ".js.map", ".ts.map", ".ts"]);

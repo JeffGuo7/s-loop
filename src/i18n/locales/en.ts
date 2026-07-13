@@ -32,6 +32,7 @@ const en = {
     platformHub: 'Platform Hub',
     pet: 'Pet',
     goals: 'Goals',
+    extensions: 'Extensions',
     sleep: 'Sleep',
     wakePet: 'Wake Pet',
     hatch: 'Hatch',

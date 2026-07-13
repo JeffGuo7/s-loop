@@ -32,6 +32,7 @@ const zh = {
     platformHub: '平台中心',
     pet: '宠物',
     goals: '目标',
+    extensions: '扩展',
     sleep: '休眠',
     wakePet: '唤醒宠物',
     hatch: '孵化',

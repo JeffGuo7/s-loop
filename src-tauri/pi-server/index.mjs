@@ -39,6 +39,7 @@ import { tryGetAdapter } from './platforms/registry.mjs'
 import { authorizeInbound } from './platforms/access-control.mjs'
 import { ToolGuard } from './tool-guardrails.mjs'
 import { checkCommandSafety, checkSensitivePath } from './security.mjs'
+import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools } from './extension-runtime.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -115,6 +116,14 @@ function createSSE(event, data) {
 
 function getTools(dir, webSearchConfig) {
   const all = [...createCodingTools(dir), ...createReadOnlyTools(dir)]
+
+  // Merge tools from loaded pi.dev extensions
+  const extTools = getExtensionTools()
+  if (extTools.length > 0) {
+    console.log(`[pi-server] adding ${extTools.length} extension tool(s)`)
+    all.push(...extTools)
+  }
+
   const seen = new Set()
   const tools = all.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true })
   if (!seen.has('web_search')) {
@@ -1259,6 +1268,67 @@ createServer((req, res) => {
     return
   }
 
+  // ── Extension Management endpoints ──
+
+  // GET /extensions — list installed/loaded extensions
+  if (req.method === 'GET' && url.pathname === '/extensions') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(listExtensions()))
+    return
+  }
+
+  // POST /extensions/install — install a pi.dev package
+  if (req.method === 'POST' && url.pathname === '/extensions/install') {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const pkg = data.package || data.name
+        if (!pkg) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "package" field' })); return }
+        const result = await installExtension(pkg)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  // POST /extensions/remove — uninstall a pi.dev package
+  if (req.method === 'POST' && url.pathname === '/extensions/remove') {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const pkg = data.package || data.name
+        if (!pkg) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "package" field' })); return }
+        const result = await removeExtension(pkg)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  // POST /extensions/reload — reload all extensions
+  if (req.method === 'POST' && url.pathname === '/extensions/reload') {
+    reloadAll().then(() => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+    }).catch((e) => {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
   // ── Existing endpoints ──
 
   if (req.method === 'GET' && url.pathname === '/health') {
@@ -1772,4 +1842,8 @@ createServer((req, res) => {
     prompt: createCronPrompt,
   })
   void ensureTelegramMonitorState()
+  // Load installed pi.dev extensions
+  initExtensions().catch((err) => {
+    console.error('[pi-server] extension init error:', err)
+  })
 })
