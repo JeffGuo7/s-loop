@@ -222,50 +222,87 @@ fn pi_server_in(dir: &std::path::Path) -> Option<std::path::PathBuf> {
 fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>) -> String {
     // 1. Dev path: {project_dir}/src-tauri/pi-server/index.mjs
     let dev = std::path::Path::new(project_dir).join("src-tauri").join("pi-server").join("index.mjs");
-    if dev.exists() { return project_dir.to_string(); }
+    if dev.exists() {
+        eprintln!("[s-loop] pi-server found at dev path: {}", dev.display());
+        return project_dir.to_string();
+    }
 
     // 2. Relative subdir: {project_dir}/pi-server/index.mjs
     let rel = std::path::Path::new(project_dir).join("pi-server").join("index.mjs");
-    if rel.exists() { return project_dir.to_string(); }
+    if rel.exists() {
+        eprintln!("[s-loop] pi-server found at relative path: {}", rel.display());
+        return project_dir.to_string();
+    }
 
     // 3. Root level: {project_dir}/index.mjs (pi-server files extracted to install root)
     let root = std::path::Path::new(project_dir).join("index.mjs");
-    if root.exists() { return project_dir.to_string(); }
+    if root.exists() {
+        eprintln!("[s-loop] pi-server found at root: {}", root.display());
+        return project_dir.to_string();
+    }
 
-    // 4. Tauri resource_dir (subdir or flat layout). The bundled pi-server.zip
-    //    is extracted here on first launch.
+    // Collect candidate directories where pi-server.zip or extracted pi-server may live.
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+
+    // 4a. Tauri resource_dir — where `bundle.resources` files are placed.
     if let Some(app) = app_handle {
-        if let Ok(res) = app.path().resource_dir() {
-            if let Err(e) = ensure_pi_server_extracted(&res) {
-                eprintln!("[s-loop] pi-server extract from resource_dir failed: {e}");
+        match app.path().resource_dir() {
+            Ok(res) => {
+                eprintln!("[s-loop] resource_dir = {}", res.display());
+                candidates.push(res);
             }
-            if pi_server_in(&res).is_some() {
-                return res.to_string_lossy().to_string();
+            Err(e) => eprintln!("[s-loop] resource_dir unavailable: {e}"),
+        }
+    }
+
+    // 4b. Exe directory — reliable fallback for packaged apps.
+    match std::env::current_exe() {
+        Ok(exe) => {
+            if let Some(dir) = exe.parent() {
+                let clean = dir.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+                eprintln!("[s-loop] exe_dir = {}", clean);
+                candidates.push(dir.to_path_buf());
+            }
+        }
+        Err(e) => eprintln!("[s-loop] current_exe unavailable: {e}"),
+    }
+
+    // Deduplicate candidates (resource_dir often equals exe_dir for NSIS).
+    let mut seen = std::collections::HashSet::new();
+    candidates.retain(|p| seen.insert(p.to_string_lossy().to_string()));
+
+    // Try each candidate: extract if zip is present, then check for pi-server.
+    for candidate in &candidates {
+        match ensure_pi_server_extracted(candidate) {
+            Ok(true) => {
+                if pi_server_in(candidate).is_some() {
+                    let clean = candidate.to_string_lossy().trim_start_matches(r"\\?").to_string();
+                    eprintln!("[s-loop] pi-server ready at: {}", clean);
+                    return clean;
+                }
+            }
+            Ok(false) => {
+                eprintln!("[s-loop] no pi-server.zip at {}", candidate.display());
+            }
+            Err(e) => {
+                eprintln!("[s-loop] pi-server extract failed at {}: {e}", candidate.display());
             }
         }
     }
 
-    // 5. Exe directory — the reliable fallback for a packaged app whose
-    //    current_dir() is unrelated to the install location (e.g. launched
-    //    from a shortcut with cwd = home or System32). The bundled
-    //    pi-server.zip is extracted next to the exe on first launch.
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            if let Err(e) = ensure_pi_server_extracted(dir) {
-                eprintln!("[s-loop] pi-server extract from exe dir failed: {e}");
-            }
-            if pi_server_in(dir).is_some() {
-                // current_exe() may carry the \\?\ verbatim prefix on Windows;
-                // pi_server::start strips it too, but keep the returned path
-                // clean for any other consumer.
-                let clean = dir.to_string_lossy();
-                let clean = clean.trim_start_matches(r"\\?\");
-                return clean.to_string();
-            }
+    // If no candidate had the zip but one candidate has the extracted
+    // pi-server (e.g. NSIS post-install already extracted it), try again
+    // without requiring the zip.
+    for candidate in &candidates {
+        if pi_server_in(candidate).is_some() {
+            let clean = candidate.to_string_lossy().trim_start_matches(r"\\?").to_string();
+            eprintln!("[s-loop] pi-server found (pre-extracted) at: {}", clean);
+            return clean;
         }
     }
 
-    // 6. Fallback
+    // 5. Fallback: return project_dir so the caller can report a clear error.
+    eprintln!("[s-loop] pi-server not found in any candidate dir, falling back to project_dir={}", project_dir);
     project_dir.to_string()
 }
 

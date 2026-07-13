@@ -26,18 +26,25 @@ pub fn ensure_pi_server_extracted(base_dir: &std::path::Path) -> Result<bool, St
     let index_mjs = pi_server_dir.join("index.mjs");
     let marker = pi_server_dir.join(EXTRACT_OK_MARKER);
 
-    // Already extracted and intact — fast path.
-    if index_mjs.exists() && marker.exists() {
+    // If pi-server is already usable (NSIS post-install may have pre-extracted
+    // it without writing the marker), write the marker and return success.
+    // This avoids deleting a working extraction just because the marker is missing.
+    if index_mjs.exists() {
+        if !marker.exists() {
+            let _ = std::fs::write(&marker, b"ok");
+        }
         return Ok(true);
     }
 
     let zip_path = base_dir.join("pi-server.zip");
     if !zip_path.exists() {
-        // No archive and no extracted dir: caller will report not-found.
-        return Ok(index_mjs.exists());
+        eprintln!("[s-loop] pi-server.zip not found at {}", zip_path.display());
+        return Ok(false);
     }
 
-    // Stale or partial extraction — start clean.
+    eprintln!("[s-loop] extracting pi-server.zip at {} ...", base_dir.display());
+
+    // Clean any partial/empty directory from a previous failed attempt.
     if pi_server_dir.exists() {
         std::fs::remove_dir_all(&pi_server_dir)
             .map_err(|e| format!("failed to remove stale pi-server dir: {e}"))?;
@@ -219,17 +226,6 @@ impl PiServerProcess {
             return Err(format!("Project directory not found: {}", project_dir));
         }
 
-        let node_path = std::env::var("PI_NODE_PATH")
-            .ok()
-            .and_then(|p| {
-                let path = std::path::Path::new(&p);
-                if path.exists() { Some(p) } else { None }
-            })
-            .or_else(find_node_cmd)
-            .unwrap_or_else(|| "node".into());
-
-        let mut cmd = Command::new(&node_path);
-
         // Resolve pi-server entry point — check dev, production, and root paths.
         let base = PathBuf::from(project_dir);
         let dev_path = base.join("src-tauri").join("pi-server").join("index.mjs");
@@ -251,6 +247,35 @@ impl PiServerProcess {
             ));
         };
 
+        // Resolve the node binary to use.
+        // 1. PI_NODE_PATH env var (explicit override)
+        // 2. Bundled node next to the entry script (self-contained, no system dep)
+        // 3. System-installed node (find_node_cmd)
+        // 4. Bare "node" as last resort
+        let node_name = if cfg!(target_os = "windows") { "node.exe" } else { "node" };
+        let bundled = entry.with_file_name(node_name);
+        let node_path = std::env::var("PI_NODE_PATH")
+            .ok()
+            .and_then(|p| {
+                let path = std::path::Path::new(&p);
+                if path.exists() { Some(p) } else { None }
+            })
+            .or_else(|| {
+                if bundled.exists() {
+                    eprintln!("[s-loop] using bundled node: {}", bundled.display());
+                    Some(bundled.to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            })
+            .or_else(find_node_cmd)
+            .unwrap_or_else(|| {
+                eprintln!("[s-loop] no node binary found, falling back to '{}'", node_name);
+                node_name.into()
+            });
+
+        let mut cmd = Command::new(&node_path);
+
         cmd.arg(&entry);
         cmd.env("PI_SERVER_PORT", port.to_string());
         cmd.current_dir(project_dir);
@@ -269,7 +294,7 @@ impl PiServerProcess {
             format!(
                 "Failed to start pi-server: {e}\n\
                  Tried to run: {} {}\n\
-                 Make sure Node.js is installed (https://nodejs.org) and the pi-server directory exists next to the app executable.",
+                 If you are running from source, make sure Node.js is installed (https://nodejs.org).",
                 node_path,
                 entry.display()
             )
