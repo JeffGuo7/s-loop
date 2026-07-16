@@ -1,40 +1,112 @@
 /**
  * extension-runtime.mjs — Pi Extension Runtime for s-loop
  *
- * Loads pi.dev packages (extensions) into the pi-server so that their
- * registered tools become available to the AI agent.
+ * Loads pi.dev packages into the pi-server so their registered
+ * tools, commands, message renderers, and event handlers become
+ * available to the AI agent and frontend.
  *
  * Each extension is an npm package whose default export is an
  * ExtensionFactory: (pi: ExtensionAPI) => void | Promise<void>
  *
- * The runtime provides a custom ExtensionAPI implementation that:
- *  - Collects tools registered via pi.registerTool()
- *  - Stubs out Pi CLI–specific features not applicable to s-loop
- *  - Supports lifecycle: install → load → unload → remove
+ * This implementation mirrors the official pi ExtensionAPI surface
+ * (from @earendil-works/pi-coding-agent) to maximise compatibility
+ * with pi.dev packages.
  */
 
-import { randomUUID } from 'node:crypto'
+import { EventEmitter } from 'node:events'
 import { execSync, spawnSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { createRequire } from 'node:module'
+
+const _require = createRequire(import.meta.url)
+let _jiti = null
+function getJiti() {
+  if (!_jiti) {
+    try {
+      const jitiMod = _require('jiti')
+      _jiti = jitiMod(import.meta.url, {
+        moduleCache: false,
+      })
+    } catch (err) {
+      console.warn('[extensions] jiti not available — .ts extensions will fail:', err.message)
+    }
+  }
+  return _jiti
+}
 
 // ── Config ────────────────────────────────────────────────────
 
-const EXTENSIONS_DIR = path.resolve(
-  process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd(),
-  'pi-server', 'extensions',
-)
+function resolveExtensionsDir() {
+  const base = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+  // Dev mode: pi-server lives under src-tauri/pi-server/
+  const devCandidate = path.resolve(base, 'src-tauri', 'pi-server')
+  if (fs.existsSync(path.join(devCandidate, 'index.mjs'))) {
+    return path.join(devCandidate, 'extensions')
+  }
+  // Production / standalone: pi-server is at base/pi-server/
+  return path.resolve(base, 'pi-server', 'extensions')
+}
 
-const MANIFEST_PATH = path.join(
-  path.dirname(EXTENSIONS_DIR), 'extensions-manifest.json',
-)
+function resolveManifestPath() {
+  return path.join(path.dirname(resolveExtensionsDir()), 'extensions-manifest.json')
+}
+
+const EXTENSIONS_DIR = resolveExtensionsDir()
+const MANIFEST_PATH = resolveManifestPath()
+
+console.log(`[extensions] dir=${EXTENSIONS_DIR} manifest=${MANIFEST_PATH}`)
+
+// ── EventBus ──────────────────────────────────────────────────
+
+/**
+ * Simple EventBus wrapping Node EventEmitter.
+ * Mirrors pi's createEventBus() from @earendil-works/pi-coding-agent.
+ */
+class EventBus {
+  constructor() {
+    this._emitter = new EventEmitter()
+    this._emitter.setMaxListeners(100)
+  }
+
+  emit(channel, data) {
+    this._emitter.emit(channel, data)
+  }
+
+  on(channel, handler) {
+    const safeHandler = async (data) => {
+      try {
+        await handler(data)
+      } catch (err) {
+        console.error(`[event-bus] handler error on "${channel}":`, err)
+      }
+    }
+    this._emitter.on(channel, safeHandler)
+    return () => this._emitter.off(channel, safeHandler)
+  }
+
+  off(channel, handler) {
+    this._emitter.off(channel, handler)
+  }
+
+  removeAllListeners(channel) {
+    if (channel) {
+      this._emitter.removeAllListeners(channel)
+    } else {
+      this._emitter.removeAllListeners()
+    }
+  }
+}
+
+const globalEventBus = new EventBus()
+
+export function getEventBus() {
+  return globalEventBus
+}
 
 // ── Internal state ────────────────────────────────────────────
 
-/** Map<packageName, { loaded, tools[], factory, def }> */
 const loadedExtensions = new Map()
-
-/** Tools registered by all currently loaded extensions */
 let extensionTools = []
 
 // ── Manifest persistence ──────────────────────────────────────
@@ -65,7 +137,6 @@ function ensurePackagesDir() {
   if (!fs.existsSync(EXTENSIONS_DIR)) {
     fs.mkdirSync(EXTENSIONS_DIR, { recursive: true })
   }
-  // Ensure the packages dir has a package.json so npm install works
   const pkgPath = path.join(EXTENSIONS_DIR, 'package.json')
   if (!fs.existsSync(pkgPath)) {
     fs.writeFileSync(pkgPath, JSON.stringify({
@@ -76,111 +147,249 @@ function ensurePackagesDir() {
   }
 }
 
-/**
- * Resolve the main entry point of an npm package installed in EXTENSIONS_DIR.
- * Follows Node.js resolution: package.json → main/exports → index.js
- */
 function resolvePackageEntry(packageName) {
   const pkgDir = path.join(EXTENSIONS_DIR, 'node_modules', packageName)
-
-  // Resolve via package.json main/exports
   const pkgJsonPath = path.join(pkgDir, 'package.json')
   if (fs.existsSync(pkgJsonPath)) {
     try {
       const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
-      // Try exports first (modern), then main (legacy)
+
+      // Check pi.extensions field (pi.dev package convention)
+      const piExtensions = pkgJson.pi?.extensions
+      if (Array.isArray(piExtensions) && piExtensions.length > 0) {
+        const extRelPath = piExtensions[0]
+        const resolved = path.resolve(pkgDir, extRelPath)
+        if (fs.existsSync(resolved)) {
+          return { pkgDir, entryPath: resolved, pkgJson, isTs: resolved.endsWith('.ts') }
+        }
+      }
+
+      // Try exports / main
       const entry = pkgJson.exports?.['.']?.import
         || pkgJson.exports?.['.']?.default
         || pkgJson.exports?.['.']
         || pkgJson.main
         || 'index.js'
       const resolved = path.resolve(pkgDir, typeof entry === 'string' ? entry : 'index.js')
-      if (fs.existsSync(resolved)) return { pkgDir, entryPath: resolved, pkgJson }
+      if (fs.existsSync(resolved)) return { pkgDir, entryPath: resolved, pkgJson, isTs: resolved.endsWith('.ts') }
     } catch {}
   }
-
-  // Fallback: index.js
   const fallback = path.join(pkgDir, 'index.js')
-  if (fs.existsSync(fallback)) return { pkgDir, entryPath: fallback, pkgJson: null }
-
+  if (fs.existsSync(fallback)) return { pkgDir, entryPath: fallback, pkgJson: null, isTs: false }
   throw new Error(`Cannot resolve entry point for package "${packageName}". Looked in ${pkgDir}`)
+}
+
+// ── ExtensionContext ──────────────────────────────────────────
+
+/**
+ * Build an ExtensionContext object for event handler calls.
+ * Mirrors pi's ExtensionContext interface.
+ */
+export function createContext(overrides = {}) {
+  return {
+    mode: overrides.mode || 'rpc',
+    hasUI: overrides.hasUI || false,
+    cwd: overrides.cwd || process.cwd(),
+    sessionManager: overrides.sessionManager || {
+      getSessionId: () => overrides.sessionId || null,
+      getSessionFile: () => overrides.sessionFile || null,
+      getEntries: () => [],
+      getEntryById: () => null,
+    },
+    modelRegistry: overrides.modelRegistry || { providers: [], getModel: () => null },
+    model: overrides.model || undefined,
+    isIdle: () => overrides.isIdle !== false,
+    isProjectTrusted: () => true,
+    signal: overrides.signal || undefined,
+    abort: () => { if (overrides.abort) overrides.abort() },
+    hasPendingMessages: () => false,
+    shutdown: () => process.exit(0),
+    getContextUsage: () => undefined,
+    compact: () => {},
+    getSystemPrompt: () => overrides.systemPrompt || '',
+    ui: {
+      setToolsExpanded: () => {},
+      setWidget: () => {},
+      openUrl: () => {},
+      showNotification: () => {},
+      setStatusBar: () => {},
+    },
+  }
 }
 
 // ── ExtensionAPI implementation ───────────────────────────────
 
+class ExtensionRecord {
+  constructor(packageName, sourceInfo) {
+    this.packageName = packageName
+    this.sourceInfo = sourceInfo
+    this.tools = new Map()
+    this.commands = new Map()
+    this.shortcuts = new Map()
+    this.flags = new Map()
+    this.messageRenderers = new Map()
+    this.entryRenderers = new Map()
+    this.handlers = new Map()
+    this.loaded = false
+    this.factory = null
+    this.toolList = []
+  }
+}
+
 /**
- * Create a custom ExtensionAPI for a single extension load call.
- * Collects tools into the `tools` array.
+ * Create an ExtensionAPI object for a given extension.
  */
-function createExtensionAPI({ onToolRegistered, onCommand, onError }) {
-  return {
+function createExtensionAPI(record, eventBus) {
+  const api = {
     // ── Event hooks ──
     on(event, handler) {
-      // For s-loop, we don't run extension event hooks because
-      // we use our own lifecycle. Extensions that only register tools
-      // via on() handlers won't work — recommend the user to use
-      // registerTool() in their factory function instead.
-      console.log(`[extensions] stub: on("${event}") — not supported in s-loop (use registerTool() directly)`)
+      const list = record.handlers.get(event) ?? []
+      list.push(handler)
+      record.handlers.set(event, list)
     },
 
-    // ── Tool registration (this is what we care about) ──
+    // ── Tool registration ──
     registerTool(toolDef) {
-      console.log(`[extensions] registered tool: "${toolDef.name || '(unnamed)'}"`)
-      if (onToolRegistered) onToolRegistered(toolDef)
+      if (!record.tools.has(toolDef.name)) {
+        if (toolDef.parameters && !Array.isArray(toolDef.parameters.required)) {
+          toolDef.parameters.required = []
+        }
+        const originalExecute = toolDef.execute
+        if (originalExecute) {
+          toolDef.execute = async (toolCallId, params, signal, onUpdate, ctx) => {
+            const fallbackCtx = {
+              ...ctx,
+              mode: ctx?.mode || 'rpc',
+              hasUI: ctx?.hasUI || false,
+              cwd: ctx?.cwd || process.cwd(),
+              sessionManager: ctx?.sessionManager || {
+                getSessionId: () => null,
+                getSessionFile: () => null,
+                getEntries: () => [],
+                getEntryById: () => null,
+              },
+              isIdle: () => true,
+              isProjectTrusted: () => true,
+              abort: () => {},
+              shutdown: () => {},
+              getSystemPrompt: () => '',
+              ui: {
+                setToolsExpanded: () => {},
+                setWidget: () => {},
+                openUrl: () => {},
+                showNotification: () => {},
+                setStatusBar: () => {},
+              },
+            }
+            return originalExecute(toolCallId, params, signal, onUpdate, fallbackCtx)
+          }
+        }
+        record.tools.set(toolDef.name, toolDef)
+        const entry = { ...toolDef, _extension: record.packageName }
+        record.toolList.push(entry)
+        extensionTools.push(entry)
+      }
     },
 
-    // ── Commands ──
+    // ── Command registration ──
     registerCommand(name, options) {
-      if (onCommand) onCommand(name, options)
-      console.log(`[extensions] stub: registerCommand("${name}") — not supported in s-loop`)
+      record.commands.set(name, { name, sourceInfo: record.sourceInfo, ...options })
     },
 
-    // ── Shortcuts (stub) ──
-    registerShortcut(key, options) {
-      console.log(`[extensions] stub: registerShortcut("${key}") — not supported in s-loop`)
+    registerShortcut(shortcut, options) {
+      record.shortcuts.set(shortcut, { shortcut, extensionPath: record.sourceInfo, ...options })
     },
 
-    // ── Flags (stub) ──
     registerFlag(name, options) {
-      console.log(`[extensions] stub: registerFlag("${name}") — not supported in s-loop`)
-    },
-    getFlag(name) { return undefined },
-
-    // ── Session & state (stubs for s-loop) ──
-    sendMessage(msg, opts) {
-      console.log(`[extensions] stub: sendMessage — not supported in s-loop`)
-    },
-    sendUserMessage(content, opts) {
-      console.log(`[extensions] stub: sendUserMessage — not supported in s-loop`)
-    },
-    appendEntry(type, data) {
-      console.log(`[extensions] stub: appendEntry("${type}") — not supported in s-loop`)
-    },
-    registerMessageRenderer(type, renderer) {
-      console.log(`[extensions] stub: registerMessageRenderer("${type}") — not supported in s-loop`)
+      record.flags.set(name, { name, extensionPath: record.sourceInfo, ...options })
+      if (options.default !== undefined) {
+        if (!api._flagValues) api._flagValues = new Map()
+        if (!api._flagValues.has(name)) {
+          api._flagValues.set(name, options.default)
+        }
+      }
     },
 
-    // ── Session name ──
-    setSessionName(name) {},
-    getSessionName() { return undefined },
+    getFlag(name) {
+      if (!record.flags.has(name)) return undefined
+      return api._flagValues?.get(name)
+    },
 
-    // ── Labels ──
-    setLabel(entryId, label) {},
+    // ── Message renderers ──
+    registerMessageRenderer(customType, renderer) {
+      record.messageRenderers.set(customType, renderer)
+    },
 
-    // ── Shell exec (stub — not sandboxed in s-loop context) ──
+    registerEntryRenderer(customType, renderer) {
+      record.entryRenderers.set(customType, renderer)
+    },
+
+    // ── Actions ──
+    sendMessage(message, options) {
+      globalEventBus.emit('extension:sendMessage', { packageName: record.packageName, message, options })
+    },
+
+    sendUserMessage(content, options) {
+      globalEventBus.emit('extension:sendUserMessage', { packageName: record.packageName, content, options })
+    },
+
+    appendEntry(customType, data) {
+      globalEventBus.emit('extension:appendEntry', { packageName: record.packageName, customType, data })
+    },
+
+    setSessionName(name) {
+      globalEventBus.emit('extension:setSessionName', { packageName: record.packageName, name })
+    },
+
+    getSessionName() {
+      return undefined
+    },
+
+    setLabel(entryId, label) {
+      globalEventBus.emit('extension:setLabel', { packageName: record.packageName, entryId, label })
+    },
+
+    // ── Shell exec ──
     async exec(command, args, options) {
-      console.log(`[extensions] stub: exec("${command}") — not available in s-loop`)
-      return { exitCode: 1, stdout: '', stderr: 'exec not available in s-loop' }
+      const cwd = options?.cwd || process.cwd()
+      const spawnOpts = { cwd, stdio: 'pipe', timeout: options?.timeout || 30000 }
+      if (options?.env) spawnOpts.env = { ...process.env, ...options.env }
+      try {
+        const result = spawnSync(command, args || [], spawnOpts)
+        return {
+          exitCode: result.status ?? 1,
+          stdout: result.stdout?.toString() || '',
+          stderr: result.stderr?.toString() || '',
+        }
+      } catch (err) {
+        return { exitCode: 1, stdout: '', stderr: err.message }
+      }
     },
 
-    // ── Tool queries (stubs) ──
-    getActiveTools() { return [] },
-    getAllTools() { return [] },
-    setActiveTools(names) {},
-    getCommands() { return [] },
-    setActiveCommands(names) {},
+    // ── Tool queries ──
+    getActiveTools() {
+      return [...extensionTools.map(t => t.name)]
+    },
 
-    // ── Model queries (stubs) ──
+    getAllTools() {
+      return extensionTools.map(t => ({ name: t.name, description: t.description, tool: t }))
+    },
+
+    setActiveTools(toolNames) {
+      // In s-loop all tools are always active; this is a no-op
+    },
+
+    getCommands() {
+      const all = []
+      for (const [, record] of loadedExtensions) {
+        for (const [, cmd] of record.commands) {
+          all.push(cmd)
+        }
+      }
+      return all
+    },
+
+    // ── Model queries ──
     getModel() { return null },
     getModels() { return [] },
     setModel(id) {},
@@ -189,7 +398,7 @@ function createExtensionAPI({ onToolRegistered, onCommand, onError }) {
     getThinkingLevel() { return 'off' },
     setThinkingLevel(level) {},
 
-    // ── Provider registration (stub) ──
+    // ── Provider registration ──
     registerProvider(name, config) {},
     unregisterProvider(name) {},
 
@@ -199,52 +408,79 @@ function createExtensionAPI({ onToolRegistered, onCommand, onError }) {
       confirm: async (msg) => { throw new Error('ui.confirm not available in s-loop') },
       input: async (opts) => { throw new Error('ui.input not available in s-loop') },
       notify: (msg) => { console.log(`[extensions:ui] ${msg}`) },
+      setToolsExpanded: () => {},
+      setWidget: () => {},
     },
 
-    // ── Warning callback ──
-    onerror: onError,
+    // ── Event bus (custom events) ──
+    events: eventBus || globalEventBus,
+
+    // ── Error callback ──
+    onerror: (err) => { console.error(`[extensions] "${record.packageName}" error:`, err) },
   }
+  return api
+}
+
+// ── Fire lifecycle events to all loaded extensions ────────────
+
+function fireEvent(event, data = {}, ctxOverrides = {}) {
+  const ctx = createContext(ctxOverrides)
+  for (const [, record] of loadedExtensions) {
+    const handlers = record.handlers.get(event)
+    if (!handlers || handlers.length === 0) continue
+    for (const handler of handlers) {
+      try {
+        handler(data, ctx)
+      } catch (err) {
+        console.error(`[extensions] "${record.packageName}" handler error on "${event}":`, err)
+      }
+    }
+  }
+}
+
+/**
+ * Fire a lifecycle event that the pi-server emits.
+ * This is the bridge between pi-server events and extension handlers.
+ */
+export function fireExtensionEvent(event, data = {}, ctxOverrides = {}) {
+  fireEvent(event, data, ctxOverrides)
 }
 
 // ── Core load / unload ────────────────────────────────────────
 
-async function loadExtension(packageName, entryPath, pkgJson) {
-  console.log(`[extensions] loading "${packageName}" from ${entryPath}`)
+async function loadExtension(packageName, entryPath, pkgJson, isTs = false) {
+  console.log(`[extensions] loading "${packageName}" from ${entryPath}${isTs ? ' (TypeScript)' : ''}`)
 
-  // Use dynamic import with cache-busting query param for ESM modules.
-  // This ensures hot-reload works even though ESM caches modules.
   const resolvedPath = path.resolve(entryPath)
 
-  let mod
-  try {
-    // Use dynamic import for ESM modules
-    mod = await import(resolvedPath + '?t=' + Date.now())
-  } catch (err) {
-    throw new Error(`Failed to import extension "${packageName}": ${err.message}`)
+  let factory
+  if (isTs) {
+    const jiti = getJiti()
+    if (!jiti) {
+      throw new Error(`Cannot load TypeScript extension "${packageName}": jiti not available. Install jiti in pi-server.`)
+    }
+    try {
+      const mod = await jiti.import(resolvedPath, { default: true })
+      factory = mod.default || mod
+    } catch (err) {
+      throw new Error(`Failed to import TypeScript extension "${packageName}": ${err.message}`)
+    }
+  } else {
+    let mod
+    try {
+      mod = await import(resolvedPath + '?t=' + Date.now())
+    } catch (err) {
+      throw new Error(`Failed to import extension "${packageName}": ${err.message}`)
+    }
+    factory = mod.default || mod
   }
 
-  // The default export should be an ExtensionFactory function
-  const factory = mod.default || mod
   if (typeof factory !== 'function') {
     throw new Error(`Extension "${packageName}" does not export a default factory function. Got: ${typeof factory}`)
   }
 
-  const tools = []
-
-  const api = createExtensionAPI({
-    onToolRegistered: (toolDef) => {
-      tools.push({
-        ...toolDef,
-        _extension: packageName,
-      })
-    },
-    onCommand: (name, options) => {
-      console.log(`[extensions] "${packageName}" registered command "${name}" (stubbed)`)
-    },
-    onError: (err) => {
-      console.error(`[extensions] "${packageName}" error:`, err)
-    },
-  })
+  const record = new ExtensionRecord(packageName, entryPath)
+  const api = createExtensionAPI(record, globalEventBus)
 
   try {
     await factory(api)
@@ -252,45 +488,56 @@ async function loadExtension(packageName, entryPath, pkgJson) {
     throw new Error(`Extension "${packageName}" factory threw: ${err.message}`)
   }
 
-  console.log(`[extensions] "${packageName}" loaded — ${tools.length} tool(s) registered`)
+  record.loaded = true
+  record.factory = factory
 
-  return { tools, factory }
+  loadedExtensions.set(packageName, record)
+
+  console.log(`[extensions] "${packageName}" loaded — ${record.tools.size} tool(s), ${record.commands.size} command(s), ${record.handlers.size} event type(s)`)
+
+  return {
+    loaded: true,
+    packageName,
+    tools: record.toolList.map(t => ({ name: t.name, description: t.description })),
+    commands: [...record.commands.keys()],
+  }
 }
 
 async function unloadExtension(packageName) {
-  const entry = loadedExtensions.get(packageName)
-  if (!entry) throw new Error(`Extension "${packageName}" is not loaded`)
+  const record = loadedExtensions.get(packageName)
+  if (!record) throw new Error(`Extension "${packageName}" is not loaded`)
 
-  // Remove its tools from the global list
   extensionTools = extensionTools.filter(t => t._extension !== packageName)
+  record.toolList = []
+  record.tools.clear()
+  record.commands.clear()
+  record.shortcuts.clear()
+  record.flags.clear()
+  record.messageRenderers.clear()
+  record.entryRenderers.clear()
+  record.handlers.clear()
+  record.loaded = false
+
   loadedExtensions.delete(packageName)
   console.log(`[extensions] "${packageName}" unloaded`)
 }
 
 // ── Public API ────────────────────────────────────────────────
 
-/**
- * Install a pi.dev package by name.
- * Runs `npm install <packageName>` in the extensions packages directory,
- * then loads the extension.
- */
 export async function installExtension(packageName) {
   const manifest = loadManifest()
 
-  // Check if already installed
   if (manifest.packages.includes(packageName)) {
-    // Try to load it if not yet loaded
     if (!loadedExtensions.has(packageName)) {
       return await loadInstalledExtension(packageName)
     }
-    return { loaded: true, packageName, tools: loadedExtensions.get(packageName)?.tools || [] }
+    return { loaded: true, packageName, tools: [...loadedExtensions.get(packageName).toolList.map(t => ({ name: t.name, description: t.description }))] }
   }
 
   ensurePackagesDir()
 
   console.log(`[extensions] installing "${packageName}"…`)
 
-  // Run npm install
   try {
     execSync(`npm install "${packageName}" --save`, {
       cwd: EXTENSIONS_DIR,
@@ -303,44 +550,26 @@ export async function installExtension(packageName) {
     throw new Error(`npm install failed for "${packageName}": ${msg}`)
   }
 
-  // Add to manifest
   manifest.packages.push(packageName)
   saveManifest(manifest)
 
-  // Load it
   return await loadInstalledExtension(packageName)
 }
 
-/**
- * Load an already-installed extension by name.
- */
 async function loadInstalledExtension(packageName) {
-  // Validate it's known to the manifest
   const manifest = loadManifest()
   if (!manifest.packages.includes(packageName)) {
     throw new Error(`Extension "${packageName}" is not in the manifest`)
   }
 
-  // If already loaded, return current state
   if (loadedExtensions.has(packageName)) {
-    return { loaded: true, packageName, tools: loadedExtensions.get(packageName).tools }
+    return { loaded: true, packageName, tools: [...loadedExtensions.get(packageName).toolList.map(t => ({ name: t.name, description: t.description }))] }
   }
 
-  const { pkgDir, entryPath, pkgJson } = resolvePackageEntry(packageName)
-
-  const result = await loadExtension(packageName, entryPath, pkgJson)
-
-  loadedExtensions.set(packageName, result)
-  // Add tools to global list
-  extensionTools.push(...result.tools)
-
-  return { loaded: true, packageName, tools: result.tools.map(t => ({ name: t.name, description: t.description })) }
+  const { pkgDir, entryPath, pkgJson, isTs } = resolvePackageEntry(packageName)
+  return await loadExtension(packageName, entryPath, pkgJson, isTs)
 }
 
-/**
- * Unload and remove an installed extension.
- * Removes the npm package and updates the manifest.
- */
 export async function removeExtension(packageName) {
   const manifest = loadManifest()
 
@@ -348,16 +577,13 @@ export async function removeExtension(packageName) {
     throw new Error(`Extension "${packageName}" is not installed`)
   }
 
-  // Unload if loaded
   if (loadedExtensions.has(packageName)) {
     await unloadExtension(packageName)
   }
 
-  // Remove from manifest
   manifest.packages = manifest.packages.filter(p => p !== packageName)
   saveManifest(manifest)
 
-  // npm uninstall
   try {
     execSync(`npm uninstall "${packageName}"`, {
       cwd: EXTENSIONS_DIR,
@@ -372,31 +598,27 @@ export async function removeExtension(packageName) {
   return { removed: true, packageName }
 }
 
-/**
- * Get all loaded extension tools, ready to merge into the tool list.
- * Each tool has an `_extension` property indicating which package it came from.
- */
 export function getExtensionTools() {
   return extensionTools
 }
 
-/**
- * Get status of installed extensions.
- */
 export function listExtensions() {
   const manifest = loadManifest()
-  return manifest.packages.map(name => ({
-    name,
-    loaded: loadedExtensions.has(name),
-    tools: loadedExtensions.has(name)
-      ? loadedExtensions.get(name).tools.map(t => ({ name: t.name, description: t.description }))
-      : [],
-  }))
+  return manifest.packages.map(name => {
+    const record = loadedExtensions.get(name)
+    return {
+      name,
+      loaded: !!record?.loaded,
+      tools: record
+        ? record.toolList.map(t => ({ name: t.name, description: t.description }))
+        : [],
+      commands: record
+        ? [...record.commands.keys()]
+        : [],
+    }
+  })
 }
 
-/**
- * Reload a specific extension.
- */
 export async function reloadExtension(packageName) {
   if (loadedExtensions.has(packageName)) {
     await unloadExtension(packageName)
@@ -404,13 +626,12 @@ export async function reloadExtension(packageName) {
   return await loadInstalledExtension(packageName)
 }
 
-/**
- * Initialize: load all extensions from the manifest.
- */
 export async function init() {
   ensurePackagesDir()
   const manifest = loadManifest()
   console.log(`[extensions] manifest has ${manifest.packages.length} package(s): ${manifest.packages.join(', ') || '(none)'}`)
+
+  globalEventBus.emit('extensions:beforeInit', { manifest })
 
   for (const name of manifest.packages) {
     try {
@@ -420,24 +641,20 @@ export async function init() {
     }
   }
 
+  globalEventBus.emit('extensions:afterInit', { count: loadedExtensions.size, toolCount: extensionTools.length })
   console.log(`[extensions] init complete — ${extensionTools.length} extension tool(s) total`)
 }
 
-/**
- * Reload all extensions.
- */
 export async function reloadAll() {
-  // Unload all
   for (const [name] of loadedExtensions) {
     await unloadExtension(name)
   }
-  // Reload from manifest
   await init()
 }
 
-// ── Cleanup ───────────────────────────────────────────────────
-
 export function dispose() {
+  fireEvent('dispose', {})
   extensionTools = []
   loadedExtensions.clear()
+  globalEventBus.removeAllListeners()
 }

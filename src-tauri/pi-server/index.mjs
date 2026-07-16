@@ -39,7 +39,7 @@ import { tryGetAdapter } from './platforms/registry.mjs'
 import { authorizeInbound } from './platforms/access-control.mjs'
 import { ToolGuard } from './tool-guardrails.mjs'
 import { checkCommandSafety, checkSensitivePath } from './security.mjs'
-import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools } from './extension-runtime.mjs'
+import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -364,6 +364,57 @@ function createDelegateParallelTool({ runtimeConfig, resolveModel, getTools, pro
 
 // ── Sub-agent endpoint helpers ────────────────────────────
 
+function createDelegateChainTool({ runtimeConfig, resolveModel, getTools, projectDir, emit, wrapper }) {
+  return {
+    name: 'delegate_chain',
+    label: 'Delegate Chain',
+    description: `Run multiple sub-agents in sequence. Each step receives the previous step's output as context. Use {previous} in task strings. Available agents: ${(() => {
+      const { agents } = discoverAgents(projectDir)
+      return formatAgentList(agents)
+    })()}`,
+    parameters: {
+      type: 'object',
+      properties: {
+        chain: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              agent: { type: 'string', description: 'Sub-agent name' },
+              task: { type: 'string', description: 'Task description. Use {previous} to reference the output from the prior step.' },
+            },
+            required: ['agent', 'task'],
+          },
+          description: 'Array of { agent, task } to execute in sequence. Each step gets the previous result via {previous}.',
+        },
+      },
+      required: ['chain'],
+    },
+    execute: async (_toolCallId, params, signal) => {
+      const chain = params.chain || []
+      if (chain.length > 6) {
+        return { content: [{ type: 'text', text: 'Chain limit is 6 steps.' }], isError: true }
+      }
+      console.log('[pi-server] delegate_chain:', chain.length, 'steps')
+      const result = await runChain(chain, {
+        parentConfig: {
+          providerID: runtimeConfig.providerID,
+          modelID: runtimeConfig.modelID,
+          apiKey: runtimeConfig.apiKey,
+          workspaceDir: runtimeConfig.workspaceDir,
+          webSearchConfig: wrapper?.config?.webSearchConfig,
+          providerConfig: runtimeConfig.providerConfig,
+        },
+        resolveModel,
+        getTools,
+        signal,
+        projectDir: projectDir || runtimeConfig.workspaceDir,
+      })
+      return { content: [{ type: 'text', text: result.finalOutput }], details: { steps: result.results } }
+    },
+  }
+}
+
 function getSubagentList(projectDir) {
   const { agents, builtinDir, userDir } = discoverAgents(projectDir)
   return agents.map((a) => ({
@@ -411,6 +462,7 @@ async function getOrCreateWrapper(sessionId, autoCreate = false) {
     const session = await sessionRepo.open(metadata)
     wrapper = { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() }
     sessions.set(sessionId, wrapper)
+    fireExtensionEvent('session_start', { sessionId }, { sessionId })
     return wrapper
   }
 
@@ -419,6 +471,7 @@ async function getOrCreateWrapper(sessionId, autoCreate = false) {
   const session = await sessionRepo.create({ cwd: DATA_DIR, id: sessionId })
   wrapper = { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() }
   sessions.set(sessionId, wrapper)
+  fireExtensionEvent('session_start', { sessionId }, { sessionId })
   return wrapper
 }
 
@@ -1445,6 +1498,7 @@ createServer((req, res) => {
       const session = await sessionRepo.create({ cwd: DATA_DIR, id })
       const metadata = await session.getMetadata()
       sessions.set(metadata.id, { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() })
+      fireExtensionEvent('session_start', { sessionId: metadata.id }, { sessionId: metadata.id })
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ id: metadata.id }))
     })().catch((e) => {
@@ -1519,11 +1573,12 @@ createServer((req, res) => {
     ;(async () => {
       try {
         const wrapper = sessions.get(deleteSid)
-        if (wrapper) {
-          if (wrapper.agent) { try { wrapper.agent.abort() } catch {} }
-          rejectPendingMcpRequests(wrapper, 'session deleted')
-          sessions.delete(deleteSid)
-        }
+          if (wrapper) {
+            if (wrapper.agent) { try { wrapper.agent.abort() } catch {} }
+            rejectPendingMcpRequests(wrapper, 'session deleted')
+            fireExtensionEvent('session_shutdown', { sessionId: deleteSid }, { sessionId: deleteSid })
+            sessions.delete(deleteSid)
+          }
         // Also remove from session repo (disk)
         const list = await sessionRepo.list()
         const meta = list.find((m) => m.id === deleteSid)
@@ -1578,6 +1633,7 @@ createServer((req, res) => {
         const tools = [...baseTools, ...mcpToolDefs,
           createDelegateTaskTool({ runtimeConfig: { ...runtimeConfig, apiKey }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
           createDelegateParallelTool({ runtimeConfig: { ...runtimeConfig, apiKey }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
+          createDelegateChainTool({ runtimeConfig: { ...runtimeConfig, apiKey }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
         ]
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
@@ -1636,6 +1692,7 @@ createServer((req, res) => {
             }
 
             emit('tool_call', { id: toolCall.id, name: toolCall.name, args: args })
+            fireExtensionEvent('tool_call', { toolCallId: toolCall.id, toolName: toolCall.name, args }, { sessionId })
             console.log('[pi-server] beforeToolCall:', toolCall.name, 'config.mode:', wrapper.config?.permissionMode)
             const permission = checkToolPermission(toolCall.name, wrapper.config?.permissionRules, wrapper.config?.permissionMode)
             console.log('[pi-server] beforeToolCall result:', JSON.stringify(permission))
@@ -1667,6 +1724,9 @@ createServer((req, res) => {
             return undefined
           },
           afterToolCall: async ({ result, toolCall }) => {
+            if (toolCall?.name) {
+              fireExtensionEvent('tool_result', { toolCallId: toolCall.id, toolName: toolCall.name, result }, { sessionId })
+            }
             // Guard tracking: record tool outcome
             const guard = wrapper.toolGuard
             if (guard && toolCall?.name) {
@@ -1757,6 +1817,8 @@ createServer((req, res) => {
       }
 
       try {
+        const currentSessionId = sessionId
+        fireExtensionEvent('agent_start', { sessionId: currentSessionId }, { sessionId: currentSessionId })
         await withRetry(
           () => willUseImages ? wrapper.agent.prompt(content, imageContents) : wrapper.agent.prompt(content),
           {
@@ -1777,6 +1839,7 @@ createServer((req, res) => {
             },
           },
         )
+        fireExtensionEvent('agent_end', { sessionId: currentSessionId }, { sessionId: currentSessionId })
       } finally {
         clearTimeout(totalTimeout)
         totalAc.abort()
