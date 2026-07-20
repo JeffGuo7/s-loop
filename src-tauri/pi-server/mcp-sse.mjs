@@ -108,10 +108,27 @@ function mcpRequest(endpoint, method, params, extraHeaders = {}) {
     }
     let data
     if (res.body && res.body.trim()) {
+      // Some MCP servers return JSON-RPC wrapped in SSE format even over HTTP POST.
+      // Parse lines that look like "data: {...}" or "event: message".
+      const body = res.body.trim()
+      let jsonStr = body
+
+      if (body.startsWith('event:') || body.startsWith('data:')) {
+        // SSE-formatted response — extract the data line
+        const lines = body.split('\n')
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed.startsWith('data: ')) {
+            jsonStr = trimmed.slice(6)
+            break
+          }
+        }
+      }
+
       try {
-        data = JSON.parse(res.body)
+        data = JSON.parse(jsonStr)
       } catch {
-        throw new Error(`Invalid JSON-RPC response from MCP server: ${res.body.slice(0, 200)}`)
+        throw new Error(`Invalid JSON-RPC response from MCP server: ${jsonStr.slice(0, 200)}`)
       }
       if (data.error) {
         throw new Error(`MCP error (${data.error.code || 'unknown'}): ${data.error.message || JSON.stringify(data.error)}`)
