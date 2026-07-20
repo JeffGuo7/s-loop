@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import type { MCPServerConfig, MCPServerStatus, MCPTool } from '../types/mcp';
+import { getBaseUrl } from '../utils/piClient';
 
 // ---- Tauri command response types (matches Rust mcp_manager.rs) ----
 
@@ -133,6 +134,47 @@ export const useMCPStore = create<MCPState>()(
 
         get().setServerStatus(name, { status: 'connecting', tools: [], resources: [] });
 
+        // SSE/HTTP type: connect via pi-server
+        if (server.type === 'sse' || server.type === 'http') {
+          try {
+            const base = getBaseUrl();
+            const res = await fetch(`${base}/mcp-sse/connect`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: server.name,
+                url: server.url,
+                headers: server.headers || {},
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Connection failed');
+
+            const tools = (data.tools || []).map((t: any) => ({
+              name: t.name,
+              description: t.description || '',
+              inputSchema: t.inputSchema || {},
+            }));
+
+            get().setServerStatus(name, {
+              status: 'connected',
+              tools,
+              resources: [],
+            });
+          } catch (error) {
+            get().setServerStatus(name, {
+              status: 'error',
+              error: error instanceof Error ? error.message : String(error),
+              tools: [],
+              resources: [],
+            });
+          }
+          return;
+        }
+
+        // stdio type: connect via Rust backend
+        get().setServerStatus(name, { status: 'connecting', tools: [], resources: [] });
+
         try {
           const command = server.type === 'stdio' ? (server.command || '') : '';
           const args = server.type === 'stdio' ? (server.args || []) : [];
@@ -168,10 +210,28 @@ export const useMCPStore = create<MCPState>()(
       },
 
       disconnectServer: async (name) => {
-        try {
-          await invoke('mcp_disconnect', { name });
-        } catch {
-          // Ignore disconnect errors
+        const { servers } = get();
+        const server = servers.find((s) => s.name === name);
+
+        // SSE/HTTP type: disconnect via pi-server
+        if (server && (server.type === 'sse' || server.type === 'http')) {
+          try {
+            const base = getBaseUrl();
+            await fetch(`${base}/mcp-sse/disconnect`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name }),
+            });
+          } catch {
+            // Ignore disconnect errors
+          }
+        } else {
+          // stdio type: disconnect via Rust backend
+          try {
+            await invoke('mcp_disconnect', { name });
+          } catch {
+            // Ignore disconnect errors
+          }
         }
         get().setServerStatus(name, { status: 'disabled', tools: [], resources: [] });
       },
@@ -184,7 +244,7 @@ export const useMCPStore = create<MCPState>()(
           get().addServer(config);
         }
 
-        if (autoConnect && !config.disabled && config.type === 'stdio') {
+        if (autoConnect && !config.disabled) {
           await get().connectServer(config.name);
         }
       },
@@ -197,6 +257,34 @@ export const useMCPStore = create<MCPState>()(
           return;
         }
 
+        // SSE/HTTP: refresh via pi-server status
+        if (server.type === 'sse' || server.type === 'http') {
+          try {
+            const base = getBaseUrl();
+            const res = await fetch(`${base}/mcp-sse/status`);
+            if (res.ok) {
+              const sseStatuses = await res.json();
+              const sseServer = sseStatuses.find((s: any) => s.name === name);
+              if (sseServer) {
+                get().setServerStatus(name, {
+                  status: 'connected',
+                  tools: (sseServer.tools || []).map((t: any) => ({
+                    name: t.name,
+                    description: t.description || '',
+                    inputSchema: {},
+                  })),
+                  resources: [],
+                });
+                return;
+              }
+            }
+          } catch {}
+          // Not connected, try to connect
+          get().connectServer(name);
+          return;
+        }
+
+        // stdio: refresh via Rust backend
         try {
           const status = await invoke<RustMCPServerStatus>('mcp_get_status', { name });
           get().setServerStatus(name, mapRustStatus(status));
@@ -215,20 +303,52 @@ export const useMCPStore = create<MCPState>()(
       refreshAllServers: async () => {
         const { servers } = get();
         const enabledServers = servers.filter((s) => !s.disabled);
+        const statusMap: Record<string, MCPServerStatus> = {};
 
+        // Fetch stdio MCP status from Rust backend
         try {
           const statuses = await invoke<RustMCPServerStatus[]>('mcp_list_servers');
-          const statusMap: Record<string, MCPServerStatus> = {};
           for (const s of statuses) {
             statusMap[s.name] = mapRustStatus(s);
           }
-          set({ serverStatuses: statusMap });
         } catch {
-          // If listing fails, refresh each server individually
+          // If listing fails, fallback to individual refresh
           for (const server of enabledServers) {
-            get().refreshServer(server.name).catch(() => {});
+            if (server.type === 'stdio') {
+              get().refreshServer(server.name).catch(() => {});
+            }
           }
         }
+
+        // Fetch SSE MCP status from pi-server
+        try {
+          const base = getBaseUrl();
+          const res = await fetch(`${base}/mcp-sse/status`);
+          if (res.ok) {
+            const sseStatuses = await res.json();
+            for (const s of sseStatuses) {
+              statusMap[s.name] = {
+                name: s.name,
+                status: 'connected',
+                tools: (s.tools || []).map((t: any) => ({
+                  name: t.name,
+                  description: t.description || '',
+                  inputSchema: {},
+                })),
+                resources: [],
+              };
+            }
+          }
+        } catch {}
+
+        // Try connecting SSE servers that aren't yet connected
+        for (const server of enabledServers) {
+          if ((server.type === 'sse' || server.type === 'http') && !statusMap[server.name]) {
+            get().connectServer(server.name).catch(() => {});
+          }
+        }
+
+        set({ serverStatuses: statusMap });
 
         // Mark disabled servers
         for (const server of servers) {

@@ -299,6 +299,7 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
           command: server.command as string | undefined,
           args: server.args as string[] | undefined,
           url: server.url as string | undefined,
+          headers: server.headers as Record<string, string> | undefined,
           env: server.env as Record<string, string> | undefined,
           disabled: false,
         });
@@ -354,6 +355,7 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
   const [command, setCommand] = useState('');
   const [args, setArgs] = useState('');
   const [url, setUrl] = useState('');
+  const [headers, setHeaders] = useState('');
   const [inputMode, setInputMode] = useState<'form' | 'json'>('form');
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -384,11 +386,26 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
       type,
       ...(type === 'stdio'
         ? { command, args: args.split(' ').filter(Boolean) }
-        : { url }),
+        : { url, ...(headers.trim() ? { headers: parseHeaders(headers) } : {}) }),
     };
 
     addServer(config);
     onClose();
+  };
+
+  const parseHeaders = (h: string): Record<string, string> => {
+    const result: Record<string, string> = {};
+    for (const line of h.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx > 0) {
+        const key = trimmed.slice(0, colonIdx).trim();
+        const value = trimmed.slice(colonIdx + 1).trim();
+        if (key) result[key] = value;
+      }
+    }
+    return result;
   };
 
   return (
@@ -508,16 +525,28 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-1.5 animate-slide-up">
-                  <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.serverUrl')}</label>
-                  <input
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
-                    placeholder={t('mcp.urlPlaceholder')}
-                    required
-                  />
+                <div className="space-y-4 animate-slide-up">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">{t('mcp.serverUrl')}</label>
+                    <input
+                      type="url"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                      placeholder={t('mcp.urlPlaceholder')}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Headers (optional)</label>
+                    <textarea
+                      value={headers}
+                      onChange={(e) => setHeaders(e.target.value)}
+                      className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                      placeholder={"Authorization: Bearer xxx\nX-Custom: value"}
+                      rows={3}
+                    />
+                  </div>
                 </div>
               )}
             </div>

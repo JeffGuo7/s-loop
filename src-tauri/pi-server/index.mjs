@@ -40,6 +40,7 @@ import { authorizeInbound } from './platforms/access-control.mjs'
 import { ToolGuard } from './tool-guardrails.mjs'
 import { checkCommandSafety, checkSensitivePath } from './security.mjs'
 import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
+import { connectSseMcpServer, disconnectSseMcpServer, getAllSseMcpTools, getSseMcpStatus, disconnectAllSseMcp, callSseMcpTool } from './mcp-sse.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -122,6 +123,13 @@ function getTools(dir, webSearchConfig) {
   if (extTools.length > 0) {
     console.log(`[pi-server] adding ${extTools.length} extension tool(s)`)
     all.push(...extTools)
+  }
+
+  // Merge tools from connected SSE MCP servers
+  const sseMcpTools = getAllSseMcpTools()
+  if (sseMcpTools.length > 0) {
+    console.log(`[pi-server] adding ${sseMcpTools.length} SSE MCP tool(s)`)
+    all.push(...sseMcpTools)
   }
 
   const seen = new Set()
@@ -1381,6 +1389,78 @@ createServer((req, res) => {
     })
     return
   }
+
+  // ── SSE MCP Endpoints ──
+
+  // GET /mcp-sse/status — list connected SSE MCP servers and their tools
+  if (req.method === 'GET' && url.pathname === '/mcp-sse/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(getSseMcpStatus()))
+    return
+  }
+
+  // POST /mcp-sse/connect — connect to an SSE MCP server
+  if (req.method === 'POST' && url.pathname === '/mcp-sse/connect') {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const { name, url, headers } = data
+        if (!name || !url) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name" or "url"' })); return }
+        const result = await connectSseMcpServer(name, url, headers || {})
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, ...result }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  // POST /mcp-sse/disconnect — disconnect from an SSE MCP server
+  if (req.method === 'POST' && url.pathname === '/mcp-sse/disconnect') {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const { name } = data
+        if (!name) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name"' })); return }
+        await disconnectSseMcpServer(name)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  // POST /mcp-sse/call — call a tool on an SSE MCP server
+  if (req.method === 'POST' && url.pathname === '/mcp-sse/call') {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const { serverName, toolName, arguments: args } = data
+        if (!serverName || !toolName) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "serverName" or "toolName"' })); return }
+        const result = await callSseMcpTool(serverName, toolName, args || {})
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  // Clean up SSE MCP connections on server shutdown
+  process.on('exit', () => { disconnectAllSseMcp() })
 
   // ── Existing endpoints ──
 
