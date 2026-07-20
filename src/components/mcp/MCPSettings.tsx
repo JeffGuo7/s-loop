@@ -281,6 +281,18 @@ function MCPServerCard({
   );
 }
 
+// Auto-detect MCP transport type: if url is present, default to sse;
+// otherwise fall back to stdio (which is the traditional MCP transport).
+function inferType(server: Record<string, unknown>): MCPTransportType {
+  if (typeof server.type === 'string' && (server.type === 'sse' || server.type === 'http' || server.type === 'stdio')) {
+    return server.type as MCPTransportType;
+  }
+  if (server.url && typeof server.url === 'string' && server.url.startsWith('http')) {
+    return 'sse';
+  }
+  return 'stdio';
+}
+
 function parseJSONConfig(data: unknown): MCPServerConfig[] {
   const results: MCPServerConfig[] = [];
 
@@ -295,7 +307,7 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
         const server = cfg as Record<string, unknown>;
         results.push({
           name,
-          type: (server.type as MCPTransportType) || 'stdio',
+          type: inferType(server),
           command: server.command as string | undefined,
           args: server.args as string[] | undefined,
           url: server.url as string | undefined,
@@ -315,7 +327,7 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
         const server = item as Record<string, unknown>;
         results.push({
           name: (server.name as string) || 'unnamed',
-          type: (server.type as MCPTransportType) || 'stdio',
+          type: inferType(server),
           command: server.command as string | undefined,
           args: server.args as string[] | undefined,
           url: server.url as string | undefined,
@@ -331,7 +343,7 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
   if (obj.name) {
     results.push({
       name: obj.name as string,
-      type: (obj.type as MCPTransportType) || 'stdio',
+      type: obj.url ? 'sse' : ((obj.type as MCPTransportType) || 'stdio'),
       command: obj.command as string | undefined,
       args: obj.args as string[] | undefined,
       url: obj.url as string | undefined,
