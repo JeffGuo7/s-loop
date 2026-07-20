@@ -339,8 +339,10 @@ export function getAllSseMcpTools() {
   for (const [name, conn] of connections) {
     for (const tool of conn.tools) {
       const toolName = tool.name
+      // Sanitize server name for tool name: replace non-alphanumeric chars with underscore
+      const safeServerName = name.replace(/[^a-zA-Z0-9]/g, '_')
       all.push({
-        name: `mcp_sse_${name}_${toolName}`,
+        name: `mcp_sse_${safeServerName}_${toolName}`,
         label: `${name}/${toolName}`,
         description: tool.description || `${name} MCP tool: ${toolName}`,
         parameters: tool.inputSchema || { type: 'object', properties: {} },
