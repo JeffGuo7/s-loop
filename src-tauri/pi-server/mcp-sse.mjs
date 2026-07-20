@@ -86,7 +86,7 @@ function nextId() {
   return ++requestId
 }
 
-function mcpRequest(endpoint, method, params) {
+function mcpRequest(endpoint, method, params, extraHeaders = {}) {
   const id = nextId()
   const body = JSON.stringify({
     jsonrpc: '2.0',
@@ -97,21 +97,28 @@ function mcpRequest(endpoint, method, params) {
   return httpRequest(endpoint, {
     method: 'POST',
     body,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...extraHeaders,  // pass through user-configured headers (e.g. Authorization)
+    },
   }).then((res) => {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw new Error(`MCP request failed (${res.statusCode}): ${res.body}`)
     }
     let data
-    try {
-      data = JSON.parse(res.body)
-    } catch {
-      throw new Error(`Invalid JSON-RPC response from MCP server: ${res.body.slice(0, 200)}`)
+    if (res.body && res.body.trim()) {
+      try {
+        data = JSON.parse(res.body)
+      } catch {
+        throw new Error(`Invalid JSON-RPC response from MCP server: ${res.body.slice(0, 200)}`)
+      }
+      if (data.error) {
+        throw new Error(`MCP error (${data.error.code || 'unknown'}): ${data.error.message || JSON.stringify(data.error)}`)
+      }
+      return data.result || null
     }
-    if (data.error) {
-      throw new Error(`MCP error (${data.error.code || 'unknown'}): ${data.error.message || JSON.stringify(data.error)}`)
-    }
-    return data.result || null
+    return null
   })
 }
 
@@ -211,12 +218,71 @@ function sseConnect(url, headers = {}) {
   })
 }
 
+// ── HTTP MCP (direct POST JSON-RPC) ─────────────────────────
+
+/**
+ * Connect to an MCP server via direct HTTP POST (Streamable HTTP transport).
+ * This is used when the server endpoint doesn't support SSE (returns 405).
+ */
+async function mcpHttpConnect(name, url, headers = {}) {
+  console.log(`[mcp-sse] trying HTTP MCP for "${name}" at ${url}`)
+
+  // Step 1: Initialize via POST
+  let serverInfo
+  try {
+    const result = await mcpRequest(url, 'initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 's-loop', version: '1.0.0' },
+    }, headers)
+    serverInfo = result
+    console.log(`[mcp-sse] HTTP MCP "${name}" initialized:`, JSON.stringify(result?.serverInfo || result))
+  } catch (err) {
+    throw new Error(`HTTP MCP initialize failed for "${name}": ${err.message}`)
+  }
+
+  // Step 2: Send initialized notification (fire and forget)
+  try {
+    await mcpRequest(url, 'notifications/initialized', {}, headers)
+  } catch {
+    // Notification is fire-and-forget, ignore errors
+  }
+
+  // Step 3: Discover tools
+  let tools = []
+  try {
+    const result = await mcpRequest(url, 'tools/list', {}, headers)
+    tools = (result?.tools || []).map(t => ({
+      name: t.name || 'unknown',
+      description: t.description || '',
+      inputSchema: t.inputSchema || {},
+    }))
+    console.log(`[mcp-sse] HTTP MCP "${name}" discovered ${tools.length} tool(s):`, tools.map(t => t.name).join(', '))
+  } catch (err) {
+    console.warn(`[mcp-sse] HTTP MCP "${name}" tools/list failed: ${err.message}`)
+  }
+
+  // Store connection (no SSE to manage)
+  connections.set(name, {
+    endpoint: url,
+    tools,
+    serverInfo,
+    headers,
+    transport: 'http',
+  })
+
+  return { tools, serverInfo }
+}
+
 // ── Public API ───────────────────────────────────────────────
 
 /**
- * Connect to an SSE MCP server.
+ * Connect to an MCP server.
+ * Tries in order:
+ *  1. HTTP POST (direct JSON-RPC) — works for most remote MCP endpoints
+ *  2. SSE (Server-Sent Events) — for streaming endpoints
  * @param {string} name - Server name/id
- * @param {string} url - SSE endpoint URL (e.g. https://example.com/mcp/sse)
+ * @param {string} url - Server URL
  * @param {object} headers - Optional HTTP headers (e.g. Authorization)
  * @returns {Promise<{ tools: Array }>}
  */
@@ -228,7 +294,15 @@ export async function connectSseMcpServer(name, url, headers = {}) {
 
   console.log(`[mcp-sse] connecting to "${name}" at ${url}`)
 
-  // Step 1: Connect to SSE endpoint, discover POST endpoint
+  // Try HTTP MCP first (direct POST JSON-RPC) — works for most servers
+  try {
+    return await mcpHttpConnect(name, url, headers)
+  } catch (err) {
+    console.log(`[mcp-sse] HTTP MCP failed for "${name}": ${err.message}`)
+    console.log(`[mcp-sse] falling back to SSE transport for "${name}"`)
+  }
+
+  // Fall back to SSE transport
   let sseResult
   try {
     sseResult = await sseConnect(url, headers)
@@ -246,7 +320,7 @@ export async function connectSseMcpServer(name, url, headers = {}) {
       protocolVersion: '2024-11-05',
       capabilities: {},
       clientInfo: { name: 's-loop', version: '1.0.0' },
-    })
+    }, headers)
     serverInfo = result
     console.log(`[mcp-sse] "${name}" initialized:`, JSON.stringify(result?.serverInfo || result))
   } catch (err) {
@@ -256,7 +330,7 @@ export async function connectSseMcpServer(name, url, headers = {}) {
 
   // Step 3: Send initialized notification (fire and forget)
   try {
-    await mcpRequest(postEndpoint, 'notifications/initialized', {})
+    await mcpRequest(postEndpoint, 'notifications/initialized', {}, headers)
   } catch {
     // Notification is fire-and-forget, ignore errors
   }
@@ -264,7 +338,7 @@ export async function connectSseMcpServer(name, url, headers = {}) {
   // Step 4: Discover tools
   let tools = []
   try {
-    const result = await mcpRequest(postEndpoint, 'tools/list', {})
+    const result = await mcpRequest(postEndpoint, 'tools/list', {}, headers)
     tools = (result?.tools || []).map(t => ({
       name: t.name || 'unknown',
       description: t.description || '',
@@ -299,10 +373,10 @@ export async function disconnectSseMcpServer(name) {
 
   // Try graceful shutdown
   try {
-    await mcpRequest(conn.endpoint, 'shutdown', {})
+    await mcpRequest(conn.endpoint, 'shutdown', {}, conn.headers || {})
   } catch {}
 
-  // Close SSE connection
+  // Close SSE connection (HTTP transport doesn't have one)
   try { conn.sseAbort?.abort() } catch {}
   try { conn.sseReq?.destroy() } catch {}
 
@@ -322,7 +396,7 @@ export async function callSseMcpTool(serverName, toolName, args) {
     const result = await mcpRequest(conn.endpoint, 'tools/call', {
       name: toolName,
       arguments: args || {},
-    })
+    }, conn.headers || {})
     return result
   } catch (err) {
     throw new Error(`MCP tool call "${serverName}/${toolName}" failed: ${err.message}`)
