@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -15,63 +15,86 @@ pub struct PiServerState(pub Arc<Mutex<Option<PiServerProcess>>>);
 /// a crash mid-extract leaves an incomplete directory that we will rebuild.
 const EXTRACT_OK_MARKER: &str = ".extract-ok";
 
-/// Ensure the pi-server directory exists under `base_dir`, extracting the
-/// bundled `pi-server.zip` archive on first launch. Returns true when
-/// `base_dir/pi-server/index.mjs` is usable afterwards.
+/// Ensure the pi-server directory exists under `target_base`, extracting the
+/// bundled archive on first launch. Returns true when the runtime is usable.
 ///
 /// In dev, the pi-server source directory is already present and the zip does
 /// not exist, so this is a no-op (returns true).
-pub fn ensure_pi_server_extracted(base_dir: &std::path::Path) -> Result<bool, String> {
-    let pi_server_dir = base_dir.join("pi-server");
+pub fn ensure_pi_server_extracted_to(
+    archive_path: &Path,
+    target_base: &Path,
+) -> Result<bool, String> {
+    let pi_server_dir = target_base.join("pi-server");
     let index_mjs = pi_server_dir.join("index.mjs");
     let marker = pi_server_dir.join(EXTRACT_OK_MARKER);
 
-    // If pi-server is already usable (NSIS post-install may have pre-extracted
-    // it without writing the marker), write the marker and return success.
-    // This avoids deleting a working extraction just because the marker is missing.
-    if index_mjs.exists() {
-        if !marker.exists() {
-            let _ = std::fs::write(&marker, b"ok");
-        }
+    // A marker is written only after a complete extraction. The index-only
+    // fallback keeps development mode working when no archive is present.
+    if index_mjs.exists() && (marker.exists() || !archive_path.exists()) {
         return Ok(true);
     }
 
-    let zip_path = base_dir.join("pi-server.zip");
-    if !zip_path.exists() {
-        eprintln!("[s-loop] pi-server.zip not found at {}", zip_path.display());
+    if !archive_path.exists() {
+        eprintln!(
+            "[s-loop] pi-server archive not found at {}",
+            archive_path.display()
+        );
         return Ok(false);
     }
 
-    eprintln!("[s-loop] extracting pi-server.zip at {} ...", base_dir.display());
+    std::fs::create_dir_all(target_base).map_err(|e| {
+        format!(
+            "failed to create runtime directory {}: {e}",
+            target_base.display()
+        )
+    })?;
 
-    // Clean any partial/empty directory from a previous failed attempt.
-    if pi_server_dir.exists() {
-        std::fs::remove_dir_all(&pi_server_dir)
-            .map_err(|e| format!("failed to remove stale pi-server dir: {e}"))?;
+    // Extract into a staging directory and activate it only after every file
+    // has been written. This prevents partial runtimes after a crash or file
+    // lock during installation/startup.
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let staging_dir = target_base.join(format!(
+        ".pi-server.extracting-{}-{}",
+        std::process::id(),
+        nonce
+    ));
+    if staging_dir.exists() {
+        std::fs::remove_dir_all(&staging_dir)
+            .map_err(|e| format!("failed to remove stale extraction staging dir: {e}"))?;
     }
-    std::fs::create_dir_all(&pi_server_dir)
-        .map_err(|e| format!("failed to create pi-server dir: {e}"))?;
+    let staging_pi_server_dir = staging_dir.join("pi-server");
+    std::fs::create_dir_all(&staging_pi_server_dir)
+        .map_err(|e| format!("failed to create extraction staging dir: {e}"))?;
 
-    let file = std::fs::File::open(&zip_path)
-        .map_err(|e| format!("failed to open pi-server.zip: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| format!("failed to read pi-server.zip: {e}"))?;
+    eprintln!(
+        "[s-loop] extracting {} -> {} ...",
+        archive_path.display(),
+        target_base.display()
+    );
+    let file = std::fs::File::open(archive_path)
+        .map_err(|e| format!("failed to open pi-server archive: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("failed to read pi-server archive: {e}"))?;
 
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
             .map_err(|e| format!("zip entry {i} read error: {e}"))?;
         let rel = entry.name().to_string();
-        // Guard against path traversal in the archive (zipslip).
-        let dest = pi_server_dir.join(&rel);
-        let canonical_base = pi_server_dir.canonicalize().unwrap_or_else(|_| pi_server_dir.clone());
-        if !dest
-            .canonicalize()
-            .unwrap_or_else(|_| dest.clone())
-            .starts_with(&canonical_base)
+        // Guard against absolute paths and traversal before joining. This is
+        // reliable even when the destination does not exist yet.
+        let rel_path = Path::new(&rel);
+        if rel_path.is_absolute()
+            || rel_path
+                .components()
+                .any(|component| matches!(component, Component::ParentDir))
         {
             return Err(format!("zip entry escapes pi-server dir: {rel}"));
         }
+        let dest = staging_pi_server_dir.join(rel_path);
 
         if entry.is_dir() {
             std::fs::create_dir_all(&dest)
@@ -88,11 +111,45 @@ pub fn ensure_pi_server_extracted(base_dir: &std::path::Path) -> Result<bool, St
             .map_err(|e| format!("failed to write {}: {e}", dest.display()))?;
     }
 
+    let staged_index = staging_pi_server_dir.join("index.mjs");
+    let staged_node = staging_pi_server_dir.join(node_binary_name());
+    if !staged_index.exists() {
+        return Err("pi-server archive is missing index.mjs".into());
+    }
+    if !staged_node.exists() {
+        return Err(format!(
+            "pi-server archive is missing bundled {}",
+            node_binary_name()
+        ));
+    }
+
     // Write the completion marker last so a partial extract is detectable.
-    std::fs::write(&marker, b"ok")
+    std::fs::write(staging_pi_server_dir.join(EXTRACT_OK_MARKER), b"ok")
         .map_err(|e| format!("failed to write marker: {e}"))?;
 
-    Ok(index_mjs.exists())
+    if pi_server_dir.exists() {
+        std::fs::remove_dir_all(&pi_server_dir)
+            .map_err(|e| format!("failed to replace stale pi-server dir: {e}"))?;
+    }
+    std::fs::rename(&staging_pi_server_dir, &pi_server_dir)
+        .map_err(|e| format!("failed to activate extracted pi-server: {e}"))?;
+    let _ = std::fs::remove_dir_all(&staging_dir);
+
+    Ok(index_mjs.exists() && pi_server_dir.join(node_binary_name()).exists())
+}
+
+/// Compatibility wrapper for development and older packaged layouts where
+/// the archive and extracted runtime live under the same base directory.
+pub fn ensure_pi_server_extracted(base_dir: &Path) -> Result<bool, String> {
+    ensure_pi_server_extracted_to(&base_dir.join("pi-server.zip"), base_dir)
+}
+
+fn node_binary_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "node.exe"
+    } else {
+        "node"
+    }
 }
 
 fn dirs_home() -> PathBuf {
@@ -105,14 +162,14 @@ fn dirs_home() -> PathBuf {
 /// Find the node executable by searching common installation paths.
 /// GUI apps on all platforms may not inherit shell-configured PATH.
 fn find_node_cmd() -> Option<String> {
-    let node_name = if cfg!(target_os = "windows") {
-        "node.exe"
-    } else {
-        "node"
-    };
+    let node_name = node_binary_name();
 
     // 1. Try the system's command locator
-    let locator = if cfg!(target_os = "windows") { "where" } else { "which" };
+    let locator = if cfg!(target_os = "windows") {
+        "where"
+    } else {
+        "which"
+    };
     if let Ok(output) = Command::new(locator).arg(node_name).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         if let Some(line) = stdout.lines().next() {
@@ -178,14 +235,24 @@ fn find_node_cmd() -> Option<String> {
 
     // 5. fnm: search ~/.local/share/fnm/node-versions/*/installation/bin/node
     let fnm_versions = if cfg!(target_os = "macos") {
-        home.join("Library").join("Application Support").join("fnm").join("node-versions")
+        home.join("Library")
+            .join("Application Support")
+            .join("fnm")
+            .join("node-versions")
     } else {
-        home.join(".local").join("share").join("fnm").join("node-versions")
+        home.join(".local")
+            .join("share")
+            .join("fnm")
+            .join("node-versions")
     };
     if fnm_versions.exists() {
         if let Ok(entries) = std::fs::read_dir(&fnm_versions) {
             for entry in entries.flatten() {
-                let node = entry.path().join("installation").join("bin").join(node_name);
+                let node = entry
+                    .path()
+                    .join("installation")
+                    .join("bin")
+                    .join(node_name);
                 if node.exists() {
                     return Some(node.to_string_lossy().to_string());
                 }
@@ -212,7 +279,7 @@ impl PiServerProcess {
         Self { child: None, url }
     }
 
-    pub fn start(project_dir: &str, port: u16) -> Result<Self, String> {
+    pub fn start(project_dir: &str, workspace_dir: &str, port: u16) -> Result<Self, String> {
         // Normalize away the \\?\ verbatim prefix when present. Under it,
         // forward slashes are not treated as separators and some Node
         // path APIs behave unexpectedly; the plain path works everywhere.
@@ -247,38 +314,54 @@ impl PiServerProcess {
             ));
         };
 
-        // Resolve the node binary to use.
-        // 1. PI_NODE_PATH env var (explicit override)
-        // 2. Bundled node next to the entry script (self-contained, no system dep)
-        // 3. System-installed node (find_node_cmd)
-        // 4. Bare "node" as last resort
-        let node_name = if cfg!(target_os = "windows") { "node.exe" } else { "node" };
+        // Resolve the node binary to use. Production builds must use the
+        // bundled runtime; system Node is only a development fallback.
+        let node_name = node_binary_name();
         let bundled = entry.with_file_name(node_name);
-        let node_path = std::env::var("PI_NODE_PATH")
+        let (node_path, node_source) = std::env::var("PI_NODE_PATH")
             .ok()
             .and_then(|p| {
                 let path = std::path::Path::new(&p);
-                if path.exists() { Some(p) } else { None }
+                if path.exists() { Some((PathBuf::from(p), "PI_NODE_PATH")) } else { None }
             })
             .or_else(|| {
                 if bundled.exists() {
                     eprintln!("[s-loop] using bundled node: {}", bundled.display());
-                    Some(bundled.to_string_lossy().to_string())
+                    Some((bundled.clone(), "bundled"))
                 } else {
                     None
                 }
             })
-            .or_else(find_node_cmd)
-            .unwrap_or_else(|| {
-                eprintln!("[s-loop] no node binary found, falling back to '{}'", node_name);
-                node_name.into()
-            });
+            .or_else(|| {
+                if cfg!(debug_assertions) {
+                    find_node_cmd().map(|p| (PathBuf::from(p), "system"))
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| format!(
+                "Bundled Node.js runtime not found next to {}. Rebuild the installer with src-tauri/pi-server/{} included.",
+                entry.display(), node_name
+            ))?;
+
+        eprintln!(
+            "[s-loop] starting pi-server with {node_source} node: {}",
+            node_path.display()
+        );
 
         let mut cmd = Command::new(&node_path);
 
         cmd.arg(&entry);
         cmd.env("PI_SERVER_PORT", port.to_string());
-        cmd.current_dir(project_dir);
+        cmd.env("S_LOOP_PROJECT_DIR", workspace_dir);
+        cmd.env("SNOTRA_PROJECT_DIR", workspace_dir);
+        cmd.env("S_LOOP_RUNTIME_DIR", project_dir);
+        let working_dir = if Path::new(workspace_dir).is_dir() {
+            workspace_dir
+        } else {
+            project_dir
+        };
+        cmd.current_dir(working_dir);
 
         #[cfg(windows)]
         {
@@ -294,8 +377,8 @@ impl PiServerProcess {
             format!(
                 "Failed to start pi-server: {e}\n\
                  Tried to run: {} {}\n\
-                 If you are running from source, make sure Node.js is installed (https://nodejs.org).",
-                node_path,
+                 The bundled runtime is missing or cannot be started.",
+                node_path.display(),
                 entry.display()
             )
         })?;
@@ -384,10 +467,16 @@ impl PiServerProcess {
             } else {
                 " (startup diagnostics unavailable)".into()
             };
-            return Err(format!("pi-server started but no listening URL detected{}", details));
+            return Err(format!(
+                "pi-server started but no listening URL detected{}",
+                details
+            ));
         }
 
-        Ok(Self { child: Some(child), url })
+        Ok(Self {
+            child: Some(child),
+            url,
+        })
     }
 }
 

@@ -27,9 +27,8 @@ fn check_server_healthy(port: u16) -> bool {
         Ok(s) => s,
         Err(_) => return false,
     };
-    let request = format!(
-        "GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
-    );
+    let request =
+        format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
     if stream.write_all(request.as_bytes()).is_err() {
         return false;
     }
@@ -63,7 +62,11 @@ fn find_available_port(preferred: u16) -> Result<u16, String> {
     ))
 }
 
-fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, String> {
+fn do_start_server(
+    state: &PiServerState,
+    runtime_dir: &str,
+    workspace_dir: &str,
+) -> Result<String, String> {
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
     if let Some(existing) = guard.as_ref() {
         if let Some(port) = port_from_url(&existing.url) {
@@ -95,7 +98,7 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
             );
         }
 
-        match PiServerProcess::start(project_dir, port) {
+        match PiServerProcess::start(runtime_dir, workspace_dir, port) {
             Ok(proc) => {
                 let url = proc.url.clone();
                 *guard = Some(proc);
@@ -108,7 +111,10 @@ fn do_start_server(state: &PiServerState, project_dir: &str) -> Result<String, S
         }
     }
 
-    Err(format!("pi-server failed to start after 3 attempts: {}", last_err))
+    Err(format!(
+        "pi-server failed to start after 3 attempts: {}",
+        last_err
+    ))
 }
 
 fn resolve_project_dir() -> String {
@@ -120,12 +126,20 @@ fn resolve_project_dir() -> String {
     }
     let cwd = std::env::current_dir().unwrap_or_default();
     let cwd_str = cwd.to_string_lossy();
-    if cwd_str.ends_with("src-tauri") || cwd_str.ends_with("src-tauri\\") || cwd_str.ends_with("src-tauri/") {
+    if cwd_str.ends_with("src-tauri")
+        || cwd_str.ends_with("src-tauri\\")
+        || cwd_str.ends_with("src-tauri/")
+    {
         if let Some(parent) = cwd.parent() {
             return parent.to_string_lossy().into_owned();
         }
     }
-    if std::path::Path::new(&cwd).join("src-tauri").join("pi-server").join("index.mjs").exists() {
+    if std::path::Path::new(&cwd)
+        .join("src-tauri")
+        .join("pi-server")
+        .join("index.mjs")
+        .exists()
+    {
         return cwd_str.into_owned();
     }
     if let Some(parent) = cwd.parent() {
@@ -135,6 +149,27 @@ fn resolve_project_dir() -> String {
         }
     }
     cwd_str.into_owned()
+}
+
+fn resolve_workspace_dir(project_dir: &str, app: &tauri::AppHandle) -> String {
+    let project_path = std::path::Path::new(project_dir);
+    let is_source_checkout = project_path
+        .join("src-tauri")
+        .join("pi-server")
+        .join("index.mjs")
+        .exists()
+        || project_path.join("pi-server").join("index.mjs").exists();
+    if is_source_checkout {
+        return project_dir.to_string();
+    }
+
+    // A packaged app should not use its installation directory as the
+    // pi-server data directory. Shortcuts may set the working directory to
+    // Program Files or even System32, both of which are unsuitable for writes.
+    app.path()
+        .app_data_dir()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| project_dir.to_string())
 }
 
 fn show_main_window(app: &tauri::AppHandle) {
@@ -221,16 +256,24 @@ fn pi_server_in(dir: &std::path::Path) -> Option<std::path::PathBuf> {
 
 fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>) -> String {
     // 1. Dev path: {project_dir}/src-tauri/pi-server/index.mjs
-    let dev = std::path::Path::new(project_dir).join("src-tauri").join("pi-server").join("index.mjs");
+    let dev = std::path::Path::new(project_dir)
+        .join("src-tauri")
+        .join("pi-server")
+        .join("index.mjs");
     if dev.exists() {
         eprintln!("[s-loop] pi-server found at dev path: {}", dev.display());
         return project_dir.to_string();
     }
 
     // 2. Relative subdir: {project_dir}/pi-server/index.mjs
-    let rel = std::path::Path::new(project_dir).join("pi-server").join("index.mjs");
+    let rel = std::path::Path::new(project_dir)
+        .join("pi-server")
+        .join("index.mjs");
     if rel.exists() {
-        eprintln!("[s-loop] pi-server found at relative path: {}", rel.display());
+        eprintln!(
+            "[s-loop] pi-server found at relative path: {}",
+            rel.display()
+        );
         return project_dir.to_string();
     }
 
@@ -259,7 +302,10 @@ fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>
     match std::env::current_exe() {
         Ok(exe) => {
             if let Some(dir) = exe.parent() {
-                let clean = dir.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+                let clean = dir
+                    .to_string_lossy()
+                    .trim_start_matches(r"\\?\")
+                    .to_string();
                 eprintln!("[s-loop] exe_dir = {}", clean);
                 candidates.push(dir.to_path_buf());
             }
@@ -271,12 +317,44 @@ fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>
     let mut seen = std::collections::HashSet::new();
     candidates.retain(|p| seen.insert(p.to_string_lossy().to_string()));
 
+    // Prefer a per-user runtime directory. The installation folder may be
+    // read-only under Program Files, while app data is writable for both MSI
+    // and NSIS installs.
+    if let Some(app) = app_handle {
+        if let Ok(data_dir) = app.path().app_data_dir() {
+            let runtime_dir = data_dir.join("runtime");
+            for candidate in &candidates {
+                let archive = candidate.join("pi-server.zip");
+                match crate::pi_server::ensure_pi_server_extracted_to(&archive, &runtime_dir) {
+                    Ok(true) if pi_server_in(&runtime_dir).is_some() => {
+                        eprintln!(
+                            "[s-loop] pi-server ready in app data: {}",
+                            runtime_dir.display()
+                        );
+                        return runtime_dir.to_string_lossy().into_owned();
+                    }
+                    Ok(false) => {}
+                    Ok(true) => eprintln!("[s-loop] extracted runtime has no entry point"),
+                    Err(e) => eprintln!(
+                        "[s-loop] app-data extraction failed at {}: {e}",
+                        archive.display()
+                    ),
+                }
+            }
+        }
+    }
+
+    // Legacy fallback: extract beside the executable/resource when app data
+    // is unavailable, or reuse an older pre-extracted installation.
     // Try each candidate: extract if zip is present, then check for pi-server.
     for candidate in &candidates {
         match ensure_pi_server_extracted(candidate) {
             Ok(true) => {
                 if pi_server_in(candidate).is_some() {
-                    let clean = candidate.to_string_lossy().trim_start_matches(r"\\?").to_string();
+                    let clean = candidate
+                        .to_string_lossy()
+                        .trim_start_matches(r"\\?")
+                        .to_string();
                     eprintln!("[s-loop] pi-server ready at: {}", clean);
                     return clean;
                 }
@@ -285,7 +363,10 @@ fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>
                 eprintln!("[s-loop] no pi-server.zip at {}", candidate.display());
             }
             Err(e) => {
-                eprintln!("[s-loop] pi-server extract failed at {}: {e}", candidate.display());
+                eprintln!(
+                    "[s-loop] pi-server extract failed at {}: {e}",
+                    candidate.display()
+                );
             }
         }
     }
@@ -295,21 +376,32 @@ fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>
     // without requiring the zip.
     for candidate in &candidates {
         if pi_server_in(candidate).is_some() {
-            let clean = candidate.to_string_lossy().trim_start_matches(r"\\?").to_string();
+            let clean = candidate
+                .to_string_lossy()
+                .trim_start_matches(r"\\?")
+                .to_string();
             eprintln!("[s-loop] pi-server found (pre-extracted) at: {}", clean);
             return clean;
         }
     }
 
     // 5. Fallback: return project_dir so the caller can report a clear error.
-    eprintln!("[s-loop] pi-server not found in any candidate dir, falling back to project_dir={}", project_dir);
+    eprintln!(
+        "[s-loop] pi-server not found in any candidate dir, falling back to project_dir={}",
+        project_dir
+    );
     project_dir.to_string()
 }
 
 #[tauri::command]
-fn start_server(state: tauri::State<PiServerState>, app: tauri::AppHandle) -> Result<String, String> {
-    let project_dir = find_pi_server_entry(&resolve_project_dir(), Some(&app));
-    do_start_server(&state, &project_dir)
+fn start_server(
+    state: tauri::State<PiServerState>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let project_dir = resolve_project_dir();
+    let workspace_dir = resolve_workspace_dir(&project_dir, &app);
+    let runtime_dir = find_pi_server_entry(&project_dir, Some(&app));
+    do_start_server(&state, &runtime_dir, &workspace_dir)
 }
 
 #[tauri::command]
@@ -333,6 +425,50 @@ fn server_status(state: tauri::State<PiServerState>) -> Result<bool, String> {
     Ok(false)
 }
 
+#[tauri::command]
+fn runtime_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
+    let workspace_dir = resolve_project_dir();
+    let runtime_dir = find_pi_server_entry(&workspace_dir, Some(&app));
+    let runtime_path = std::path::Path::new(&runtime_dir);
+    let entry = [
+        runtime_path.join("pi-server").join("index.mjs"),
+        runtime_path.join("index.mjs"),
+    ]
+    .into_iter()
+    .find(|path| path.exists());
+    let node_name = if cfg!(target_os = "windows") {
+        "node.exe"
+    } else {
+        "node"
+    };
+    let bundled_node = entry.as_ref().map(|path| path.with_file_name(node_name));
+    let node_version = bundled_node.as_ref().and_then(|path| {
+        std::process::Command::new(path)
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    });
+    let resource_dir = app.path().resource_dir().ok();
+    let app_data_dir = app.path().app_data_dir().ok();
+
+    serde_json::json!({
+        "workspaceDir": workspace_dir,
+        "runtimeDir": runtime_dir,
+        "entry": entry.map(|path| path.to_string_lossy().into_owned()),
+        "bundledNode": bundled_node.as_ref().map(|path| path.to_string_lossy().into_owned()),
+        "bundledNodeExists": bundled_node.as_ref().is_some_and(|path| path.exists()),
+        "nodeVersion": node_version,
+        "archive": resource_dir.as_ref().map(|dir| dir.join("pi-server.zip").to_string_lossy().into_owned()),
+        "archiveExists": resource_dir.is_some_and(|dir| dir.join("pi-server.zip").exists()),
+        "appDataDir": app_data_dir.map(|path| path.to_string_lossy().into_owned()),
+        "debugBuild": cfg!(debug_assertions),
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    })
+}
+
 // ---- MCP Commands ----
 
 #[tauri::command]
@@ -347,10 +483,7 @@ fn mcp_connect(
 }
 
 #[tauri::command]
-fn mcp_disconnect(
-    state: tauri::State<MCPManager>,
-    name: String,
-) -> Result<(), String> {
+fn mcp_disconnect(state: tauri::State<MCPManager>, name: String) -> Result<(), String> {
     state.disconnect(&name)
 }
 
@@ -421,6 +554,7 @@ pub fn run() {
             start_server,
             stop_server,
             server_status,
+            runtime_diagnostics,
             commands::list_directory,
             commands::read_text_file,
             commands::read_file_base64,
@@ -459,9 +593,10 @@ pub fn run() {
             }
             setup_tray(app).map_err(|e| e.to_string())?;
             let state = PiServerState(server_state_arc);
+            let workspace_dir = resolve_workspace_dir(&project_dir, app.handle());
             let actual_project_dir = find_pi_server_entry(&project_dir, Some(app.handle()));
             tauri::async_runtime::spawn(async move {
-                match do_start_server(&state, &actual_project_dir) {
+                match do_start_server(&state, &actual_project_dir, &workspace_dir) {
                     Ok(url) => eprintln!("[s-loop] pi-server started at {url}"),
                     Err(e) => eprintln!("[s-loop] pi-server start failed: {e}"),
                 }

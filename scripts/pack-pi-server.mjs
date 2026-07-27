@@ -63,6 +63,19 @@ async function main() {
     console.error(`[pack-pi-server] source dir not found: ${srcDir}`);
     process.exit(1);
   }
+
+  // A production Windows bundle must be self-contained. Failing the build
+  // here is much clearer than producing an installer that silently depends on
+  // a user's global Node.js installation.
+  if (process.platform === "win32") {
+    const bundledNode = join(srcDir, "node.exe");
+    try {
+      await stat(bundledNode);
+    } catch {
+      console.error(`[pack-pi-server] bundled Node.js missing: ${bundledNode}`);
+      process.exit(1);
+    }
+  }
   console.log(`[pack-pi-server] packing ${srcDir} -> ${outZip}`);
 
   const zip = new JSZip();

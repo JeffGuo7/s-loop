@@ -102,7 +102,15 @@ function App() {
       } catch (err) {
         const msg = String(err)
         console.error('[app] pi-server start failed:', msg)
-        if (!cancelled) setServerError(msg)
+        let detail = ''
+        try {
+          const { invoke: invokeDiagnostics } = await import('@tauri-apps/api/core')
+          const diagnostics = await invokeDiagnostics<Record<string, unknown>>('runtime_diagnostics')
+          detail = `\n\nRuntime diagnostics:\n${JSON.stringify(diagnostics, null, 2)}`
+        } catch (diagnosticError) {
+          console.warn('[app] runtime diagnostics failed:', diagnosticError)
+        }
+        if (!cancelled) setServerError(`${msg}${detail}`)
       }
     })()
 
@@ -243,7 +251,7 @@ function App() {
                 <p className="text-[13px] font-black text-red-400 uppercase tracking-wider">Server Startup Failed</p>
                 <p className="mt-1 text-[11px] text-red-300/80 font-mono break-all leading-relaxed">{serverError}</p>
                 <p className="mt-2 text-[10px] text-text-tertiary">
-                  Make sure Node.js is installed and the pi-server directory exists next to the app executable.
+                  The app should use its bundled runtime. Copy this diagnostic message when reporting an installation or startup problem.
                 </p>
               </div>
             </div>
