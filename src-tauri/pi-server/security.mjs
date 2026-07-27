@@ -103,11 +103,13 @@ const SENSITIVE_ABSOLUTES = [
 export function checkSensitivePath(filePath) {
   const home = process.env.USERPROFILE || process.env.HOME || '/root'
   const normalized = filePath.replace(/^~/, home).replace(/\\/g, '/')
+  const comparable = process.platform === 'win32' ? normalized.toLowerCase() : normalized
 
   // Check ~-relative paths (e.g. ~/.ssh/id_rsa → /home/user/.ssh/id_rsa)
   for (const relPath of SENSITIVE_HOME_RELATIVES) {
-    const pattern = `/${relPath}/`
-    if (normalized.includes(pattern) || normalized.endsWith(`/${relPath}`)) {
+    const relative = process.platform === 'win32' ? relPath.toLowerCase() : relPath
+    const pattern = `/${relative}/`
+    if (comparable.includes(pattern) || comparable.endsWith(`/${relative}`)) {
       return { blocked: true, label: 'sensitive host path: ~/' + relPath }
     }
   }
@@ -115,7 +117,8 @@ export function checkSensitivePath(filePath) {
   // Check absolute system paths
   for (const absPath of SENSITIVE_ABSOLUTES) {
     const clean = absPath.replace(/\\/g, '/')
-    if (normalized.startsWith(clean)) {
+    const prefix = process.platform === 'win32' ? clean.toLowerCase() : clean
+    if (comparable === prefix || comparable.startsWith(prefix.endsWith('/') ? prefix : prefix + '/')) {
       return { blocked: true, label: 'sensitive host path: ' + absPath }
     }
   }

@@ -6,7 +6,142 @@ use std::time::{Duration, Instant};
 
 pub struct PiServerProcess {
     child: Option<Child>,
+    #[cfg(windows)]
+    _job: Option<WindowsJob>,
     pub url: String,
+}
+
+#[cfg(windows)]
+pub(crate) struct WindowsJob(isize);
+
+#[cfg(windows)]
+impl Drop for WindowsJob {
+    fn drop(&mut self) {
+        if self.0 != 0 {
+            unsafe {
+                windows_sys::Win32::Foundation::CloseHandle(
+                    self.0 as windows_sys::Win32::Foundation::HANDLE,
+                );
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<WindowsJob> {
+    use std::ffi::c_void;
+    use std::mem::{size_of, zeroed};
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    unsafe {
+        let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if handle.is_null() {
+            eprintln!("[s-loop] unable to create process job: {}", GetLastError());
+            return None;
+        }
+
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = zeroed();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let configured = SetInformationJobObject(
+            handle,
+            JobObjectExtendedLimitInformation,
+            &limits as *const _ as *const c_void,
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        if configured == 0 {
+            eprintln!(
+                "[s-loop] unable to configure process job: {}",
+                GetLastError()
+            );
+            CloseHandle(handle);
+            return None;
+        }
+
+        let process_handle = child.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+        if AssignProcessToJobObject(handle, process_handle) == 0 {
+            // Some enterprise launchers already place the app in a job that
+            // disallows nesting. Keep startup functional, but log the reduced
+            // containment so diagnostics can surface it.
+            eprintln!(
+                "[s-loop] unable to attach child process to process job: {}",
+                GetLastError()
+            );
+            CloseHandle(handle);
+            return None;
+        }
+
+        Some(WindowsJob(handle as isize))
+    }
+}
+
+pub(crate) fn configure_sanitized_environment(cmd: &mut Command) {
+    const SAFE_KEYS: &[&str] = &[
+        "PATH",
+        "PATHEXT",
+        "ComSpec",
+        "SystemRoot",
+        "WINDIR",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "ProgramW6432",
+        "ProgramData",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "HOME",
+        "USER",
+        "USERNAME",
+        "SHELL",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "LANG",
+        "LANGUAGE",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TZ",
+        "TERM",
+        "COLORTERM",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "NODE_EXTRA_CA_CERTS",
+        "S_LOOP_SKILLS_API_URL",
+        "S_LOOP_NPM_REGISTRY",
+    ];
+
+    cmd.env_clear();
+    for key in SAFE_KEYS {
+        if let Some(value) = std::env::var_os(key) {
+            cmd.env(key, value);
+        }
+    }
+    cmd.env(
+        "LANG",
+        std::env::var_os("LANG").unwrap_or_else(|| "en_US.UTF-8".into()),
+    );
+    cmd.env(
+        "LC_ALL",
+        std::env::var_os("LC_ALL").unwrap_or_else(|| "en_US.UTF-8".into()),
+    );
+    cmd.env("PYTHONUTF8", "1");
+    cmd.env("PYTHONIOENCODING", "utf-8");
+    cmd.env("S_LOOP_SANDBOX", "workspace");
 }
 
 pub struct PiServerState(pub Arc<Mutex<Option<PiServerProcess>>>);
@@ -276,7 +411,12 @@ fn find_node_cmd() -> Option<String> {
 impl PiServerProcess {
     #[allow(dead_code)]
     pub fn orphan(url: String) -> Self {
-        Self { child: None, url }
+        Self {
+            child: None,
+            #[cfg(windows)]
+            _job: None,
+            url,
+        }
     }
 
     pub fn start(project_dir: &str, workspace_dir: &str, port: u16) -> Result<Self, String> {
@@ -352,6 +492,7 @@ impl PiServerProcess {
         let mut cmd = Command::new(&node_path);
 
         cmd.arg(&entry);
+        configure_sanitized_environment(&mut cmd);
         cmd.env("PI_SERVER_PORT", port.to_string());
         cmd.env("S_LOOP_PROJECT_DIR", workspace_dir);
         cmd.env("SNOTRA_PROJECT_DIR", workspace_dir);
@@ -382,6 +523,9 @@ impl PiServerProcess {
                 entry.display()
             )
         })?;
+
+        #[cfg(windows)]
+        let job = attach_kill_on_close_job(&child);
 
         let stdout = child.stdout.take().ok_or("No stdout")?;
         let stderr = child.stderr.take().ok_or("No stderr")?;
@@ -475,6 +619,8 @@ impl PiServerProcess {
 
         Ok(Self {
             child: Some(child),
+            #[cfg(windows)]
+            _job: job,
             url,
         })
     }

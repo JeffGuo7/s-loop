@@ -18,6 +18,7 @@ export interface AgentRuntimeConfig {
   agentModel?: string
   permissionMode?: string
   permissionRules?: Record<string, unknown>
+  accessiblePaths?: string[]
 }
 
 export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
@@ -51,5 +52,6 @@ export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
     agentModel: activeAgent?.model || undefined,
     permissionMode: activeAgent?.permissionMode,
     permissionRules: activeAgent?.permissionRules,
+    accessiblePaths: activeAgent?.accessiblePaths || [],
   }
 }

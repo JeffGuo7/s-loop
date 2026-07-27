@@ -3551,6 +3551,7 @@ dependencies = [
  "tauri-plugin-sql",
  "urlencoding",
  "wait-timeout",
+ "windows-sys 0.59.0",
  "zip",
 ]
 

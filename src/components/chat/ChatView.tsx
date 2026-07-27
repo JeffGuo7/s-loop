@@ -43,7 +43,7 @@ export function ChatView() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [dragTargetZone, setDragTargetZone] = useState<'message' | 'input'>('message')
   const [showPermissionPopup, setShowPermissionPopup] = useState(false)
-  const [pendingApproval, setPendingApproval] = useState<{ requestId: string; toolName: string; args: any; piSessionId: string } | null>(null)
+  const [pendingApproval, setPendingApproval] = useState<{ requestId: string; toolName: string; args: any; reason?: string; piSessionId: string } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const streamUnsubsRef = useRef(new Map<string, () => void>())
 
@@ -294,6 +294,7 @@ export function ChatView() {
         thinkingLevel: 'medium',
         apiKey: providerConfig?.apiKey,
         workspaceDir: workspaceDir ?? undefined,
+        accessiblePaths: activeAgent?.accessiblePaths || [],
         webSearchConfig: useWebSearchStore.getState().getActiveConfig(),
         tools: mcpToolDefs,
         permissionMode: activeAgent?.permissionMode,
@@ -750,6 +751,11 @@ export function ChatView() {
                   <code className="text-[13px] font-bold text-accent font-mono">{pendingApproval.toolName}</code>
                   <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/15">{t('chat.toolApproval.dangerous')}</span>
                 </div>
+                {pendingApproval.reason && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mb-3 leading-relaxed">
+                    {pendingApproval.reason}
+                  </p>
+                )}
                 {pendingApproval.args && (
                   <div>
                     <pre className="text-[11px] font-mono text-text-secondary/80 bg-surface border border-border-light/40 rounded-lg p-3 max-h-36 overflow-auto whitespace-pre-wrap leading-relaxed">

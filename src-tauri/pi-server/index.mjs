@@ -38,7 +38,8 @@ import { runGoalLoop } from './goal-loop/index.mjs'
 import { tryGetAdapter } from './platforms/registry.mjs'
 import { authorizeInbound } from './platforms/access-control.mjs'
 import { ToolGuard } from './tool-guardrails.mjs'
-import { checkCommandSafety, checkSensitivePath } from './security.mjs'
+import { evaluateToolCall } from './execution-policy.mjs'
+import { sanitizeChildEnvironment } from './sandbox.mjs'
 import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
 import { connectSseMcpServer, disconnectSseMcpServer, getAllSseMcpTools, getSseMcpStatus, disconnectAllSseMcp, callSseMcpTool } from './mcp-sse.mjs'
 
@@ -116,7 +117,18 @@ function createSSE(event, data) {
 }
 
 function getTools(dir, webSearchConfig) {
-  const all = [...createCodingTools(dir), ...createReadOnlyTools(dir)]
+  const toolRoot = dir || process.cwd()
+  const bashOptions = {
+    spawnHook: ({ command, env }) => ({
+      command,
+      cwd: toolRoot,
+      env: sanitizeChildEnvironment(env, toolRoot),
+    }),
+  }
+  const all = [
+    ...createCodingTools(toolRoot, { bash: bashOptions }),
+    ...createReadOnlyTools(toolRoot),
+  ]
 
   // Merge tools from loaded pi.dev extensions
   const extTools = getExtensionTools()
@@ -191,22 +203,6 @@ function getTools(dir, webSearchConfig) {
     })
   }
 
-  // Wrap bash tool to ensure UTF-8 encoding on all platforms.
-  // Even with PYTHONUTF8 env set, some shells (Git Bash on Windows)
-  // need an explicit locale override before each command.
-  const bashTool = tools.find((t) => t.name === 'bash')
-  if (bashTool) {
-    const orig = bashTool.execute
-    bashTool.execute = async (id, params, signal, onUpdate) => {
-      // Prepend UTF-8 locale setup — harmless on Linux/macOS, critical on Windows
-      const cmdKey = 'command' in params ? 'command' : 'cmd' in params ? 'cmd' : null
-      if (cmdKey && typeof params[cmdKey] === 'string') {
-        params = { ...params, [cmdKey]: `export LANG=en_US.UTF-8 PYTHONUTF8=1 2>/dev/null\n${params[cmdKey]}` }
-      }
-      return orig(id, params, signal, onUpdate)
-    }
-  }
-
   return tools
 }
 
@@ -239,14 +235,18 @@ function createDelegateTaskTool({ runtimeConfig, resolveModel, getTools, project
           providerID: runtimeConfig.providerID,
           modelID: runtimeConfig.modelID,
           apiKey: runtimeConfig.apiKey,
-          workspaceDir: runtimeConfig.workspaceDir,
+          workspaceDir: wrapper?.config?.workspaceDir || runtimeConfig.workspaceDir,
+          accessiblePaths: wrapper?.config?.accessiblePaths || [],
           webSearchConfig: wrapper?.config?.webSearchConfig,
           providerConfig: runtimeConfig.providerConfig,
+          permissionMode: wrapper?.config?.permissionMode,
+          permissionRules: wrapper?.config?.permissionRules,
         },
         resolveModel,
         getTools,
         signal,
         projectDir: projectDir || runtimeConfig.workspaceDir,
+        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config),
         onUpdate: onUpdate
           ? (ev) => {
               // Structured sub-agent event — frontend can render as live progress
@@ -339,14 +339,18 @@ function createDelegateParallelTool({ runtimeConfig, resolveModel, getTools, pro
           providerID: runtimeConfig.providerID,
           modelID: runtimeConfig.modelID,
           apiKey: runtimeConfig.apiKey,
-          workspaceDir: runtimeConfig.workspaceDir,
+          workspaceDir: wrapper?.config?.workspaceDir || runtimeConfig.workspaceDir,
+          accessiblePaths: wrapper?.config?.accessiblePaths || [],
           webSearchConfig: wrapper?.config?.webSearchConfig,
           providerConfig: runtimeConfig.providerConfig,
+          permissionMode: wrapper?.config?.permissionMode,
+          permissionRules: wrapper?.config?.permissionRules,
         },
         resolveModel,
         getTools,
         signal,
         projectDir: projectDir || runtimeConfig.workspaceDir,
+        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config),
       })
 
       const successCount = results.filter((r) => r.exitCode === 0 && !r.errorMessage).length
@@ -409,14 +413,18 @@ function createDelegateChainTool({ runtimeConfig, resolveModel, getTools, projec
           providerID: runtimeConfig.providerID,
           modelID: runtimeConfig.modelID,
           apiKey: runtimeConfig.apiKey,
-          workspaceDir: runtimeConfig.workspaceDir,
+          workspaceDir: wrapper?.config?.workspaceDir || runtimeConfig.workspaceDir,
+          accessiblePaths: wrapper?.config?.accessiblePaths || [],
           webSearchConfig: wrapper?.config?.webSearchConfig,
           providerConfig: runtimeConfig.providerConfig,
+          permissionMode: wrapper?.config?.permissionMode,
+          permissionRules: wrapper?.config?.permissionRules,
         },
         resolveModel,
         getTools,
         signal,
         projectDir: projectDir || runtimeConfig.workspaceDir,
+        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config),
       })
       return { content: [{ type: 'text', text: result.finalOutput }], details: { steps: result.results } }
     },
@@ -499,6 +507,7 @@ function createMcpToolDefinition(tool, wrapper, sessionId) {
     label: `${tool.serverName}/${tool.name}`,
     description: tool.description || `MCP tool ${tool.name}`,
     parameters: tool.inputSchema || { type: 'object', properties: {} },
+    _sandboxCategory: 'mcp',
     executionMode: 'parallel',
     execute: async (_toolCallId, params, signal) => callMcpTool(wrapper, sessionId, tool.serverName, tool.name, params, signal),
   }
@@ -558,35 +567,57 @@ async function callMcpTool(wrapper, sessionId, serverName, toolName, args, signa
   }
 }
 
-const DANGEROUS_CATEGORIES = new Set(['bash', 'edit', 'delete', 'remove', 'execute', 'shell'])
+async function requestToolApproval(wrapper, toolCall, reason) {
+  const generation = wrapper.approvalGeneration || 0
+  const runRequest = async () => {
+    if ((wrapper.approvalGeneration || 0) !== generation) return false
+    if (!wrapper.emit) return false
+    const requestId = `tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    wrapper.pendingToolApprovals = wrapper.pendingToolApprovals || new Map()
+    const approvalPromise = new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        wrapper.pendingToolApprovals?.delete(requestId)
+        resolve(false)
+      }, 60_000)
+      wrapper.pendingToolApprovals.set(requestId, (approved) => {
+        clearTimeout(timeout)
+        wrapper.pendingToolApprovals?.delete(requestId)
+        resolve(approved)
+      })
+    })
+    wrapper.emit('tool_approval_request', {
+      requestId,
+      toolName: toolCall.name,
+      args: toolCall.arguments || {},
+      reason,
+    })
+    return await approvalPromise
+  }
 
-function getToolCategory(toolName) {
-  const lower = toolName.toLowerCase()
-  if (lower.includes('bash') || lower.includes('shell') || lower.includes('exec')) return 'bash'
-  // write (create new content) is safe; edit/delete/remove modify existing files
-  if (lower.includes('write') && !lower.includes('delete') && !lower.includes('remove')) return 'write'
-  if (lower.includes('edit') || lower.includes('delete') || lower.includes('remove')) return 'edit'
-  if (lower.includes('grep')) return 'grep'
-  if (lower.includes('find') || lower.includes('glob')) return 'glob'
-  if (lower.includes('ls') || lower.includes('list')) return 'list'
-  if (lower.includes('web_search')) return 'websearch'
-  if (lower.includes('web_fetch')) return 'webfetch'
-  if (lower.includes('read')) return 'read'
-  if (lower.includes('skill')) return 'skill'
-  return toolName
+  // Parallel tool calls must not overwrite each other's approval dialogs.
+  const previous = wrapper.approvalQueue || Promise.resolve()
+  const current = previous.catch(() => undefined).then(runRequest)
+  wrapper.approvalQueue = current.then(() => undefined, () => undefined)
+  return await current
 }
 
-function checkToolPermission(toolName, rules = {}, mode = 'ask') {
-  console.log('[pi-server] checkToolPermission:', { toolName, mode, rules })
-  if (mode === 'allow') return { allowed: true }
-  if (mode === 'deny') return { allowed: false, reason: 'Permission denied: agent policy is deny-all' }
-  const category = getToolCategory(toolName)
-  const action = rules[toolName] ?? rules[category]
-  console.log('[pi-server] checkToolPermission category:', category, 'action:', action, 'isDangerous:', DANGEROUS_CATEGORIES.has(category))
-  if (action === 'deny') return { allowed: false, reason: `Permission denied: ${toolName} is blocked by agent rules` }
-  if (action === 'allow') return { allowed: true }
-  if (DANGEROUS_CATEGORIES.has(category)) return { allowed: false, reason: `Permission denied: ${toolName} requires explicit approval` }
-  return { allowed: true }
+function rejectPendingToolApprovals(wrapper) {
+  if (!wrapper) return
+  wrapper.approvalGeneration = (wrapper.approvalGeneration || 0) + 1
+  for (const resolver of wrapper.pendingToolApprovals?.values?.() || []) resolver(false)
+  wrapper.pendingToolApprovals?.clear?.()
+}
+
+async function authorizeToolCall(wrapper, toolCall, config, { interactive = true } = {}) {
+  const decision = evaluateToolCall(toolCall, config)
+  if (decision.allowed) return undefined
+  if (!decision.approvalRequired) return { block: true, reason: decision.reason }
+  if (!interactive) {
+    return { block: true, reason: `${decision.reason}; interactive approval is unavailable` }
+  }
+  const approved = await requestToolApproval(wrapper, toolCall, decision.reason)
+  if (!approved) return { block: true, reason: 'User rejected or approval timed out' }
+  return undefined
 }
 
 async function readJsonBody(req) {
@@ -706,11 +737,7 @@ async function promptPlatformConversation(sessionId, content) {
       sessionId,
       getApiKey: async () => runtimeConfig.apiKey || '',
       beforeToolCall: async ({ toolCall }) => {
-        const permission = checkToolPermission(toolCall.name, runtimeConfig.permissionRules, runtimeConfig.permissionMode)
-        if (!permission.allowed) {
-          return { block: true, reason: permission.reason }
-        }
-        return undefined
+        return await authorizeToolCall(wrapper, toolCall, runtimeConfig, { interactive: false })
       },
       toolExecution: 'parallel',
     })
@@ -831,6 +858,14 @@ const createCronPrompt = async (content, options) => {
       },
       sessionId: options.sessionId || 'cron-' + Date.now(),
       getApiKey: async () => options.apiKey || process.env.PI_API_KEY || '',
+      beforeToolCall: async ({ toolCall }) => {
+        const decision = evaluateToolCall(toolCall, options)
+        if (decision.allowed) return undefined
+        const reason = decision.approvalRequired
+          ? `${decision.reason}; interactive approval is unavailable`
+          : decision.reason
+        return { block: true, reason }
+      },
       toolExecution: 'parallel',
     })
     await agent.prompt(content)
@@ -867,6 +902,7 @@ createServer((req, res) => {
       runtimeConfig.agentModel = data.agentModel || undefined
       runtimeConfig.permissionMode = data.permissionMode || undefined
       runtimeConfig.permissionRules = data.permissionRules || undefined
+      runtimeConfig.accessiblePaths = Array.isArray(data.accessiblePaths) ? data.accessiblePaths : []
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ ok: true }))
     }).catch((e) => {
@@ -1641,6 +1677,7 @@ createServer((req, res) => {
       console.log('[pi-server] explicit abort for session:', abortSessionId)
       try { abortWrapper.agent.abort() } catch (e) { console.warn('[pi-server] abort error:', e.message) }
     }
+    rejectPendingToolApprovals(abortWrapper)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok: true }))
     return
@@ -1656,6 +1693,7 @@ createServer((req, res) => {
           if (wrapper) {
             if (wrapper.agent) { try { wrapper.agent.abort() } catch {} }
             rejectPendingMcpRequests(wrapper, 'session deleted')
+            rejectPendingToolApprovals(wrapper)
             fireExtensionEvent('session_shutdown', { sessionId: deleteSid }, { sessionId: deleteSid })
             sessions.delete(deleteSid)
           }
@@ -1684,7 +1722,7 @@ createServer((req, res) => {
   req.on('end', async () => {
     const wrapper = await getOrCreateWrapper(sessionId)
     if (!wrapper) { res.writeHead(404); res.end('Session not found'); return }
-    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
+    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, accessiblePaths, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
     console.log('[pi-server] session message — permissionMode:', permissionMode, 'permissionRules:', JSON.stringify(permissionRules))
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
@@ -1750,58 +1788,10 @@ createServer((req, res) => {
               }
             }
 
-            // Command safety: unconditionally block hardline-dangerous commands
             const args = toolCall.arguments || {}
-            const cmd = args.command || args.cmd || ''
-            const isShellTool = toolCall.name === 'bash' || toolCall.name === 'shell' || toolCall.name === 'execute_command'
-            if (isShellTool && cmd) {
-              const safety = checkCommandSafety(cmd)
-              if (!safety.allowed) {
-                console.log('[pi-server] COMMAND SAFETY BLOCK:', safety.reason)
-                return { block: true, reason: safety.reason }
-              }
-            }
-            // File path safety: block writes to sensitive host paths
-            const isEditTool = ['edit', 'write', 'apply_diff', 'replace_in_file', 'delete', 'remove'].includes(toolCall.name)
-            if (isEditTool && args.path) {
-              const sensitive = checkSensitivePath(args.path)
-              if (sensitive.blocked) {
-                console.log('[pi-server] SENSITIVE PATH BLOCK:', sensitive.label)
-                return { block: true, reason: `Write blocked: ${sensitive.label}. This host path cannot be modified by the AI.` }
-              }
-            }
-
             emit('tool_call', { id: toolCall.id, name: toolCall.name, args: args })
             fireExtensionEvent('tool_call', { toolCallId: toolCall.id, toolName: toolCall.name, args }, { sessionId })
-            console.log('[pi-server] beforeToolCall:', toolCall.name, 'config.mode:', wrapper.config?.permissionMode)
-            const permission = checkToolPermission(toolCall.name, wrapper.config?.permissionRules, wrapper.config?.permissionMode)
-            console.log('[pi-server] beforeToolCall result:', JSON.stringify(permission))
-            if (!permission.allowed) {
-              // In 'ask' mode, dangerous tools require explicit user approval
-              if (wrapper.config?.permissionMode === 'ask' && permission.reason?.includes('requires explicit approval')) {
-                const requestId = `tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-                wrapper.pendingToolApprovals = wrapper.pendingToolApprovals || new Map()
-                const approvalPromise = new Promise((resolve) => {
-                  const timeout = setTimeout(() => {
-                    wrapper.pendingToolApprovals?.delete(requestId)
-                    resolve(false)
-                  }, 60_000)
-                  wrapper.pendingToolApprovals.set(requestId, (approved) => {
-                    clearTimeout(timeout)
-                    resolve(approved)
-                  })
-                })
-                console.log('[pi-server] emitting tool-approval-request:', requestId, toolCall.name)
-                emit('tool_approval_request', { requestId, toolName: toolCall.name, args: toolCall.arguments })
-                const approved = await approvalPromise
-                console.log('[pi-server] tool approval result:', requestId, approved)
-                if (!approved) return { block: true, reason: '用户拒绝' }
-                return undefined
-              }
-              console.log('[pi-server] BLOCKING tool:', toolCall.name, 'reason:', permission.reason)
-              return { block: true, reason: permission.reason }
-            }
-            return undefined
+            return await authorizeToolCall(wrapper, toolCall, wrapper.config)
           },
           afterToolCall: async ({ result, toolCall }) => {
             if (toolCall?.name) {
@@ -1855,7 +1845,15 @@ createServer((req, res) => {
         wrapper.contextEngine = contextEngine
         wrapper.previousMessageCount = initialMessages.length
         wrapper.toolGuard = new ToolGuard()
-        wrapper.config = { workspaceDir, webSearchConfig, permissionMode, permissionRules, providerConfig: effectiveProviderConfig }
+        wrapper.config = {
+          workspaceDir,
+          accessiblePaths: Array.isArray(accessiblePaths) ? accessiblePaths : [],
+          webSearchConfig,
+          permissionMode,
+          permissionRules,
+          providerConfig: effectiveProviderConfig,
+          mcpToolNames: new Set(mcpToolDefs.map((tool) => tool.name)),
+        }
         sessions.set(sessionId, wrapper)
         console.log('[pi-server] Tools:', tools.length, '| Provider:', provider, '| Model:', modelId)
       } else {
@@ -1869,7 +1867,15 @@ createServer((req, res) => {
         wrapper.agent.state.tools = [...baseTools, ...mcpToolDefs]
         if (wrapper.agent.state.systemPrompt !== fullPrompt) wrapper.agent.state.systemPrompt = fullPrompt
         if (apiKey) wrapper.apiKey = apiKey
-        wrapper.config = { workspaceDir, webSearchConfig, permissionMode, permissionRules, providerConfig: effectiveProviderConfig }
+        wrapper.config = {
+          workspaceDir,
+          accessiblePaths: Array.isArray(accessiblePaths) ? accessiblePaths : [],
+          webSearchConfig,
+          permissionMode,
+          permissionRules,
+          providerConfig: effectiveProviderConfig,
+          mcpToolNames: new Set(mcpToolDefs.map((tool) => tool.name)),
+        }
       }
 
       wrapper.emit = emit

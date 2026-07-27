@@ -15,6 +15,7 @@ export interface PermissionRule {
   webfetch?: PermissionAction
   websearch?: PermissionAction
   skill?: PermissionAction
+  mcp?: PermissionAction
   [key: string]: PermissionAction | undefined
 }
 

@@ -22,6 +22,7 @@ export interface ToolApprovalRequest {
   requestId: string
   toolName: string
   args: Record<string, unknown>
+  reason?: string
 }
 
 export interface PiStreamCallbacks {
@@ -104,6 +105,7 @@ export async function syncRuntimeConfig(config: {
   modelID: string
   apiKey?: string
   workspaceDir?: string
+  accessiblePaths?: string[]
   providerConfig?: { api?: string; baseUrl?: string; supportsVision?: boolean }
   webSearchConfig?: Record<string, unknown>
   agentSystemPrompt?: string
@@ -148,6 +150,7 @@ export async function prompt(
     tools?: McpToolDef[]
     apiKey?: string
     workspaceDir?: string
+    accessiblePaths?: string[]
     webSearchConfig?: {
       provider?: string
       apiKey?: string
@@ -174,6 +177,7 @@ export async function prompt(
     if (options?.apiKey) body.apiKey = options.apiKey
     if (options?.tools && options.tools.length > 0) body.tools = options.tools
     if (options?.workspaceDir) body.workspaceDir = options.workspaceDir
+    if (options?.accessiblePaths) body.accessiblePaths = options.accessiblePaths
     if (options?.webSearchConfig) body.webSearchConfig = options.webSearchConfig
     if (options?.permissionMode) body.permissionMode = options.permissionMode
     if (options?.permissionRules) body.permissionRules = options.permissionRules

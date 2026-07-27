@@ -226,6 +226,7 @@ export function getAllSseMcpTools() {
         parameters: tool.inputSchema || { type: 'object', properties: {} },
         _mcpServer: serverName,
         _mcpToolName: toolName,
+        _sandboxCategory: 'mcp',
         executionMode: 'parallel',
         execute: async (_toolCallId, params) => {
           try {

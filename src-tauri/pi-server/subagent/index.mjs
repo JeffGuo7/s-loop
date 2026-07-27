@@ -14,6 +14,7 @@
 
 import { Agent } from '@earendil-works/pi-agent-core'
 import { loadAgentDefinition, formatAgentList } from './agent-registry.mjs'
+import { evaluateToolCall } from '../execution-policy.mjs'
 
 const MAX_CONCURRENCY = 4
 const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
@@ -30,6 +31,7 @@ const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
  * @param {AbortSignal} [opts.signal] - Abort signal
  * @param {Function} [opts.onUpdate] - Streaming update callback
  * @param {string} [opts.projectDir] - Project directory for agent discovery
+ * @param {Function} [opts.requestToolApproval] - interactive parent policy hook
  * @returns {Promise<Object>} SubagentResult
  */
 export async function runSubagent({
@@ -41,6 +43,7 @@ export async function runSubagent({
   signal,
   onUpdate,
   projectDir,
+  requestToolApproval,
 }) {
   // 1. Look up agent definition
   const def = loadAgentDefinition(agentName, projectDir)
@@ -106,6 +109,15 @@ export async function runSubagent({
     },
     sessionId,
     getApiKey: async () => apiKey,
+    beforeToolCall: async ({ toolCall }) => {
+      if (requestToolApproval) return await requestToolApproval(toolCall)
+      const decision = evaluateToolCall(toolCall, parentConfig)
+      if (decision.allowed) return undefined
+      const reason = decision.approvalRequired
+        ? `${decision.reason}; interactive approval is unavailable`
+        : decision.reason
+      return { block: true, reason }
+    },
     toolExecution: 'parallel',
   })
 

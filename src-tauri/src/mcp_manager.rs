@@ -6,6 +6,10 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::time::Duration;
 
+use crate::pi_server::configure_sanitized_environment;
+#[cfg(windows)]
+use crate::pi_server::{attach_kill_on_close_job, WindowsJob};
+
 // ---- Data Types ----
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -40,6 +44,8 @@ fn push_diagnostic(diagnostics: &Arc<Mutex<Vec<String>>>, stream: &str, line: St
 struct MCPServerProcess {
     name: String,
     child: Child,
+    #[cfg(windows)]
+    _job: Option<WindowsJob>,
     response_rx: mpsc::Receiver<Result<String, String>>,
     writer: ChildStdin,
     tools: Vec<MCPTool>,
@@ -53,14 +59,28 @@ impl MCPServerProcess {
         args: &[String],
         env: &HashMap<String, String>,
     ) -> Result<Self, String> {
-        let mut child = Command::new(command)
-            .args(args)
+        let mut cmd = Command::new(command);
+        configure_sanitized_environment(&mut cmd);
+        cmd.args(args)
+            // MCP environment variables are explicit user configuration and
+            // are applied after the inherited host environment is cleared.
             .envs(env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+
+        let mut child = cmd
             .spawn()
             .map_err(|e| format!("Failed to spawn MCP server '{}': {}", name, e))?;
+
+        #[cfg(windows)]
+        let job = attach_kill_on_close_job(&child);
 
         let stdin = child.stdin.take().ok_or("Failed to capture stdin")?;
         let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
@@ -73,6 +93,8 @@ impl MCPServerProcess {
         let mut process = Self {
             name: name.to_string(),
             child,
+            #[cfg(windows)]
+            _job: job,
             response_rx,
             writer,
             tools: Vec::new(),

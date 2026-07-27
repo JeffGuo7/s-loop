@@ -13,6 +13,8 @@
 import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel } from '@earendil-works/pi-ai/compat'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
+import { evaluateToolCall } from './execution-policy.mjs'
+import { sanitizeChildEnvironment } from './sandbox.mjs'
 import { webSearch } from './searchProviders.mjs'
 import { createSessionRepo, findSession } from './session-store.mjs'
 import { getAdapter } from './platforms/registry.mjs'
@@ -115,6 +117,14 @@ export async function autoReply(msg, platform, runtimeConfig) {
       },
       sessionId,
       getApiKey: async () => runtimeConfig.apiKey || '',
+      beforeToolCall: async ({ toolCall }) => {
+        const decision = evaluateToolCall(toolCall, runtimeConfig)
+        if (decision.allowed) return undefined
+        const reason = decision.approvalRequired
+          ? `${decision.reason}; interactive approval is unavailable`
+          : decision.reason
+        return { block: true, reason }
+      },
       toolExecution: 'sequential',
     })
 
@@ -174,7 +184,14 @@ async function createPiSession() {
 
 function getToolsForPlatform(runtimeConfig) {
   const dir = runtimeConfig.workspaceDir || process.env.S_LOOP_PROJECT_DIR || process.cwd()
-  const all = [...createCodingTools(dir), ...createReadOnlyTools(dir)]
+  const bashOptions = {
+    spawnHook: ({ command, env }) => ({
+      command,
+      cwd: dir,
+      env: sanitizeChildEnvironment(env, dir),
+    }),
+  }
+  const all = [...createCodingTools(dir, { bash: bashOptions }), ...createReadOnlyTools(dir)]
   const seen = new Set()
   const tools = all.filter(t => {
     if (seen.has(t.name)) return false
