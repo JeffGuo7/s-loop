@@ -341,8 +341,9 @@ fn mcp_connect(
     name: String,
     command: String,
     args: Vec<String>,
+    env: std::collections::HashMap<String, String>,
 ) -> Result<mcp_manager::MCPServerStatus, String> {
-    state.connect(&name, &command, &args)
+    state.connect(&name, &command, &args, &env)
 }
 
 #[tauri::command]

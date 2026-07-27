@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
-import type { MCPServerConfig, MCPServerStatus, MCPTool } from '../types/mcp';
-import { getBaseUrl } from '../utils/piClient';
+import type { MCPServerConfig, MCPServerStatus, MCPTool, MCPResource } from '../types/mcp';
+import { getBaseUrl, waitForServer } from '../utils/piClient';
 
 // ---- Tauri command response types (matches Rust mcp_manager.rs) ----
 
@@ -17,6 +17,46 @@ interface RustMCPServerStatus {
   status: string;
   error: string | null;
   tools: RustMCPTool[];
+}
+
+interface RemoteMCPTool {
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+}
+
+interface RemoteMCPResource {
+  name: string;
+  uri: string;
+  description?: string;
+  mimeType?: string;
+}
+
+async function ensurePiServer(): Promise<void> {
+  try {
+    const response = await fetch(`${getBaseUrl()}/health`);
+    if (response.ok) return;
+  } catch {
+    // The Tauri side may still be starting pi-server.
+  }
+  await waitForServer(10000);
+}
+
+function mapRemoteTools(tools: RemoteMCPTool[] = []): MCPTool[] {
+  return tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description || '',
+    inputSchema: tool.inputSchema || {},
+  }));
+}
+
+function mapRemoteResources(resources: RemoteMCPResource[] = []): MCPResource[] {
+  return resources.map((resource) => ({
+    name: resource.name || resource.uri,
+    uri: resource.uri,
+    description: resource.description || '',
+    mimeType: resource.mimeType || undefined,
+  }));
 }
 
 interface MCPState {
@@ -82,8 +122,18 @@ export const useMCPStore = create<MCPState>()(
       },
 
       removeServer: (name) => {
-        // Disconnect from Rust backend first
-        invoke('mcp_disconnect', { name }).catch(() => {});
+        // Disconnect from the correct backend without re-adding a status entry
+        // after the config has been removed.
+        const server = get().servers.find((item) => item.name === name);
+        if (server?.type === 'sse' || server?.type === 'http') {
+          ensurePiServer().then(() => fetch(`${getBaseUrl()}/mcp-sse/disconnect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+          })).catch(() => {});
+        } else {
+          invoke('mcp_disconnect', { name }).catch(() => {});
+        }
 
         set((state) => {
           const newStatuses = { ...state.serverStatuses };
@@ -114,7 +164,7 @@ export const useMCPStore = create<MCPState>()(
         } else {
           // Was enabled, now disabling → disconnect
           get().setServerStatus(name, { status: 'disabled', tools: [], resources: [] });
-          invoke('mcp_disconnect', { name }).catch(() => {});
+          get().disconnectServer(name).catch(() => {});
         }
       },
 
@@ -137,6 +187,7 @@ export const useMCPStore = create<MCPState>()(
         // SSE/HTTP type: connect via pi-server
         if (server.type === 'sse' || server.type === 'http') {
           try {
+            await ensurePiServer();
             const base = getBaseUrl();
             const res = await fetch(`${base}/mcp-sse/connect`, {
               method: 'POST',
@@ -145,21 +196,19 @@ export const useMCPStore = create<MCPState>()(
                 name: server.name,
                 url: server.url,
                 headers: server.headers || {},
+                // Older S-Loop versions inferred every URL as `sse`. Treat
+                // that persisted value as auto-detect so existing configs also
+                // get the modern-first path.
+                transport: server.type === 'sse' ? 'http' : server.type,
               }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Connection failed');
 
-            const tools = (data.tools || []).map((t: any) => ({
-              name: t.name,
-              description: t.description || '',
-              inputSchema: t.inputSchema || {},
-            }));
-
             get().setServerStatus(name, {
               status: 'connected',
-              tools,
-              resources: [],
+              tools: mapRemoteTools(data.tools || []),
+              resources: mapRemoteResources(data.resources || []),
             });
           } catch (error) {
             get().setServerStatus(name, {
@@ -183,6 +232,7 @@ export const useMCPStore = create<MCPState>()(
             name,
             command,
             args,
+            ...(server.env ? { env: server.env } : {}),
           });
 
           get().setServerStatus(name, mapRustStatus(result));
@@ -216,6 +266,7 @@ export const useMCPStore = create<MCPState>()(
         // SSE/HTTP type: disconnect via pi-server
         if (server && (server.type === 'sse' || server.type === 'http')) {
           try {
+            await ensurePiServer();
             const base = getBaseUrl();
             await fetch(`${base}/mcp-sse/disconnect`, {
               method: 'POST',
@@ -260,6 +311,7 @@ export const useMCPStore = create<MCPState>()(
         // SSE/HTTP: refresh via pi-server status
         if (server.type === 'sse' || server.type === 'http') {
           try {
+            await ensurePiServer();
             const base = getBaseUrl();
             const res = await fetch(`${base}/mcp-sse/status`);
             if (res.ok) {
@@ -268,12 +320,8 @@ export const useMCPStore = create<MCPState>()(
               if (sseServer) {
                 get().setServerStatus(name, {
                   status: 'connected',
-                  tools: (sseServer.tools || []).map((t: any) => ({
-                    name: t.name,
-                    description: t.description || '',
-                    inputSchema: {},
-                  })),
-                  resources: [],
+                  tools: mapRemoteTools(sseServer.tools || []),
+                  resources: mapRemoteResources(sseServer.resources || []),
                 });
                 return;
               }
@@ -320,35 +368,40 @@ export const useMCPStore = create<MCPState>()(
           }
         }
 
-        // Fetch SSE MCP status from pi-server
-        try {
-          const base = getBaseUrl();
-          const res = await fetch(`${base}/mcp-sse/status`);
-          if (res.ok) {
-            const sseStatuses = await res.json();
-            for (const s of sseStatuses) {
-              statusMap[s.name] = {
-                name: s.name,
-                status: 'connected',
-                tools: (s.tools || []).map((t: any) => ({
-                  name: t.name,
-                  description: t.description || '',
-                  inputSchema: {},
-                })),
-                resources: [],
-              };
+        // Fetch remote MCP status only when remote servers are configured. This
+        // keeps stdio-only startup fast and avoids waiting for pi-server in
+        // browser/unit-test environments.
+        if (enabledServers.some((server) => server.type === 'sse' || server.type === 'http')) {
+          try {
+            await ensurePiServer();
+            const base = getBaseUrl();
+            const res = await fetch(`${base}/mcp-sse/status`);
+            if (res.ok) {
+              const sseStatuses = await res.json();
+              for (const s of sseStatuses) {
+                statusMap[s.name] = {
+                  name: s.name,
+                  status: s.status || (s.connected ? 'connected' : 'error'),
+                  error: s.error || undefined,
+                  tools: mapRemoteTools(s.tools || []),
+                  resources: mapRemoteResources(s.resources || []),
+                };
+              }
             }
-          }
-        } catch {}
+          } catch {}
+        }
 
-        // Try connecting SSE servers that aren't yet connected
+        // Publish the snapshot before starting asynchronous connections. This
+        // prevents connectServer() results from being overwritten by the
+        // stale snapshot below.
+        set({ serverStatuses: statusMap });
+
+        // Try connecting remote servers that aren't yet connected
         for (const server of enabledServers) {
           if ((server.type === 'sse' || server.type === 'http') && !statusMap[server.name]) {
             get().connectServer(server.name).catch(() => {});
           }
         }
-
-        set({ serverStatuses: statusMap });
 
         // Mark disabled servers
         for (const server of servers) {

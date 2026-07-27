@@ -47,9 +47,15 @@ struct MCPServerProcess {
 }
 
 impl MCPServerProcess {
-    fn start(name: &str, command: &str, args: &[String]) -> Result<Self, String> {
+    fn start(
+        name: &str,
+        command: &str,
+        args: &[String],
+        env: &HashMap<String, String>,
+    ) -> Result<Self, String> {
         let mut child = Command::new(command)
             .args(args)
+            .envs(env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -337,6 +343,7 @@ impl MCPManager {
         name: &str,
         command: &str,
         args: &[String],
+        env: &HashMap<String, String>,
     ) -> Result<MCPServerStatus, String> {
         let existing = {
             let mut processes = self.processes.write().map_err(|e| e.to_string())?;
@@ -348,7 +355,7 @@ impl MCPManager {
             process.shutdown();
         }
 
-        let process = MCPServerProcess::start(name, command, args)
+        let process = MCPServerProcess::start(name, command, args, env)
             .map_err(|e| format!("Connection failed: {}", e))?;
         let status = MCPServerStatus {
             name: name.to_string(),

@@ -1403,9 +1403,9 @@ createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/mcp-sse/connect') {
     readJsonBody(req).then(async (data) => {
       try {
-        const { name, url, headers } = data
+        const { name, url, headers, transport } = data
         if (!name || !url) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name" or "url"' })); return }
-        const result = await connectSseMcpServer(name, url, headers || {})
+        const result = await connectSseMcpServer(name, url, headers || {}, transport || 'http')
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, ...result }))
       } catch (e) {

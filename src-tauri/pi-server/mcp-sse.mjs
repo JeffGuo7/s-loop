@@ -1,455 +1,243 @@
 /**
- * mcp-sse.mjs — SSE MCP transport for pi-server
+ * MCP client manager for remote servers.
  *
- * Manages connections to SSE-based MCP servers (remote HTTP endpoints
- * using Server-Sent Events for server→client and POST for client→server).
+ * Remote MCP transport rules:
+ *   1. Prefer modern Streamable HTTP.
+ *   2. Fall back to legacy HTTP+SSE when the endpoint rejects Streamable HTTP.
  *
- * Each connection:
- *  1. Connects to the SSE endpoint
- *  2. Receives the "endpoint" event for the POST URL
- *  3. Sends initialize via POST
- *  4. Discovers tools via tools/list
- *  5. Exposes tool definitions that can be merged into the agent's tool list
- *
- * Tool calls are handled directly in pi-server via HTTP POST to the MCP endpoint.
+ * The official MCP SDK owns JSON-RPC framing, session IDs, SSE parsing,
+ * reconnection, pagination and protocol-version negotiation. Keeping this
+ * module focused on lifecycle and pi-agent tool adaptation prevents the
+ * desktop app from having to know transport details.
  */
 
-import * as http from 'node:http'
-import * as https from 'node:https'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 
-// ── State ────────────────────────────────────────────────────
+const connections = new Map()
 
-const connections = new Map()  // name → { tools, endpoint, sseAbort, sseReq }
+function normalizeHeaders(headers = {}) {
+  return Object.fromEntries(
+    Object.entries(headers)
+      .filter(([key, value]) => typeof key === 'string' && typeof value === 'string')
+      .map(([key, value]) => [key, value])
+  )
+}
 
-// ── HTTP helpers ─────────────────────────────────────────────
-
-const AGENT = 's-loop/1.0'
-
-function buildUrl(base, path) {
-  const u = new URL(base)
-  // If the base already has a path, replace it; otherwise append
-  if (path) {
-    u.pathname = path
+function fetchWithHeaders(headers) {
+  const customHeaders = normalizeHeaders(headers)
+  return async (input, init = {}) => {
+    const merged = new Headers(init.headers || {})
+    for (const [key, value] of Object.entries(customHeaders)) merged.set(key, value)
+    return globalThis.fetch(input, { ...init, headers: merged })
   }
-  return u.toString()
 }
 
-function httpRequest(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url)
-    const isHttps = urlObj.protocol === 'https:'
-    const mod = isHttps ? https : http
-
-    const defaultHeaders = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-      'User-Agent': AGENT,
-    }
-
-    // Merge custom headers (from user config) with defaults
-    const reqHeaders = { ...defaultHeaders, ...options.headers }
-
-    const reqOptions = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || (isHttps ? 443 : 80),
-      path: urlObj.pathname + urlObj.search,
-      method: options.method || 'GET',
-      headers: reqHeaders,
-      timeout: options.timeout || 30000,
-      rejectUnauthorized: options.rejectUnauthorized !== false,
-    }
-
-    const req = mod.request(reqOptions, (res) => {
-      const chunks = []
-      res.on('data', (chunk) => chunks.push(chunk))
-      res.on('end', () => {
-        const body = Buffer.concat(chunks).toString('utf-8')
-        resolve({ statusCode: res.statusCode, headers: res.headers, body })
-      })
-    })
-
-    req.on('error', (err) => reject(err))
-    req.on('timeout', () => { req.destroy(); reject(new Error(`Request timed out: ${url}`)) })
-
-    if (options.body) {
-      req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body))
-    }
-    req.end()
-  })
-}
-
-// ── MCP JSON-RPC helpers ─────────────────────────────────────
-
-let requestId = 100
-
-function nextId() {
-  return ++requestId
-}
-
-function mcpRequest(endpoint, method, params, extraHeaders = {}) {
-  const id = nextId()
-  const body = JSON.stringify({
-    jsonrpc: '2.0',
-    id,
-    method,
-    params: params || {},
-  })
-  return httpRequest(endpoint, {
-    method: 'POST',
-    body,
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...extraHeaders,  // pass through user-configured headers (e.g. Authorization)
-    },
-  }).then((res) => {
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw new Error(`MCP request failed (${res.statusCode}): ${res.body}`)
-    }
-    let data
-    if (res.body && res.body.trim()) {
-      // Some MCP servers return JSON-RPC wrapped in SSE format even over HTTP POST.
-      // Parse lines that look like "data: {...}" or "event: message".
-      const body = res.body.trim()
-      let jsonStr = body
-
-      if (body.startsWith('event:') || body.startsWith('data:')) {
-        // SSE-formatted response — extract the data line
-        const lines = body.split('\n')
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (trimmed.startsWith('data: ')) {
-            jsonStr = trimmed.slice(6)
-            break
-          }
-        }
-      }
-
-      try {
-        data = JSON.parse(jsonStr)
-      } catch {
-        throw new Error(`Invalid JSON-RPC response from MCP server: ${jsonStr.slice(0, 200)}`)
-      }
-      if (data.error) {
-        throw new Error(`MCP error (${data.error.code || 'unknown'}): ${data.error.message || JSON.stringify(data.error)}`)
-      }
-      return data.result || null
-    }
-    return null
-  })
-}
-
-// ── SSE connection ───────────────────────────────────────────
-
-function sseConnect(url, headers = {}) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url)
-    const isHttps = urlObj.protocol === 'https:'
-    const mod = isHttps ? https : http
-
-    const reqHeaders = {
-      'Accept': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'User-Agent': AGENT,
-      ...headers,
-    }
-
-    const reqOptions = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || (isHttps ? 443 : 80),
-      path: urlObj.pathname + urlObj.search,
-      method: 'GET',
-      headers: reqHeaders,
-      timeout: 15000,
-      rejectUnauthorized: true,
-    }
-
-    const req = mod.request(reqOptions, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`SSE connection failed (${res.statusCode})`))
-        return
-      }
-
-      let endpoint = null
-      let buffer = ''
-      const abortController = new AbortController()
-
-      res.on('data', (chunk) => {
-        buffer += chunk.toString('utf-8')
-        // Process SSE events
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''  // keep incomplete line
-
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (trimmed.startsWith('event: ')) {
-            const eventType = trimmed.slice(7)
-            if (eventType === 'endpoint') {
-              // Next line contains the POST endpoint URL
-              // Look ahead in remaining lines
-              const nextDataLine = lines[lines.indexOf(line) + 1] || ''
-              if (nextDataLine.startsWith('data: ')) {
-                endpoint = nextDataLine.slice(6).trim()
-              }
-            } else if (eventType === 'message') {
-              // Standard MCP message over SSE — we handle these via POST
-              // Ignore during sse init (we use POST for initialize)
-            }
-          }
-          if (trimmed.startsWith('data: ')) {
-            const data = trimmed.slice(6)
-            if (data === '[DONE]') continue
-            // Parse as JSON to check for endpoint field
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.endpoint) {
-                endpoint = parsed.endpoint
-              }
-            } catch {}
-          }
-        }
-
-        // If we found the endpoint, resolve
-        if (endpoint) {
-          resolve({ endpoint, abortController, req })
-        }
-      })
-
-      res.on('end', () => {
-        if (!endpoint) {
-          // No endpoint received — try to use the original SSE URL as endpoint
-          // Some SSE MCP servers use the same URL for both SSE and POST
-          resolve({ endpoint: url, abortController, req })
-        }
-      })
-
-      res.on('error', (err) => {
-        reject(err)
-      })
-    })
-
-    req.on('error', (err) => reject(err))
-    req.on('timeout', () => { req.destroy(); reject(new Error(`SSE connect timeout: ${url}`)) })
-
-    req.end()
-  })
-}
-
-// ── HTTP MCP (direct POST JSON-RPC) ─────────────────────────
-
-/**
- * Connect to an MCP server via direct HTTP POST (Streamable HTTP transport).
- * This is used when the server endpoint doesn't support SSE (returns 405).
- */
-async function mcpHttpConnect(name, url, headers = {}) {
-  console.log(`[mcp-sse] trying HTTP MCP for "${name}" at ${url}`)
-
-  // Step 1: Initialize via POST
-  let serverInfo
-  try {
-    const result = await mcpRequest(url, 'initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: { name: 's-loop', version: '1.0.0' },
-    }, headers)
-    serverInfo = result
-    console.log(`[mcp-sse] HTTP MCP "${name}" initialized:`, JSON.stringify(result?.serverInfo || result))
-  } catch (err) {
-    throw new Error(`HTTP MCP initialize failed for "${name}": ${err.message}`)
+function makeClient() {
+  const client = new Client(
+    { name: 's-loop', version: '1.0.0' },
+    { capabilities: {} }
+  )
+  client.onerror = (error) => {
+    console.warn(`[mcp] remote client error: ${error?.message || error}`)
   }
+  return client
+}
 
-  // Step 2: Send initialized notification (fire and forget)
+function makeStreamableTransport(url, headers) {
+  return new StreamableHTTPClientTransport(new URL(url), {
+    fetch: fetchWithHeaders(headers),
+  })
+}
+
+function makeSseTransport(url, headers) {
+  const fetch = fetchWithHeaders(headers)
+  return new SSEClientTransport(new URL(url), {
+    eventSourceInit: { fetch },
+    requestInit: {},
+    fetch,
+  })
+}
+
+async function closeTransport(transport) {
   try {
-    await mcpRequest(url, 'notifications/initialized', {}, headers)
+    if (typeof transport.terminateSession === 'function') {
+      await transport.terminateSession()
+    }
   } catch {
-    // Notification is fire-and-forget, ignore errors
+    // Some servers do not implement DELETE/terminate-session.
   }
-
-  // Step 3: Discover tools
-  let tools = []
   try {
-    const result = await mcpRequest(url, 'tools/list', {}, headers)
-    tools = (result?.tools || []).map(t => ({
-      name: t.name || 'unknown',
-      description: t.description || '',
-      inputSchema: t.inputSchema || {},
-    }))
-    console.log(`[mcp-sse] HTTP MCP "${name}" discovered ${tools.length} tool(s):`, tools.map(t => t.name).join(', '))
-  } catch (err) {
-    console.warn(`[mcp-sse] HTTP MCP "${name}" tools/list failed: ${err.message}`)
-  }
-
-  // Store connection (no SSE to manage)
-  connections.set(name, {
-    endpoint: url,
-    tools,
-    serverInfo,
-    headers,
-    transport: 'http',
-  })
-
-  return { tools, serverInfo }
-}
-
-// ── Public API ───────────────────────────────────────────────
-
-/**
- * Connect to an MCP server.
- * Tries in order:
- *  1. HTTP POST (direct JSON-RPC) — works for most remote MCP endpoints
- *  2. SSE (Server-Sent Events) — for streaming endpoints
- * @param {string} name - Server name/id
- * @param {string} url - Server URL
- * @param {object} headers - Optional HTTP headers (e.g. Authorization)
- * @returns {Promise<{ tools: Array }>}
- */
-export async function connectSseMcpServer(name, url, headers = {}) {
-  // Disconnect existing connection if any
-  if (connections.has(name)) {
-    await disconnectSseMcpServer(name)
-  }
-
-  console.log(`[mcp-sse] connecting to "${name}" at ${url}`)
-
-  // Try HTTP MCP first (direct POST JSON-RPC) — works for most servers
-  try {
-    return await mcpHttpConnect(name, url, headers)
-  } catch (err) {
-    console.log(`[mcp-sse] HTTP MCP failed for "${name}": ${err.message}`)
-    console.log(`[mcp-sse] falling back to SSE transport for "${name}"`)
-  }
-
-  // Fall back to SSE transport
-  let sseResult
-  try {
-    sseResult = await sseConnect(url, headers)
-  } catch (err) {
-    throw new Error(`SSE connect failed for "${name}": ${err.message}`)
-  }
-
-  const { endpoint: postEndpoint, abortController, req: sseReq } = sseResult
-  console.log(`[mcp-sse] "${name}" SSE connected, POST endpoint: ${postEndpoint}`)
-
-  // Step 2: Initialize via POST
-  let serverInfo
-  try {
-    const result = await mcpRequest(postEndpoint, 'initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: { name: 's-loop', version: '1.0.0' },
-    }, headers)
-    serverInfo = result
-    console.log(`[mcp-sse] "${name}" initialized:`, JSON.stringify(result?.serverInfo || result))
-  } catch (err) {
-    abortController.abort()
-    throw new Error(`Initialize failed for "${name}": ${err.message}`)
-  }
-
-  // Step 3: Send initialized notification (fire and forget)
-  try {
-    await mcpRequest(postEndpoint, 'notifications/initialized', {}, headers)
+    await transport.close()
   } catch {
-    // Notification is fire-and-forget, ignore errors
+    // The connection may already be closed after a failed handshake.
   }
+}
 
-  // Step 4: Discover tools
-  let tools = []
+async function listAll(client, method) {
+  const items = []
+  let cursor
+  do {
+    const result = method === 'tools'
+      ? await client.listTools(cursor ? { cursor } : undefined)
+      : await client.listResources(cursor ? { cursor } : undefined)
+    items.push(...(result[method] || []))
+    cursor = result.nextCursor
+  } while (cursor)
+  return items
+}
+
+async function discover(client) {
+  const tools = await listAll(client, 'tools')
+  let resources = []
   try {
-    const result = await mcpRequest(postEndpoint, 'tools/list', {}, headers)
-    tools = (result?.tools || []).map(t => ({
-      name: t.name || 'unknown',
-      description: t.description || '',
-      inputSchema: t.inputSchema || {},
-    }))
-    console.log(`[mcp-sse] "${name}" discovered ${tools.length} tool(s):`, tools.map(t => t.name).join(', '))
-  } catch (err) {
-    console.warn(`[mcp-sse] "${name}" tools/list failed: ${err.message}`)
+    resources = await listAll(client, 'resources')
+  } catch (error) {
+    // A server may expose tools without resources/list.
+    console.warn(`[mcp] resources/list unavailable: ${error?.message || error}`)
   }
+  return { tools, resources }
+}
 
-  // Store connection
-  connections.set(name, {
-    endpoint: postEndpoint,
-    tools,
-    serverInfo,
-    sseAbort: abortController,
-    sseReq,
-    headers,
-  })
-
-  return { tools, serverInfo }
+async function connectWithTransport(name, transport, transportType) {
+  const client = makeClient()
+  try {
+    await client.connect(transport)
+    const { tools, resources } = await discover(client)
+    const connection = {
+      name,
+      client,
+      transport,
+      transportType,
+      tools,
+      resources,
+      serverInfo: client.getServerVersion?.() || null,
+    }
+    connections.set(name, connection)
+    console.log(`[mcp] "${name}" connected via ${transportType}; ${tools.length} tool(s)`)
+    return connection
+  } catch (error) {
+    await closeTransport(transport)
+    throw error
+  }
 }
 
 /**
- * Disconnect from an SSE MCP server.
+ * Connect to a remote MCP server.
+ *
+ * `preferredTransport` is only a hint for imported configs. `sse` forces the
+ * legacy transport; `http` and omitted values use modern-first fallback.
  */
+export async function connectSseMcpServer(name, url, headers = {}, preferredTransport = 'http') {
+  if (!name || !url) throw new Error('MCP server name and URL are required')
+  if (!/^https?:\/\//i.test(url)) throw new Error(`Unsupported MCP URL: ${url}`)
+
+  await disconnectSseMcpServer(name)
+  const safeHeaders = normalizeHeaders(headers)
+
+  if (preferredTransport === 'sse') {
+    try {
+      const connection = await connectWithTransport(name, makeSseTransport(url, safeHeaders), 'sse')
+      return serializeConnection(connection)
+    } catch (error) {
+      throw new Error(`Legacy SSE connection failed for "${name}": ${error?.message || error}`)
+    }
+  }
+
+  let modernError
+  try {
+    const connection = await connectWithTransport(name, makeStreamableTransport(url, safeHeaders), 'streamable-http')
+    return serializeConnection(connection)
+  } catch (error) {
+    modernError = error
+    console.warn(`[mcp] Streamable HTTP failed for "${name}", trying legacy SSE: ${error?.message || error}`)
+  }
+
+  try {
+    const connection = await connectWithTransport(name, makeSseTransport(url, safeHeaders), 'sse')
+    return serializeConnection(connection)
+  } catch (sseError) {
+    throw new Error(
+      `Remote MCP connection failed for "${name}". ` +
+      `Streamable HTTP: ${modernError?.message || modernError}; ` +
+      `legacy SSE: ${sseError?.message || sseError}`
+    )
+  }
+}
+
+function serializeTool(tool) {
+  return {
+    name: tool.name || 'unknown',
+    description: tool.description || '',
+    inputSchema: tool.inputSchema || {},
+  }
+}
+
+function serializeResource(resource) {
+  return {
+    name: resource.name || resource.title || resource.uri || 'resource',
+    uri: resource.uri || '',
+    description: resource.description || '',
+    mimeType: resource.mimeType || '',
+  }
+}
+
+function serializeConnection(connection) {
+  return {
+    transport: connection.transportType,
+    tools: connection.tools.map(serializeTool),
+    resources: connection.resources.map(serializeResource),
+    serverInfo: connection.serverInfo,
+  }
+}
+
 export async function disconnectSseMcpServer(name) {
-  const conn = connections.get(name)
-  if (!conn) return
-
-  console.log(`[mcp-sse] disconnecting "${name}"`)
-
-  // Try graceful shutdown
-  try {
-    await mcpRequest(conn.endpoint, 'shutdown', {}, conn.headers || {})
-  } catch {}
-
-  // Close SSE connection (HTTP transport doesn't have one)
-  try { conn.sseAbort?.abort() } catch {}
-  try { conn.sseReq?.destroy() } catch {}
-
+  const connection = connections.get(name)
+  if (!connection) return
   connections.delete(name)
-  console.log(`[mcp-sse] "${name}" disconnected`)
+  await closeTransport(connection.transport)
+  console.log(`[mcp] "${name}" disconnected`)
 }
 
-/**
- * Call a tool on an SSE MCP server.
- */
 export async function callSseMcpTool(serverName, toolName, args) {
-  const conn = connections.get(serverName)
-  if (!conn) throw new Error(`SSE MCP server "${serverName}" not connected`)
-
-  console.log(`[mcp-sse] calling "${serverName}" / "${toolName}"`)
+  const connection = connections.get(serverName)
+  if (!connection) throw new Error(`Remote MCP server "${serverName}" is not connected`)
   try {
-    const result = await mcpRequest(conn.endpoint, 'tools/call', {
+    return await connection.client.callTool({
       name: toolName,
       arguments: args || {},
-    }, conn.headers || {})
-    return result
-  } catch (err) {
-    throw new Error(`MCP tool call "${serverName}/${toolName}" failed: ${err.message}`)
+    })
+  } catch (error) {
+    throw new Error(`MCP tool call "${serverName}/${toolName}" failed: ${error?.message || error}`)
   }
 }
 
-/**
- * Get all tools from all connected SSE MCP servers.
- * Returns tool definitions compatible with pi-agent-core's tool format.
- */
 export function getAllSseMcpTools() {
   const all = []
-
-  for (const [name, conn] of connections) {
-    for (const tool of conn.tools) {
+  for (const [serverName, connection] of connections) {
+    const safeServerName = serverName.replace(/[^a-zA-Z0-9]/g, '_')
+    for (const tool of connection.tools) {
       const toolName = tool.name
-      // Sanitize server name for tool name: replace non-alphanumeric chars with underscore
-      const safeServerName = name.replace(/[^a-zA-Z0-9]/g, '_')
       all.push({
         name: `mcp_sse_${safeServerName}_${toolName}`,
-        label: `${name}/${toolName}`,
-        description: tool.description || `${name} MCP tool: ${toolName}`,
+        label: `${serverName}/${toolName}`,
+        description: tool.description || `${serverName} MCP tool: ${toolName}`,
         parameters: tool.inputSchema || { type: 'object', properties: {} },
-        _mcpServer: name,
+        _mcpServer: serverName,
         _mcpToolName: toolName,
         executionMode: 'parallel',
-        execute: async (_toolCallId, params, signal) => {
+        execute: async (_toolCallId, params) => {
           try {
-            const result = await callSseMcpTool(name, toolName, params)
+            const result = await callSseMcpTool(serverName, toolName, params)
             return {
-              content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
+              content: result?.content || [{ type: 'text', text: JSON.stringify(result, null, 2) }],
               details: result,
+              ...(result?.isError ? { isError: true } : {}),
             }
-          } catch (err) {
+          } catch (error) {
             return {
-              content: [{ type: 'text', text: `Error: ${err.message}` }],
+              content: [{ type: 'text', text: `Error: ${error?.message || error}` }],
               details: {},
               isError: true,
             }
@@ -458,38 +246,25 @@ export function getAllSseMcpTools() {
       })
     }
   }
-
   return all
 }
 
-/**
- * Get the list of connected SSE MCP servers and their tools.
- */
 export function getSseMcpStatus() {
-  const list = []
-  for (const [name, conn] of connections) {
-    list.push({
-      name,
-      connected: true,
-      tools: conn.tools.map(t => ({ name: t.name, description: t.description })),
-      endpoint: conn.endpoint,
-    })
-  }
-  return list
+  return [...connections.values()].map((connection) => ({
+    name: connection.name,
+    connected: true,
+    status: 'connected',
+    transport: connection.transportType,
+    tools: connection.tools.map(serializeTool),
+    resources: connection.resources.map(serializeResource),
+    serverInfo: connection.serverInfo,
+  }))
 }
 
-/**
- * Check if an SSE MCP server is connected.
- */
 export function isSseMcpConnected(name) {
   return connections.has(name)
 }
 
-/**
- * Disconnect all SSE MCP servers.
- */
 export function disconnectAllSseMcp() {
-  for (const [name] of connections) {
-    disconnectSseMcpServer(name).catch(() => {})
-  }
+  for (const name of connections.keys()) disconnectSseMcpServer(name).catch(() => {})
 }

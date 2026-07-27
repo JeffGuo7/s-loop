@@ -4,6 +4,7 @@
     "@earendil-works/pi-agent-core": "0.80.6",
     "@earendil-works/pi-ai": "0.80.6",
     "@earendil-works/pi-coding-agent": "0.80.6",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "cheerio": "^1.2.0",
     "cron-parser": "^4.9.0",
     "jiti": "^2.7.0",

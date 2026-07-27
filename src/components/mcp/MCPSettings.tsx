@@ -281,14 +281,15 @@ function MCPServerCard({
   );
 }
 
-// Auto-detect MCP transport type: if url is present, default to sse;
-// otherwise fall back to stdio (which is the traditional MCP transport).
+// Auto-detect MCP transport type. URL-based configs use modern Streamable HTTP
+// first; the backend transparently falls back to legacy SSE when necessary.
 function inferType(server: Record<string, unknown>): MCPTransportType {
-  if (typeof server.type === 'string' && (server.type === 'sse' || server.type === 'http' || server.type === 'stdio')) {
-    return server.type as MCPTransportType;
+  const configuredType = server.type || server.transport;
+  if (typeof configuredType === 'string' && (configuredType === 'sse' || configuredType === 'http' || configuredType === 'stdio')) {
+    return configuredType as MCPTransportType;
   }
   if (server.url && typeof server.url === 'string' && server.url.startsWith('http')) {
-    return 'sse';
+    return 'http';
   }
   return 'stdio';
 }
@@ -332,6 +333,7 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
           args: server.args as string[] | undefined,
           url: server.url as string | undefined,
           env: server.env as Record<string, string> | undefined,
+          headers: server.headers as Record<string, string> | undefined,
           disabled: false,
         });
       }
@@ -343,10 +345,11 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
   if (obj.name) {
     results.push({
       name: obj.name as string,
-      type: obj.url ? 'sse' : ((obj.type as MCPTransportType) || 'stdio'),
+      type: inferType(obj),
       command: obj.command as string | undefined,
       args: obj.args as string[] | undefined,
       url: obj.url as string | undefined,
+      headers: obj.headers as Record<string, string> | undefined,
       env: obj.env as Record<string, string> | undefined,
       disabled: false,
     });
