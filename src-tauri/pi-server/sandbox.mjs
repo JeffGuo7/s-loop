@@ -81,22 +81,64 @@ export function resolveSandboxPath(filePath, workspaceDir) {
   return canonicalizeWithExistingAncestor(path.resolve(base, expandHome(filePath.trim())))
 }
 
-export function getSandboxRoots(workspaceDir, accessiblePaths = []) {
-  const rawRoots = [workspaceDir, ...(Array.isArray(accessiblePaths) ? accessiblePaths : [])]
-    .filter((value) => typeof value === 'string' && value.trim())
-  return [...new Set(rawRoots.map((root) => resolveSandboxPath(root, workspaceDir)).filter(Boolean))]
+export function getSandboxRoots(workspaceDir, workspaceRoots = []) {
+  const rawRoots = []
+  if (typeof workspaceDir === 'string' && workspaceDir.trim()) {
+    rawRoots.push({
+      path: workspaceDir,
+      access: 'read-write',
+      primary: true,
+      source: 'workspace',
+    })
+  }
+  for (const value of Array.isArray(workspaceRoots) ? workspaceRoots : []) {
+    if (typeof value === 'string' && value.trim()) {
+      // Legacy accessiblePaths entries implicitly allowed reads and writes.
+      rawRoots.push({ path: value, access: 'read-write', primary: false, source: 'user-grant' })
+    } else if (value && typeof value === 'object' && typeof value.path === 'string' && value.path.trim()) {
+      rawRoots.push({
+        path: value.path,
+        access: value.access === 'read-write' ? 'read-write' : 'read',
+        primary: value.primary === true,
+        source: value.source || 'user-grant',
+      })
+    }
+  }
+
+  const rootsByPath = new Map()
+  for (const rawRoot of rawRoots) {
+    const resolvedPath = resolveSandboxPath(rawRoot.path, workspaceDir)
+    if (!resolvedPath) continue
+    const key = comparable(resolvedPath)
+    const existing = rootsByPath.get(key)
+    if (existing) {
+      if (rawRoot.access === 'read-write') existing.access = 'read-write'
+      if (rawRoot.primary) existing.primary = true
+      continue
+    }
+    rootsByPath.set(key, { ...rawRoot, path: resolvedPath })
+  }
+  return [...rootsByPath.values()]
 }
 
-export function checkWorkspacePath(filePath, workspaceDir, accessiblePaths = []) {
+export function checkWorkspacePath(filePath, workspaceDir, workspaceRoots = [], requiredAccess = 'read') {
   const candidate = resolveSandboxPath(filePath, workspaceDir)
   if (!candidate) return { allowed: false, reason: 'A valid file path is required' }
 
-  const roots = getSandboxRoots(workspaceDir, accessiblePaths)
+  const roots = getSandboxRoots(workspaceDir, workspaceRoots)
   if (roots.length === 0) {
     return { allowed: false, reason: 'No workspace is configured for file access' }
   }
-  if (roots.some((root) => isWithin(candidate, root))) {
-    return { allowed: true, resolvedPath: candidate }
+  const matchingRoots = roots.filter((root) => isWithin(candidate, root.path))
+  if (matchingRoots.length > 0) {
+    if (requiredAccess !== 'read-write' || matchingRoots.some((root) => root.access === 'read-write')) {
+      return { allowed: true, resolvedPath: candidate }
+    }
+    return {
+      allowed: false,
+      resolvedPath: candidate,
+      reason: `Write blocked: path is granted as read-only: ${filePath}`,
+    }
   }
   return {
     allowed: false,
@@ -140,9 +182,9 @@ export function getToolPathArguments(toolName, args = {}) {
   return values
 }
 
-export function checkToolWorkspace(toolName, args, workspaceDir, accessiblePaths = []) {
+export function checkToolWorkspace(toolName, args, workspaceDir, workspaceRoots = [], requiredAccess = 'read') {
   for (const filePath of getToolPathArguments(toolName, args)) {
-    const result = checkWorkspacePath(filePath, workspaceDir, accessiblePaths)
+    const result = checkWorkspacePath(filePath, workspaceDir, workspaceRoots, requiredAccess)
     if (!result.allowed) return result
   }
   return { allowed: true }

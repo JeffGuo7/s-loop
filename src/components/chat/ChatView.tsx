@@ -294,7 +294,7 @@ export function ChatView() {
         thinkingLevel: 'medium',
         apiKey: providerConfig?.apiKey,
         workspaceDir: workspaceDir ?? undefined,
-        accessiblePaths: activeAgent?.accessiblePaths || [],
+        workspaceRoots: activeAgent?.workspaceRoots || [],
         webSearchConfig: useWebSearchStore.getState().getActiveConfig(),
         tools: mcpToolDefs,
         permissionMode: activeAgent?.permissionMode,

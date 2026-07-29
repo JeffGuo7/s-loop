@@ -25,6 +25,17 @@ export interface SlashCommand {
   prompt: string
 }
 
+export type WorkspaceAccess = 'read' | 'read-write'
+export type WorkspaceRootSource = 'workspace' | 'user-grant' | 'task'
+
+export interface WorkspaceRoot {
+  id: string
+  path: string
+  access: WorkspaceAccess
+  primary: boolean
+  source: WorkspaceRootSource
+}
+
 export interface Agent {
   id: string
   name: string
@@ -35,7 +46,7 @@ export interface Agent {
   skills: string[]
   mcpTools: AgentMCPTool[]
   mcpServers: string[]
-  accessiblePaths: string[]
+  workspaceRoots: WorkspaceRoot[]
   permissionMode: PermissionAction
   permissionRules: PermissionRule
   slashCommands: SlashCommand[]
@@ -60,6 +71,16 @@ export interface AgentStore {
   addMCPServerToAgent: (agentId: string, serverName: string) => void
   removeMCPServerFromAgent: (agentId: string, serverName: string) => void
 
-  addAccessiblePath: (agentId: string, path: string) => void
-  removeAccessiblePath: (agentId: string, path: string) => void
+  addWorkspaceRoot: (
+    agentId: string,
+    path: string,
+    access?: WorkspaceAccess,
+    source?: WorkspaceRootSource,
+  ) => void
+  updateWorkspaceRootAccess: (
+    agentId: string,
+    rootId: string,
+    access: WorkspaceAccess,
+  ) => void
+  removeWorkspaceRoot: (agentId: string, rootId: string) => void
 }

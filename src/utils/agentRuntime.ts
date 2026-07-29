@@ -1,5 +1,6 @@
 import { useAgentStore } from '../stores/agentStore'
 import { useSkillStore } from '../stores/skillStore'
+import type { WorkspaceRoot } from '../types/agent'
 
 /**
  * Runtime config derived from the active agent, synced to the backend so
@@ -18,7 +19,7 @@ export interface AgentRuntimeConfig {
   agentModel?: string
   permissionMode?: string
   permissionRules?: Record<string, unknown>
-  accessiblePaths?: string[]
+  workspaceRoots?: WorkspaceRoot[]
 }
 
 export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
@@ -52,6 +53,6 @@ export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
     agentModel: activeAgent?.model || undefined,
     permissionMode: activeAgent?.permissionMode,
     permissionRules: activeAgent?.permissionRules,
-    accessiblePaths: activeAgent?.accessiblePaths || [],
+    workspaceRoots: activeAgent?.workspaceRoots || [],
   }
 }

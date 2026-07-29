@@ -59,11 +59,16 @@ export function evaluateToolCall(toolCall, config = {}) {
   }
 
   if (!isMcp) {
+    const workspaceRoots = [
+      ...(Array.isArray(config.workspaceRoots) ? config.workspaceRoots : []),
+      ...(Array.isArray(config.accessiblePaths) ? config.accessiblePaths : []),
+    ]
     const workspace = checkToolWorkspace(
       toolName,
       args,
       config.workspaceDir || process.cwd(),
-      config.accessiblePaths || [],
+      workspaceRoots,
+      WRITE_CATEGORIES.has(category) ? 'read-write' : 'read',
     )
     if (!workspace.allowed) return workspace
 

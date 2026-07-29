@@ -66,6 +66,7 @@ const runtimeConfig = {
   modelID: 'claude-sonnet-4-20250514',
   apiKey: process.env.PI_API_KEY || '',
   workspaceDir: undefined,
+  workspaceRoots: [],
   providerConfig: {},
 }
 
@@ -238,6 +239,7 @@ function createDelegateTaskTool({ runtimeConfig, resolveModel, getTools, project
           modelID: runtimeConfig.modelID,
           apiKey: runtimeConfig.apiKey,
           workspaceDir: wrapper?.config?.workspaceDir || runtimeConfig.workspaceDir,
+          workspaceRoots: wrapper?.config?.workspaceRoots || runtimeConfig.workspaceRoots || [],
           accessiblePaths: wrapper?.config?.accessiblePaths || [],
           webSearchConfig: wrapper?.config?.webSearchConfig,
           providerConfig: runtimeConfig.providerConfig,
@@ -342,6 +344,7 @@ function createDelegateParallelTool({ runtimeConfig, resolveModel, getTools, pro
           modelID: runtimeConfig.modelID,
           apiKey: runtimeConfig.apiKey,
           workspaceDir: wrapper?.config?.workspaceDir || runtimeConfig.workspaceDir,
+          workspaceRoots: wrapper?.config?.workspaceRoots || runtimeConfig.workspaceRoots || [],
           accessiblePaths: wrapper?.config?.accessiblePaths || [],
           webSearchConfig: wrapper?.config?.webSearchConfig,
           providerConfig: runtimeConfig.providerConfig,
@@ -416,6 +419,7 @@ function createDelegateChainTool({ runtimeConfig, resolveModel, getTools, projec
           modelID: runtimeConfig.modelID,
           apiKey: runtimeConfig.apiKey,
           workspaceDir: wrapper?.config?.workspaceDir || runtimeConfig.workspaceDir,
+          workspaceRoots: wrapper?.config?.workspaceRoots || runtimeConfig.workspaceRoots || [],
           accessiblePaths: wrapper?.config?.accessiblePaths || [],
           webSearchConfig: wrapper?.config?.webSearchConfig,
           providerConfig: runtimeConfig.providerConfig,
@@ -900,6 +904,8 @@ createServer((req, res) => {
       runtimeConfig.agentModel = data.agentModel || undefined
       runtimeConfig.permissionMode = data.permissionMode || undefined
       runtimeConfig.permissionRules = data.permissionRules || undefined
+      runtimeConfig.workspaceRoots = Array.isArray(data.workspaceRoots) ? data.workspaceRoots : []
+      // Keep accepting version 0 clients during a rolling upgrade.
       runtimeConfig.accessiblePaths = Array.isArray(data.accessiblePaths) ? data.accessiblePaths : []
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ ok: true }))
@@ -1719,7 +1725,7 @@ createServer((req, res) => {
   req.on('end', async () => {
     const wrapper = await getOrCreateWrapper(sessionId)
     if (!wrapper) { res.writeHead(404); res.end('Session not found'); return }
-    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, accessiblePaths, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
+    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, workspaceRoots, accessiblePaths, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
     console.log('[pi-server] session message — permissionMode:', permissionMode, 'permissionRules:', JSON.stringify(permissionRules))
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
@@ -1844,6 +1850,7 @@ createServer((req, res) => {
         wrapper.toolGuard = new ToolGuard()
         wrapper.config = {
           workspaceDir,
+          workspaceRoots: Array.isArray(workspaceRoots) ? workspaceRoots : [],
           accessiblePaths: Array.isArray(accessiblePaths) ? accessiblePaths : [],
           webSearchConfig,
           permissionMode,
@@ -1866,6 +1873,7 @@ createServer((req, res) => {
         if (apiKey) wrapper.apiKey = apiKey
         wrapper.config = {
           workspaceDir,
+          workspaceRoots: Array.isArray(workspaceRoots) ? workspaceRoots : [],
           accessiblePaths: Array.isArray(accessiblePaths) ? accessiblePaths : [],
           webSearchConfig,
           permissionMode,

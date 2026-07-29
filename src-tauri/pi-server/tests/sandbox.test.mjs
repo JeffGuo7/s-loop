@@ -30,6 +30,76 @@ test('explicit accessible paths extend the workspace sandbox', () => {
   }
 })
 
+test('workspace roots enforce read-only and read-write grants', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const workspace = path.join(base, 'workspace')
+  const readOnly = path.join(base, 'read-only')
+  const writable = path.join(base, 'writable')
+  fs.mkdirSync(workspace)
+  fs.mkdirSync(readOnly)
+  fs.mkdirSync(writable)
+  try {
+    const roots = [
+      { path: readOnly, access: 'read', source: 'user-grant' },
+      { path: writable, access: 'read-write', source: 'user-grant' },
+    ]
+    assert.equal(checkWorkspacePath(path.join(readOnly, 'data.json'), workspace, roots, 'read').allowed, true)
+    assert.equal(checkWorkspacePath(path.join(readOnly, 'data.json'), workspace, roots, 'read-write').allowed, false)
+    assert.equal(checkWorkspacePath(path.join(writable, 'data.json'), workspace, roots, 'read-write').allowed, true)
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+})
+
+test('read-only roots block writes before agent permission mode is evaluated', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const workspace = path.join(base, 'workspace')
+  const shared = path.join(base, 'shared')
+  fs.mkdirSync(workspace)
+  fs.mkdirSync(shared)
+  try {
+    const config = {
+      workspaceDir: workspace,
+      workspaceRoots: [{ path: shared, access: 'read' }],
+      permissionMode: 'allow',
+    }
+    const read = evaluateToolCall(
+      { name: 'read', arguments: { path: path.join(shared, 'data.json') } },
+      config,
+    )
+    const write = evaluateToolCall(
+      { name: 'write', arguments: { path: path.join(shared, 'data.json') } },
+      config,
+    )
+    assert.equal(read.allowed, true)
+    assert.equal(write.allowed, false)
+    assert.match(write.reason, /read-only/)
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+})
+
+test('legacy string roots retain read-write behavior', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const workspace = path.join(base, 'workspace')
+  const shared = path.join(base, 'shared')
+  fs.mkdirSync(workspace)
+  fs.mkdirSync(shared)
+  try {
+    const result = evaluateToolCall(
+      { name: 'write', arguments: { path: path.join(shared, 'data.json') } },
+      {
+        workspaceDir: workspace,
+        accessiblePaths: [shared],
+        permissionMode: 'allow',
+      },
+    )
+    assert.equal(result.allowed, true)
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+})
+
 test('workspace sandbox resolves symlinks before checking the boundary', (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
   const workspace = path.join(base, 'workspace')

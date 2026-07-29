@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Agent, AgentStore } from '../types/agent'
+import {
+  createWorkspaceRoot,
+  migrateAgentStoreState,
+  migrateAgentWorkspaceRoots,
+} from '../utils/workspaceRoots'
 
 function generateId(): string {
   return `agent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
@@ -25,8 +30,8 @@ function createDefaultAgent(): Agent {
     skills: [],
     mcpTools: [],
     mcpServers: [],
-    accessiblePaths: [],
-    permissionMode: 'allow',
+    workspaceRoots: [],
+    permissionMode: 'ask',
     permissionRules: {},
     slashCommands: [],
     createdAt: Date.now(),
@@ -53,8 +58,8 @@ export const useAgentStore = create<AgentStore>()(
           skills: [],
           mcpTools: [],
           mcpServers: [],
-          accessiblePaths: [],
-          permissionMode: 'allow',
+          workspaceRoots: [],
+          permissionMode: 'ask',
           permissionRules: {},
           slashCommands: [],
           createdAt: Date.now(),
@@ -100,6 +105,7 @@ export const useAgentStore = create<AgentStore>()(
           ...source,
           id: generateId(),
           name: `${source.name} (copy)`,
+          workspaceRoots: source.workspaceRoots.map((root) => ({ ...root })),
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }
@@ -187,21 +193,50 @@ export const useAgentStore = create<AgentStore>()(
         }))
       },
 
-      addAccessiblePath: (agentId, path) => {
+      addWorkspaceRoot: (agentId, path, access = 'read', source = 'user-grant') => {
+        const root = createWorkspaceRoot(path, access, source)
+        if (!root.path) return
+        set((state) => ({
+          agents: state.agents.map((a) => {
+            if (a.id !== agentId) return a
+            const existing = a.workspaceRoots.find((candidate) => candidate.path === root.path)
+            const workspaceRoots = existing
+              ? a.workspaceRoots.map((candidate) =>
+                  candidate.id === existing.id
+                    ? { ...candidate, access, source }
+                    : candidate
+                )
+              : [...a.workspaceRoots, root]
+            return { ...a, workspaceRoots, updatedAt: Date.now() }
+          }),
+        }))
+      },
+
+      updateWorkspaceRootAccess: (agentId, rootId, access) => {
         set((state) => ({
           agents: state.agents.map((a) =>
             a.id === agentId
-              ? { ...a, accessiblePaths: a.accessiblePaths.includes(path) ? a.accessiblePaths : [...a.accessiblePaths, path], updatedAt: Date.now() }
+              ? {
+                  ...a,
+                  workspaceRoots: a.workspaceRoots.map((root) =>
+                    root.id === rootId ? { ...root, access } : root
+                  ),
+                  updatedAt: Date.now(),
+                }
               : a
           ),
         }))
       },
 
-      removeAccessiblePath: (agentId, path) => {
+      removeWorkspaceRoot: (agentId, rootId) => {
         set((state) => ({
           agents: state.agents.map((a) =>
             a.id === agentId
-              ? { ...a, accessiblePaths: a.accessiblePaths.filter((p) => p !== path), updatedAt: Date.now() }
+              ? {
+                  ...a,
+                  workspaceRoots: a.workspaceRoots.filter((root) => root.id !== rootId),
+                  updatedAt: Date.now(),
+                }
               : a
           ),
         }))
@@ -209,12 +244,15 @@ export const useAgentStore = create<AgentStore>()(
     }),
     {
       name: 'snotra-agents',
+      version: 1,
+      migrate: (persisted) => migrateAgentStoreState(persisted),
       partialize: (state) => ({
         agents: state.agents,
         activeAgentId: state.activeAgentId,
       }),
       merge: (persisted, current) => {
         const merged = { ...current, ...(persisted as Partial<AgentStore>) }
+        merged.agents = merged.agents?.map((agent) => migrateAgentWorkspaceRoots(agent))
         // Guarantee the default agent always exists and stays first
         const hasDefault = merged.agents?.some((a) => a.id === DEFAULT_AGENT_ID)
         if (!merged.agents || merged.agents.length === 0) {

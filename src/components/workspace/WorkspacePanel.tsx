@@ -52,8 +52,8 @@ export function WorkspacePanel() {
   const removeSkillFromAgent = useAgentStore((s) => s.removeSkillFromAgent)
   const addMCPServerToAgent = useAgentStore((s) => s.addMCPServerToAgent)
   const removeMCPServerFromAgent = useAgentStore((s) => s.removeMCPServerFromAgent)
-  const addAccessiblePath = useAgentStore((s) => s.addAccessiblePath)
-  const removeAccessiblePath = useAgentStore((s) => s.removeAccessiblePath)
+  const addWorkspaceRoot = useAgentStore((s) => s.addWorkspaceRoot)
+  const removeWorkspaceRoot = useAgentStore((s) => s.removeWorkspaceRoot)
   const skills = useSkillStore((s) => s.skills)
   const skillMeta = useSkillStore((s) => s.skillMeta)
   const clawhubSearch = useSkillStore((s) => s.clawhubSearch)
@@ -64,7 +64,7 @@ export function WorkspacePanel() {
   const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null
   const visibleSkillNames = activeAgent?.skills ?? []
   const visibleServerNames = activeAgent?.mcpServers ?? []
-  const workspaceEntries = activeAgent?.accessiblePaths ?? []
+  const workspaceEntries = activeAgent?.workspaceRoots ?? []
   const providerModel = activeAgent?.model || providerConfigs[activeProvider]?.model || t('chat.status.noModel')
   const moduleStats = [
     { label: t('agentStudio.stats.skills'), value: String(visibleSkillNames.length) },
@@ -159,7 +159,7 @@ export function WorkspacePanel() {
   function handleAttachWorkspace() {
     if (!workspaceDir) return
     const target = ensureAgentTarget()
-    addAccessiblePath(target.id, workspaceDir)
+    addWorkspaceRoot(target.id, workspaceDir, 'read-write', 'workspace')
     setActiveAgent(target.id)
     setFeedback(t('agentStudio.feedback.workspaceAttached'))
   }
@@ -553,13 +553,15 @@ export function WorkspacePanel() {
                     />
                     <SimpleSection
                       title={t('agentStudio.assembly.workspacePaths')}
-                      value={workspaceEntries.length > 0 ? workspaceEntries.join(' · ') : t('agentStudio.assembly.emptyPaths')}
+                      value={workspaceEntries.length > 0
+                        ? workspaceEntries.map((root) => `${root.path} [${root.access === 'read-write' ? 'RW' : 'RO'}]`).join(' · ')
+                        : t('agentStudio.assembly.emptyPaths')}
                       icon={<MemoryGlyph className="h-4 w-4" />}
                       action={activeAgent && workspaceEntries.length > 0
                         ? {
                             label: t('common.clear'),
                             onClick: () => {
-                              workspaceEntries.forEach((path) => removeAccessiblePath(activeAgent.id, path))
+                              workspaceEntries.forEach((root) => removeWorkspaceRoot(activeAgent.id, root.id))
                               setFeedback(t('agentStudio.feedback.workspaceCleared'))
                             },
                           }

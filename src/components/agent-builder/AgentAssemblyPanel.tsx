@@ -89,8 +89,9 @@ export function AgentAssemblyPanel() {
   const removeMCPTool = useAgentStore((s) => s.removeMCPToolFromAgent)
   const addMCPServer = useAgentStore((s) => s.addMCPServerToAgent)
   const removeMCPServer = useAgentStore((s) => s.removeMCPServerFromAgent)
-  const addAccessiblePath = useAgentStore((s) => s.addAccessiblePath)
-  const removeAccessiblePath = useAgentStore((s) => s.removeAccessiblePath)
+  const addWorkspaceRoot = useAgentStore((s) => s.addWorkspaceRoot)
+  const updateWorkspaceRootAccess = useAgentStore((s) => s.updateWorkspaceRootAccess)
+  const removeWorkspaceRoot = useAgentStore((s) => s.removeWorkspaceRoot)
 
   const activeProvider = useAppStore((s) => s.activeProvider)
   const providerList = useAppStore((s) => s.providerList)
@@ -242,7 +243,7 @@ export function AgentAssemblyPanel() {
             <AddSlashCommandForm agentId={agent.id} />
           </div>
 
-          {/* Accessible Paths */}
+          {/* Workspace Roots */}
           <div className="rounded-xl bg-surface-secondary/20 border border-border-light/20 p-2.5">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[9px] font-black uppercase tracking-[0.15em] text-accent/60">
@@ -251,10 +252,25 @@ export function AgentAssemblyPanel() {
               <div className="flex-1 border-t border-border-light/30" />
             </div>
             <div className="flex flex-wrap gap-1">
-              {agent.accessiblePaths.map((p) => (
-                <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-secondary/60 text-[9px] font-mono text-text-secondary border border-border-light/20">
-                  {p}
-                  <button onClick={() => removeAccessiblePath(agent.id, p)} className="text-text-quaternary hover:text-red-500 ml-0.5">×</button>
+              {agent.workspaceRoots.map((root) => (
+                <span key={root.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-secondary/60 text-[9px] font-mono text-text-secondary border border-border-light/20">
+                  {root.path}
+                  <button
+                    onClick={() => updateWorkspaceRootAccess(
+                      agent.id,
+                      root.id,
+                      root.access === 'read' ? 'read-write' : 'read',
+                    )}
+                    className={`rounded px-1 text-[8px] font-bold ${
+                      root.access === 'read-write'
+                        ? 'bg-amber-500/15 text-amber-600'
+                        : 'bg-sky-500/15 text-sky-600'
+                    }`}
+                    title="Toggle read-only / read-write access"
+                  >
+                    {root.access === 'read-write' ? 'RW' : 'RO'}
+                  </button>
+                  <button onClick={() => removeWorkspaceRoot(agent.id, root.id)} className="text-text-quaternary hover:text-red-500 ml-0.5">×</button>
                 </span>
               ))}
               <button
@@ -262,10 +278,10 @@ export function AgentAssemblyPanel() {
                   try {
                     const { open } = await import('@tauri-apps/plugin-dialog')
                     const dir = await open({ directory: true, title: 'Select workspace path' })
-                    if (dir) addAccessiblePath(agent.id, dir)
+                    if (dir) addWorkspaceRoot(agent.id, dir, 'read')
                   } catch {
                     const p = prompt('Enter workspace path:')
-                    if (p) addAccessiblePath(agent.id, p)
+                    if (p) addWorkspaceRoot(agent.id, p, 'read')
                   }
                 }}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-secondary/40 text-[9px] text-text-quaternary hover:text-accent border border-dashed border-border-light/30 hover:border-accent/30 transition-all"
