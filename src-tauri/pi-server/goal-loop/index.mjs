@@ -9,6 +9,7 @@ import { buildGoalSystemPrompt } from './system-prompt.mjs'
 import { createRunSubagentTool } from './tools.mjs'
 import { evaluateToolCall } from '../execution-policy.mjs'
 import { buildToolSecurityIndex } from '../tool-security.mjs'
+import { createToolAuditTracker } from '../audit-store.mjs'
 
 const MAX_GOAL_TIMEOUT = 300_000  // 5 minutes
 
@@ -24,6 +25,7 @@ const MAX_GOAL_TIMEOUT = 300_000  // 5 minutes
  * @param {Function} [opts.persistFn] - called to persist goal state
  * @param {Function} [opts.requestToolApproval] - durable approval callback
  * @param {Function} [opts.onToolCallFinished] - approval completion callback
+ * @param {Object} [opts.auditContext] - surface/run correlation metadata
  */
 export async function runGoalLoop({
   goalState,
@@ -36,6 +38,7 @@ export async function runGoalLoop({
   persistFn,
   requestToolApproval,
   onToolCallFinished,
+  auditContext,
 }) {
   // 1. Resolve model
   const providerID = runtimeConfig.providerID || 'anthropic'
@@ -70,12 +73,17 @@ export async function runGoalLoop({
       ? (toolCall, decision) => authorize(toolCall, decision)
       : undefined,
     onToolCallFinished,
+    auditContext,
   })
   const tools = [...contextTools, runSubagentTool]
   const effectiveConfig = {
     ...runtimeConfig,
     toolSecurity: buildToolSecurityIndex(tools),
   }
+  const toolAudit = createToolAuditTracker(auditContext || {
+    surface: 'goal',
+    surfaceId: goalState.id,
+  })
 
   // 3. Build system prompt
   const systemPrompt = buildGoalSystemPrompt(goalState, projectDir)
@@ -118,9 +126,15 @@ export async function runGoalLoop({
     getApiKey: async () => apiKey,
     beforeToolCall: async ({ toolCall }) => {
       const decision = evaluateToolCall(toolCall, effectiveConfig)
-      if (decision.allowed) return undefined
+      toolAudit.decision(toolCall, decision)
+      if (decision.allowed) {
+        toolAudit.started(toolCall)
+        return undefined
+      }
       if (decision.approvalRequired && requestToolApproval) {
-        return await authorize(toolCall, decision)
+        const result = await authorize(toolCall, decision)
+        if (!result?.block) toolAudit.started(toolCall)
+        return result
       }
       const reason = decision.approvalRequired
         ? `${decision.reason}; interactive approval is unavailable`
@@ -128,6 +142,7 @@ export async function runGoalLoop({
       return { block: true, reason }
     },
     afterToolCall: async ({ result, toolCall }) => {
+      toolAudit.finished(toolCall, result)
       onToolCallFinished?.(toolCall, result)
       return undefined
     },

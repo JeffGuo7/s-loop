@@ -42,6 +42,15 @@ function eventHash(previousHash, event) {
     .digest('hex')
 }
 
+function toolFingerprint(toolCall) {
+  return createHash('sha256')
+    .update(JSON.stringify(stableValue({
+      toolName: toolCall?.name || '',
+      args: toolCall?.arguments || {},
+    })))
+    .digest('hex')
+}
+
 function readEvents() {
   if (!auditFile || !existsSync(auditFile)) return []
   return readFileSync(auditFile, 'utf-8')
@@ -121,4 +130,68 @@ export function listAuditEvents({ limit = 200, surface, runId } = {}) {
     .filter((event) => !runId || event.runId === runId)
     .slice(-safeLimit)
     .reverse()
+}
+
+export function createToolAuditTracker(contextProvider) {
+  const started = new Map()
+  const getContext = () => {
+    const value = typeof contextProvider === 'function'
+      ? contextProvider()
+      : contextProvider
+    return value || {}
+  }
+  const baseEvent = (toolCall) => {
+    const context = getContext()
+    return {
+      surface: context.surface || 'session',
+      surfaceId: context.surfaceId,
+      runId: context.runId,
+      toolCallId: toolCall?.id,
+      toolName: toolCall?.name,
+      fingerprint: toolFingerprint(toolCall),
+      actor: context.actor || context.agentId || 'agent',
+    }
+  }
+
+  return {
+    decision(toolCall, decision) {
+      return appendAuditEvent('tool.decision', {
+        ...baseEvent(toolCall),
+        outcome: decision.outcome,
+        details: {
+          risk: decision.risk,
+          source: decision.source,
+          matchedRule: decision.matchedRule,
+          resolvedTargets: decision.resolvedTargets,
+          reason: decision.reason,
+          args: toolCall?.arguments || {},
+        },
+      })
+    },
+
+    started(toolCall) {
+      const event = baseEvent(toolCall)
+      const key = toolCall?.id || event.fingerprint
+      started.set(key, event)
+      return appendAuditEvent('tool.execution_started', {
+        ...event,
+        outcome: 'running',
+      })
+    },
+
+    finished(toolCall, result) {
+      const event = baseEvent(toolCall)
+      const key = toolCall?.id || event.fingerprint
+      if (!started.has(key)) return null
+      started.delete(key)
+      const failed = result?.isError === true
+      return appendAuditEvent(
+        failed ? 'tool.execution_failed' : 'tool.execution_completed',
+        {
+          ...event,
+          outcome: failed ? 'failed' : 'completed',
+        },
+      )
+    },
+  }
 }

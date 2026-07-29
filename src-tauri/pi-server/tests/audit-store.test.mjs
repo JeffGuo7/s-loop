@@ -6,6 +6,7 @@ import test from 'node:test'
 
 import {
   appendAuditEvent,
+  createToolAuditTracker,
   initAuditStore,
   listAuditEvents,
   verifyAuditTrail,
@@ -107,6 +108,50 @@ test('durable approval lifecycle emits linked audit events', () => {
     ])
     assert.ok(events.every((event) => event.approvalId === approval.id))
     assert.equal(verifyAuditTrail().valid, true)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('tool audit tracks policy and execution without persisting result content', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-audit-tool-'))
+  try {
+    initAuditStore(root)
+    const tracker = createToolAuditTracker({
+      surface: 'goal',
+      surfaceId: 'goal-tool',
+      runId: 'run-tool',
+    })
+    const toolCall = {
+      id: 'tool-call-1',
+      name: 'bash',
+      arguments: {
+        command: 'npm test',
+        env: { API_TOKEN: 'must-not-leak' },
+      },
+    }
+    tracker.decision(toolCall, {
+      outcome: 'allow',
+      risk: 'exec',
+      source: 'builtin',
+      matchedRule: 'mode:allow',
+      resolvedTargets: [],
+      reason: 'Allowed by policy',
+    })
+    tracker.started(toolCall)
+    tracker.finished(toolCall, {
+      isError: false,
+      content: [{ type: 'text', text: 'private tool output must not be audited' }],
+    })
+
+    const events = listAuditEvents({ runId: 'run-tool' }).reverse()
+    assert.deepEqual(events.map((event) => event.type), [
+      'tool.decision',
+      'tool.execution_started',
+      'tool.execution_completed',
+    ])
+    const raw = fs.readFileSync(path.join(root, 'audit', 'events.jsonl'), 'utf-8')
+    assert.doesNotMatch(raw, /must-not-leak|private tool output/)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

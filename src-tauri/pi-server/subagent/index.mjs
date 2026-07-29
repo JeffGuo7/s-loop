@@ -16,6 +16,7 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { loadAgentDefinition, formatAgentList } from './agent-registry.mjs'
 import { evaluateToolCall } from '../execution-policy.mjs'
 import { buildToolSecurityIndex } from '../tool-security.mjs'
+import { createToolAuditTracker } from '../audit-store.mjs'
 
 const MAX_CONCURRENCY = 4
 const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
@@ -34,6 +35,7 @@ const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
  * @param {string} [opts.projectDir] - Project directory for agent discovery
  * @param {Function} [opts.requestToolApproval] - interactive parent policy hook
  * @param {Function} [opts.onToolCallFinished] - approval completion callback
+ * @param {Object} [opts.auditContext] - surface/run correlation metadata
  * @returns {Promise<Object>} SubagentResult
  */
 export async function runSubagent({
@@ -47,6 +49,7 @@ export async function runSubagent({
   projectDir,
   requestToolApproval,
   onToolCallFinished,
+  auditContext,
 }) {
   // 1. Look up agent definition
   const def = loadAgentDefinition(agentName, projectDir)
@@ -102,6 +105,10 @@ export async function runSubagent({
     ...parentConfig,
     toolSecurity: buildToolSecurityIndex(allowedTools),
   }
+  const toolAudit = createToolAuditTracker({
+    ...(auditContext || {}),
+    actor: `subagent:${agentName}`,
+  })
 
   // 4. Create independent Agent instance
   const sessionId = `subagent-${agentName}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
@@ -118,9 +125,15 @@ export async function runSubagent({
     getApiKey: async () => apiKey,
     beforeToolCall: async ({ toolCall }) => {
       const decision = evaluateToolCall(toolCall, effectiveConfig)
-      if (decision.allowed) return undefined
+      toolAudit.decision(toolCall, decision)
+      if (decision.allowed) {
+        toolAudit.started(toolCall)
+        return undefined
+      }
       if (decision.approvalRequired && requestToolApproval) {
-        return await requestToolApproval(toolCall, decision)
+        const result = await requestToolApproval(toolCall, decision)
+        if (!result?.block) toolAudit.started(toolCall)
+        return result
       }
       const reason = decision.approvalRequired
         ? `${decision.reason}; interactive approval is unavailable`
@@ -128,6 +141,7 @@ export async function runSubagent({
       return { block: true, reason }
     },
     afterToolCall: async ({ result, toolCall }) => {
+      toolAudit.finished(toolCall, result)
       onToolCallFinished?.(toolCall, result)
       return undefined
     },

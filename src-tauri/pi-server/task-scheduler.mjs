@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import cronParser from 'cron-parser'
+import { appendAuditEvent } from './audit-store.mjs'
 
 const TICK_INTERVAL = 60_000  // check every 60s
 const ONESHOT_GRACE_MS = 120_000  // 2-min grace for one-shot tasks
@@ -353,6 +354,17 @@ export async function runTask(task, deps) {
   }
 
   _activeRuns.set(task.id, runId)
+  appendAuditEvent(
+    deps.resumeApprovalId ? 'run.resumed' : 'run.started',
+    {
+      surface: 'task',
+      surfaceId: task.id,
+      runId,
+      actor: 'scheduler',
+      outcome: 'running',
+      details: { trigger: deps.trigger || 'scheduled' },
+    },
+  )
 
   try {
     // Build prompt with skills + context from chain
@@ -443,6 +455,17 @@ export async function runTask(task, deps) {
     markTaskRun(task.id, error ? 'failed' : 'completed', output, error, {
       runId,
       trigger: deps.trigger || 'scheduled',
+    })
+    appendAuditEvent(error ? 'run.failed' : 'run.completed', {
+      surface: 'task',
+      surfaceId: task.id,
+      runId,
+      actor: 'scheduler',
+      outcome: error ? 'failed' : 'completed',
+      details: {
+        durationMs: Date.now() - startTime,
+        error: error || undefined,
+      },
     })
 
     return { success: !error, output, error }

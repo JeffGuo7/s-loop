@@ -74,6 +74,8 @@ import {
   updatePlatformRun,
 } from './platform-run-store.mjs'
 import {
+  appendAuditEvent,
+  createToolAuditTracker,
   initAuditStore,
   listAuditEvents,
   verifyAuditTrail,
@@ -287,7 +289,8 @@ function createDelegateTaskTool({ runtimeConfig, resolveModel, getTools, project
         getTools,
         signal,
         projectDir: projectDir || runtimeConfig.workspaceDir,
-        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config),
+        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config, { audit: false }),
+        auditContext: wrapper?.auditContext,
         onUpdate: onUpdate
           ? (ev) => {
               // Structured sub-agent event — frontend can render as live progress
@@ -393,7 +396,8 @@ function createDelegateParallelTool({ runtimeConfig, resolveModel, getTools, pro
         getTools,
         signal,
         projectDir: projectDir || runtimeConfig.workspaceDir,
-        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config),
+        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config, { audit: false }),
+        auditContext: wrapper?.auditContext,
       })
 
       const successCount = results.filter((r) => r.exitCode === 0 && !r.errorMessage).length
@@ -469,7 +473,8 @@ function createDelegateChainTool({ runtimeConfig, resolveModel, getTools, projec
         getTools,
         signal,
         projectDir: projectDir || runtimeConfig.workspaceDir,
-        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config),
+        requestToolApproval: (toolCall) => authorizeToolCall(wrapper, toolCall, wrapper.config, { audit: false }),
+        auditContext: wrapper?.auditContext,
       })
       return { content: [{ type: 'text', text: result.finalOutput }], details: { steps: result.results } }
     },
@@ -653,15 +658,24 @@ function rejectPendingToolApprovals(wrapper) {
   wrapper.pendingToolApprovals?.clear?.()
 }
 
-async function authorizeToolCall(wrapper, toolCall, config, { interactive = true } = {}) {
+async function authorizeToolCall(wrapper, toolCall, config, {
+  interactive = true,
+  audit = true,
+} = {}) {
   const decision = evaluateToolCall(toolCall, config)
-  if (decision.allowed) return undefined
+  const toolAudit = audit ? wrapper?.toolAudit : null
+  toolAudit?.decision(toolCall, decision)
+  if (decision.allowed) {
+    toolAudit?.started(toolCall)
+    return undefined
+  }
   if (!decision.approvalRequired) return { block: true, reason: decision.reason }
   if (!interactive) {
     return { block: true, reason: `${decision.reason}; interactive approval is unavailable` }
   }
   const approved = await requestToolApproval(wrapper, toolCall, decision.reason)
   if (!approved) return { block: true, reason: 'User rejected or approval timed out' }
+  toolAudit?.started(toolCall)
   return undefined
 }
 
@@ -787,12 +801,16 @@ async function promptPlatformConversation(sessionId, content, platformRun, resum
       getApiKey: async () => runtimeConfig.apiKey || '',
       beforeToolCall: async ({ toolCall }) => {
         const decision = evaluateToolCall(toolCall, wrapper.config)
-        if (decision.allowed) return undefined
+        const execution = wrapper.platformExecution
+        execution?.toolAudit.decision(toolCall, decision)
+        if (decision.allowed) {
+          execution?.toolAudit.started(toolCall)
+          return undefined
+        }
         if (!decision.approvalRequired) {
           return { block: true, reason: decision.reason }
         }
 
-        const execution = wrapper.platformExecution
         if (!execution) {
           return { block: true, reason: `${decision.reason}; durable approval context is unavailable` }
         }
@@ -814,6 +832,7 @@ async function promptPlatformConversation(sessionId, content, platformRun, resum
               pendingApprovalId: undefined,
             })
             execution.armTimeout()
+            execution.toolAudit.started(toolCall)
             return undefined
           }
         }
@@ -851,10 +870,12 @@ async function promptPlatformConversation(sessionId, content, platformRun, resum
           pendingApprovalId: undefined,
         })
         execution.armTimeout()
+        execution.toolAudit.started(toolCall)
         return undefined
       },
       afterToolCall: async ({ result, toolCall }) => {
         const execution = wrapper.platformExecution
+        execution?.toolAudit.finished(toolCall, result)
         const approvalId = execution?.executingApprovals.get(toolCall?.id)
         if (approvalId) {
           execution.executingApprovals.delete(toolCall.id)
@@ -885,6 +906,11 @@ async function promptPlatformConversation(sessionId, content, platformRun, resum
     executingApprovals: new Map(),
     deniedReason: '',
     timedOut: false,
+    toolAudit: createToolAuditTracker({
+      surface: 'platform',
+      surfaceId: platformRun.id,
+      runId: platformRun.runId,
+    }),
     pauseTimeout() {
       if (timeoutId) clearTimeout(timeoutId)
       timeoutId = undefined
@@ -923,6 +949,13 @@ async function executePlatformRun(platformRun, { resumeApprovalId } = {}) {
     throw new Error('Platform run is already active')
   }
   platformRunsInFlight.add(platformRun.id)
+  appendAuditEvent(resumeApprovalId ? 'run.resumed' : 'run.started', {
+    surface: 'platform',
+    surfaceId: platformRun.id,
+    runId: platformRun.runId,
+    actor: `platform:${platformRun.platformId}`,
+    outcome: 'running',
+  })
   const platform = getPlatformConfig(platformRun.platformId)
   if (!resumeApprovalId) {
     updatePlatformRun(platformRun.id, {
@@ -944,6 +977,14 @@ async function executePlatformRun(platformRun, { resumeApprovalId } = {}) {
         replied: false,
         pendingApprovalId: undefined,
       })
+      appendAuditEvent('run.completed', {
+        surface: 'platform',
+        surfaceId: platformRun.id,
+        runId: platformRun.runId,
+        actor: `platform:${platformRun.platformId}`,
+        outcome: 'completed',
+        details: { replied: false },
+      })
       return { ok: true, replied: false }
     }
 
@@ -963,12 +1004,28 @@ async function executePlatformRun(platformRun, { resumeApprovalId } = {}) {
       reply,
       pendingApprovalId: undefined,
     })
+    appendAuditEvent('run.completed', {
+      surface: 'platform',
+      surfaceId: platformRun.id,
+      runId: platformRun.runId,
+      actor: `platform:${platformRun.platformId}`,
+      outcome: 'completed',
+      details: { replied: true },
+    })
     return { ok: true, replied: true }
   } catch (error) {
     updatePlatformRun(platformRun.id, {
       status: 'failed',
       error: error?.message || String(error),
       pendingApprovalId: undefined,
+    })
+    appendAuditEvent('run.failed', {
+      surface: 'platform',
+      surfaceId: platformRun.id,
+      runId: platformRun.runId,
+      actor: `platform:${platformRun.platformId}`,
+      outcome: 'failed',
+      details: { error: error?.message || String(error) },
     })
     throw error
   } finally {
@@ -1076,6 +1133,11 @@ const createCronPrompt = async (content, options) => {
     const sysPrompt = options.systemPrompt || 'You are a helpful assistant.'
     const fullPrompt = options.workspaceDir ? `${sysPrompt}\n\nWorkspace: ${options.workspaceDir}` : sysPrompt
     const executingApprovals = new Map()
+    const toolAudit = createToolAuditTracker({
+      surface: 'task',
+      surfaceId: options.taskId,
+      runId: options.runId,
+    })
     let resumeApprovalId = options.resumeApprovalId
     let deniedReason = ''
     const agent = new Agent({
@@ -1089,7 +1151,11 @@ const createCronPrompt = async (content, options) => {
       getApiKey: async () => options.apiKey || process.env.PI_API_KEY || '',
       beforeToolCall: async ({ toolCall }) => {
         const decision = evaluateToolCall(toolCall, policyConfig)
-        if (decision.allowed) return undefined
+        toolAudit.decision(toolCall, decision)
+        if (decision.allowed) {
+          toolAudit.started(toolCall)
+          return undefined
+        }
         if (!decision.approvalRequired) return { block: true, reason: decision.reason }
 
         if (resumeApprovalId) {
@@ -1104,6 +1170,7 @@ const createCronPrompt = async (content, options) => {
             executingApprovals.set(toolCall.id, resumed.id)
             resumeApprovalId = undefined
             markTaskApprovalResuming(options.taskId, options.runId)
+            toolAudit.started(toolCall)
             return undefined
           }
         }
@@ -1130,9 +1197,11 @@ const createCronPrompt = async (content, options) => {
         }
         executingApprovals.set(toolCall.id, approval.id)
         markTaskApprovalResuming(options.taskId, options.runId)
+        toolAudit.started(toolCall)
         return undefined
       },
       afterToolCall: async ({ result, toolCall }) => {
+        toolAudit.finished(toolCall, result)
         const approvalId = executingApprovals.get(toolCall?.id)
         if (approvalId) {
           executingApprovals.delete(toolCall.id)
@@ -1190,6 +1259,13 @@ async function executeGoalRun(goalId, {
     lastRunId: runId,
   }
   updateGoal(goalId, goal)
+  appendAuditEvent(resumeApprovalId ? 'run.resumed' : 'run.started', {
+    surface: 'goal',
+    surfaceId: goalId,
+    runId,
+    actor: 'goal-loop',
+    outcome: 'running',
+  })
 
   const apiKey = runtimeConfig.apiKey || process.env.PI_API_KEY || ''
   const projectDir = runtimeConfig.workspaceDir || DATA_DIR
@@ -1221,6 +1297,11 @@ async function executeGoalRun(goalId, {
       persistFn: (updated) => updateGoal(goalId, updated),
       requestToolApproval: approvalCoordinator.request,
       onToolCallFinished: approvalCoordinator.complete,
+      auditContext: {
+        surface: 'goal',
+        surfaceId: goalId,
+        runId,
+      },
       onUpdate,
     })
 
@@ -1229,7 +1310,31 @@ async function executeGoalRun(goalId, {
       ? `# Goal: ${finalGoal.goal}\n\n## Result\n${finalGoal.finalResult || 'Completed'}\n\n## Steps\n${(finalGoal.steps || []).map(s => `- ${s.agent}: ${s.task}`).join('\n')}`
       : `# Goal: ${finalGoal.goal}\n\n## Error\n${finalGoal.finalResult || 'Unknown error'}`
     saveGoalRunOutput(goalId, output)
+    appendAuditEvent(
+      finalGoal.status === 'completed' ? 'run.completed' : 'run.failed',
+      {
+        surface: 'goal',
+        surfaceId: goalId,
+        runId,
+        actor: 'goal-loop',
+        outcome: finalGoal.status,
+        details: {
+          stepCount: finalGoal.steps?.length || 0,
+          error: finalGoal.status === 'completed' ? undefined : finalGoal.finalResult,
+        },
+      },
+    )
     return result
+  } catch (error) {
+    appendAuditEvent('run.failed', {
+      surface: 'goal',
+      surfaceId: goalId,
+      runId,
+      actor: 'goal-loop',
+      outcome: 'failed',
+      details: { error: error?.message || String(error) },
+    })
+    throw error
   } finally {
     goalLoopControllers.delete(goalId)
     resetBrowser().catch(() => {})
@@ -2225,6 +2330,14 @@ createServer((req, res) => {
               const guardResult = guard.beforeTool(toolCall.name, toolCall.arguments || {})
               if (guardResult?.block) {
                 console.log('[pi-server] tool guard BLOCKING:', toolCall.name, guardResult.reason)
+                wrapper.toolAudit?.decision(toolCall, {
+                  outcome: 'deny',
+                  risk: 'external',
+                  source: 'builtin',
+                  matchedRule: 'tool-guard',
+                  resolvedTargets: [],
+                  reason: guardResult.reason,
+                })
                 return { block: true, reason: guardResult.reason }
               }
             }
@@ -2235,6 +2348,7 @@ createServer((req, res) => {
             return await authorizeToolCall(wrapper, toolCall, wrapper.config)
           },
           afterToolCall: async ({ result, toolCall }) => {
+            wrapper.toolAudit?.finished(toolCall, result)
             if (toolCall?.name) {
               fireExtensionEvent('tool_result', { toolCallId: toolCall.id, toolName: toolCall.name, result }, { sessionId })
             }
@@ -2283,6 +2397,7 @@ createServer((req, res) => {
         })
 
         wrapper.agent = agent
+        wrapper.toolAudit = createToolAuditTracker(() => wrapper.auditContext)
         wrapper.contextEngine = contextEngine
         wrapper.previousMessageCount = initialMessages.length
         wrapper.toolGuard = new ToolGuard()
@@ -2323,6 +2438,16 @@ createServer((req, res) => {
         }
       }
 
+      wrapper.auditContext = {
+        surface: 'session',
+        surfaceId: sessionId,
+        runId: randomUUID(),
+      }
+      appendAuditEvent('run.started', {
+        ...wrapper.auditContext,
+        actor: 'chat-agent',
+        outcome: 'running',
+      })
       wrapper.emit = emit
 
       // ── Prompt with retry for transient network errors ──
@@ -2399,12 +2524,25 @@ createServer((req, res) => {
 
       emit('result', { text: text || '' })
       emit('done', {})
+      appendAuditEvent('run.completed', {
+        ...wrapper.auditContext,
+        actor: 'chat-agent',
+        outcome: 'completed',
+      })
     } catch (err) {
       console.error('[pi-server] prompt failed:', err.message, err.stack?.slice(0, 300))
       const userMsg = err.message === 'Request was aborted'
         ? 'Request was aborted — this usually means the AI provider connection was interrupted. Check your network and API key configuration.'
         : (err.message || String(err))
       try { emit('error', { message: userMsg }); emit('done', {}) } catch {}
+      if (wrapper?.auditContext) {
+        appendAuditEvent('run.failed', {
+          ...wrapper.auditContext,
+          actor: 'chat-agent',
+          outcome: 'failed',
+          details: { error: err?.message || String(err) },
+        })
+      }
     }
     if (wrapper) wrapper.emit = null
     try { res.end() } catch {}

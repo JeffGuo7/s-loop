@@ -62,6 +62,7 @@ export function createRunSubagentTool(goalState, opts) {
         projectDir: opts.projectDir,
         requestToolApproval: opts.requestToolApproval,
         onToolCallFinished: opts.onToolCallFinished,
+        auditContext: opts.auditContext,
       })
 
       // Update step with result

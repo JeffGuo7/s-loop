@@ -8,16 +8,21 @@ The log is append-only. Every event contains the previous event hash and its own
 SHA-256 hash, creating a verifiable chain. Startup fails before announcing sidecar
 readiness if the existing chain is malformed or has been modified.
 
-The first covered lifecycle is durable approval:
+Covered lifecycles:
 
 - approval requested;
 - approved, denied, or revoked;
 - approved tool execution started;
 - execution completed, failed, or was interrupted by restart.
+- session, task, Goal, and platform runs started/resumed/completed/failed;
+- every tool policy decision and actual tool execution start/completion/failure;
+- delegated sub-agent tool calls, correlated to the parent surface and run.
 
 Events carry surface, run, approval, tool-call, and canonical tool fingerprint IDs.
 Tool arguments are retained only in their recursively redacted form. Authorization,
 token, secret, password, API-key, and cookie fields are never written verbatim.
+Tool result bodies and model response text are deliberately excluded from the audit
+trail; existing output/session stores remain the place for user-visible content.
 
 Local API:
 
