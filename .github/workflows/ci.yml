@@ -28,3 +28,6 @@ jobs:
 
       - run: npx vitest run
         name: Run tests
+
+      - run: npm run test:server
+        name: Run pi-server tests

@@ -20,6 +20,13 @@ struct AppLifecycleState {
     exiting: AtomicBool,
 }
 
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PiServerConnection {
+    url: String,
+    api_token: String,
+}
+
 #[allow(dead_code)]
 fn check_server_healthy(port: u16) -> bool {
     use std::io::{Read, Write};
@@ -66,12 +73,15 @@ fn do_start_server(
     state: &PiServerState,
     runtime_dir: &str,
     workspace_dir: &str,
-) -> Result<String, String> {
+) -> Result<PiServerConnection, String> {
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
     if let Some(existing) = guard.as_ref() {
         if let Some(port) = port_from_url(&existing.url) {
             if check_server_healthy(port) {
-                return Ok(existing.url.clone());
+                return Ok(PiServerConnection {
+                    url: existing.url.clone(),
+                    api_token: existing.api_token.clone(),
+                });
             }
         }
         drop(guard.take());
@@ -100,9 +110,12 @@ fn do_start_server(
 
         match PiServerProcess::start(runtime_dir, workspace_dir, port) {
             Ok(proc) => {
-                let url = proc.url.clone();
+                let connection = PiServerConnection {
+                    url: proc.url.clone(),
+                    api_token: proc.api_token.clone(),
+                };
                 *guard = Some(proc);
-                return Ok(url);
+                return Ok(connection);
             }
             Err(e) => {
                 eprintln!("[s-loop] Start attempt {} failed: {}", attempt + 1, e);
@@ -397,7 +410,7 @@ fn find_pi_server_entry(project_dir: &str, app_handle: Option<&tauri::AppHandle>
 fn start_server(
     state: tauri::State<PiServerState>,
     app: tauri::AppHandle,
-) -> Result<String, String> {
+) -> Result<PiServerConnection, String> {
     let project_dir = resolve_project_dir();
     let workspace_dir = resolve_workspace_dir(&project_dir, &app);
     let runtime_dir = find_pi_server_entry(&project_dir, Some(&app));
@@ -597,7 +610,9 @@ pub fn run() {
             let actual_project_dir = find_pi_server_entry(&project_dir, Some(app.handle()));
             tauri::async_runtime::spawn(async move {
                 match do_start_server(&state, &actual_project_dir, &workspace_dir) {
-                    Ok(url) => eprintln!("[s-loop] pi-server started at {url}"),
+                    Ok(connection) => {
+                        eprintln!("[s-loop] pi-server started at {}", connection.url)
+                    }
                     Err(e) => eprintln!("[s-loop] pi-server start failed: {e}"),
                 }
             });

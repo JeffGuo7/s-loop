@@ -42,6 +42,7 @@ import { evaluateToolCall } from './execution-policy.mjs'
 import { sanitizeChildEnvironment } from './sandbox.mjs'
 import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
 import { connectSseMcpServer, disconnectSseMcpServer, getAllSseMcpTools, getSseMcpStatus, disconnectAllSseMcp, callSseMcpTool } from './mcp-sse.mjs'
+import { guardSidecarRequest } from './http-security.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -54,6 +55,7 @@ process.env.PYTHONUTF8 = '1';
 process.env.PYTHONIOENCODING = 'utf-8';
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
+const API_TOKEN = process.env.SNOTRA_API_TOKEN || ''
 const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
 const sessionRepo = createSessionRepo(DATA_DIR)
 const sessions = new Map()
@@ -882,11 +884,7 @@ const createCronPrompt = async (content, options) => {
 
 createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-
-  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+  if (!guardSidecarRequest(req, res, url, API_TOKEN)) return
 
   if (req.method === 'POST' && url.pathname === '/runtime/config') {
     readJsonBody(req).then((data) => {
@@ -1260,7 +1258,6 @@ createServer((req, res) => {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
     })
 
     const emit = (event, data) => {

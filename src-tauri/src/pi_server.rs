@@ -9,6 +9,7 @@ pub struct PiServerProcess {
     #[cfg(windows)]
     _job: Option<WindowsJob>,
     pub url: String,
+    pub api_token: String,
 }
 
 #[cfg(windows)]
@@ -416,6 +417,7 @@ impl PiServerProcess {
             #[cfg(windows)]
             _job: None,
             url,
+            api_token: String::new(),
         }
     }
 
@@ -490,10 +492,16 @@ impl PiServerProcess {
         );
 
         let mut cmd = Command::new(&node_path);
+        let api_token = format!(
+            "{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        );
 
         cmd.arg(&entry);
         configure_sanitized_environment(&mut cmd);
         cmd.env("PI_SERVER_PORT", port.to_string());
+        cmd.env("SNOTRA_API_TOKEN", &api_token);
         cmd.env("S_LOOP_PROJECT_DIR", workspace_dir);
         cmd.env("SNOTRA_PROJECT_DIR", workspace_dir);
         cmd.env("S_LOOP_RUNTIME_DIR", project_dir);
@@ -622,6 +630,7 @@ impl PiServerProcess {
             #[cfg(windows)]
             _job: job,
             url,
+            api_token,
         })
     }
 }

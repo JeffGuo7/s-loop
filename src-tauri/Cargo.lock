@@ -3550,6 +3550,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-sql",
  "urlencoding",
+ "uuid",
  "wait-timeout",
  "windows-sys 0.59.0",
  "zip",

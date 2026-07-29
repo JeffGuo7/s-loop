@@ -2,13 +2,56 @@ import type { PermissionAction, PermissionRule } from '../types/agent'
 
 const DEFAULT_BASE = 'http://127.0.0.1:4096'
 let _base = DEFAULT_BASE
+let _apiToken = import.meta.env.VITE_SNOTRA_API_TOKEN || ''
+let _fetchInterceptorInstalled = false
+const API_TOKEN_HEADER = 'X-Snotra-Token'
 
 export function setBaseUrl(url: string) {
   _base = url.replace(/\/s+$/, '')
 }
 
+export function setServerConnection(url: string, apiToken: string) {
+  setBaseUrl(url)
+  _apiToken = apiToken
+}
+
 export function getBaseUrl() {
   return _base
+}
+
+function targetsPiServer(input: RequestInfo | URL): boolean {
+  try {
+    const requestUrl = new URL(
+      input instanceof Request ? input.url : String(input),
+      window.location.href,
+    )
+    return requestUrl.origin === new URL(_base).origin
+  } catch {
+    return false
+  }
+}
+
+export function installPiServerFetchInterceptor() {
+  if (_fetchInterceptorInstalled || typeof window === 'undefined') return
+  _fetchInterceptorInstalled = true
+  const nativeFetch = window.fetch.bind(window)
+
+  window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    if (!_apiToken || !targetsPiServer(input)) {
+      return nativeFetch(input, init)
+    }
+
+    const headers = new Headers(input instanceof Request ? input.headers : undefined)
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => headers.set(key, value))
+    }
+    headers.set(API_TOKEN_HEADER, _apiToken)
+
+    if (input instanceof Request) {
+      return nativeFetch(new Request(input, { ...init, headers }))
+    }
+    return nativeFetch(input, { ...init, headers })
+  }) as typeof window.fetch
 }
 
 export interface McpToolRequest {

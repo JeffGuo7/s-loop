@@ -30,6 +30,9 @@ npm run tauri:dev
 
 > Prerequisites: Node.js ≥ 18, Rust ≥ 1.85 (MSVC), npm
 
+When running Vite and `pi-server` as separate development processes, set the same
+temporary value in `VITE_SNOTRA_API_TOKEN` and `SNOTRA_API_TOKEN`.
+
 ### Download (Windows)
 
 Download the latest installer from the [Releases page](https://github.com/JeffGuo7/s-loop/releases/latest).
@@ -70,6 +73,9 @@ Download the latest installer from the [Releases page](https://github.com/JeffGu
 | i18n | i18next (English / Chinese) |
 
 ## Architecture
+
+The security and permission invariants shared by chat, tasks, MCP, platforms, and
+sub-agents are documented in [docs/security-model.md](docs/security-model.md).
 
 ```
 ┌─ Tauri 2 ───────────────────────────────────────────────────┐

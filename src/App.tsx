@@ -18,7 +18,7 @@ import { useWebSearchStore } from './stores/websearchStore'
 import { SkillDropZone } from './components/skills'
 import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
-import { setBaseUrl, syncRuntimeConfig } from './utils/piClient'
+import { setServerConnection, syncRuntimeConfig } from './utils/piClient'
 import { buildAgentRuntimeConfig } from './utils/agentRuntime'
 import { getActiveTokens } from './themes'
 
@@ -94,9 +94,9 @@ function App() {
     ;(async () => {
       try {
         const { invoke } = await import('@tauri-apps/api/core')
-        const url = await invoke<string>('start_server')
-        if (!cancelled && url) {
-          setBaseUrl(url)
+        const connection = await invoke<{ url: string; apiToken: string }>('start_server')
+        if (!cancelled && connection?.url && connection?.apiToken) {
+          setServerConnection(connection.url, connection.apiToken)
           setServerError(null)
         }
       } catch (err) {
