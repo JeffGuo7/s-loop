@@ -73,6 +73,11 @@ import {
   initPlatformRunStore,
   updatePlatformRun,
 } from './platform-run-store.mjs'
+import {
+  initAuditStore,
+  listAuditEvents,
+  verifyAuditTrail,
+} from './audit-store.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -1270,6 +1275,23 @@ createServer((req, res) => {
     return
   }
 
+  if (req.method === 'GET' && url.pathname === '/audit/events') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(listAuditEvents({
+      limit: url.searchParams.get('limit') || undefined,
+      surface: url.searchParams.get('surface') || undefined,
+      runId: url.searchParams.get('runId') || undefined,
+    })))
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/audit/verify') {
+    const result = verifyAuditTrail()
+    res.writeHead(result.valid ? 200 : 409, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(result))
+    return
+  }
+
   const approvalDecisionMatch = url.pathname.match(/^\/approvals\/([^/]+)\/decision$/)
   if (req.method === 'POST' && approvalDecisionMatch) {
     readJsonBody(req).then((data) => {
@@ -2389,6 +2411,7 @@ createServer((req, res) => {
   })
 }).listen(PORT, '127.0.0.1', () => {
   const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+  initAuditStore(sLoopDir)
   initApprovalStore(sLoopDir)
 
   // Detect parent process exit via stdin pipe close (works on all platforms)

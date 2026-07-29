@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { appendAuditEvent } from './audit-store.mjs'
 
 const SENSITIVE_KEY = /authorization|token|secret|password|passwd|api[-_]?key|cookie/i
 const waiters = new Map()
@@ -78,6 +79,19 @@ function updateRecord(id, updater) {
   return approvals[index]
 }
 
+function auditExecutionStarted(record, toolCallId) {
+  appendAuditEvent('approval.execution_started', {
+    surface: record.surface,
+    surfaceId: record.surfaceId,
+    runId: record.runId,
+    approvalId: record.id,
+    toolCallId: toolCallId || record.resumedToolCallId || record.toolCallId,
+    toolName: record.toolName,
+    fingerprint: record.fingerprint,
+    outcome: 'running',
+  })
+}
+
 export function initApprovalStore(baseDir) {
   const approvalsDir = join(baseDir, 'approvals')
   mkdirSync(approvalsDir, { recursive: true })
@@ -93,6 +107,16 @@ export function initApprovalStore(baseDir) {
       record.updatedAt = Date.now()
       record.reason = `${record.reason}; execution was interrupted during restart`
       changed = true
+      appendAuditEvent('approval.execution_interrupted', {
+        surface: record.surface,
+        surfaceId: record.surfaceId,
+        runId: record.runId,
+        approvalId: record.id,
+        toolCallId: record.resumedToolCallId || record.toolCallId,
+        toolName: record.toolName,
+        fingerprint: record.fingerprint,
+        outcome: 'interrupted',
+      })
     }
   }
   if (changed) saveRaw(approvals)
@@ -150,6 +174,23 @@ export function createApprovalRequest(data) {
   }
   approvals.push(record)
   saveRaw(approvals)
+  appendAuditEvent('approval.requested', {
+    surface: record.surface,
+    surfaceId: record.surfaceId,
+    runId: record.runId,
+    approvalId: record.id,
+    toolCallId: record.toolCallId,
+    toolName: record.toolName,
+    fingerprint: record.fingerprint,
+    outcome: 'pending',
+    details: {
+      risk: record.risk,
+      source: record.source,
+      matchedRule: record.matchedRule,
+      resolvedTargets: record.resolvedTargets,
+      args: record.args,
+    },
+  })
   return record
 }
 
@@ -160,7 +201,8 @@ export function waitForApproval(id, { signal } = {}) {
     return Promise.resolve(false)
   }
   if (record.status === 'approved') {
-    updateRecord(id, () => ({ status: 'resuming', resumedAt: Date.now() }))
+    const resumed = updateRecord(id, () => ({ status: 'resuming', resumedAt: Date.now() }))
+    auditExecutionStarted(resumed)
     return Promise.resolve(true)
   }
   if (record.status !== 'pending') return Promise.resolve(record.status === 'resuming')
@@ -195,6 +237,18 @@ export function resolveApproval(id, decision, decidedBy = 'local-user') {
         decidedBy,
         decidedAt: Date.now(),
       }))
+      appendAuditEvent('approval.denied', {
+        surface: record.surface,
+        surfaceId: record.surfaceId,
+        runId: record.runId,
+        approvalId: record.id,
+        toolCallId: record.toolCallId,
+        toolName: record.toolName,
+        fingerprint: record.fingerprint,
+        actor: decidedBy,
+        outcome: 'denied',
+        details: { revokedBeforeExecution: true },
+      })
       return { record, delivered: false, changed: true }
     }
     return { record: current, delivered: false, changed: false }
@@ -212,6 +266,20 @@ export function resolveApproval(id, decision, decidedBy = 'local-user') {
     decidedAt: Date.now(),
     ...(delivered && decision === 'approve' ? { resumedAt: Date.now() } : {}),
   }))
+  appendAuditEvent(`approval.${decision === 'approve' ? 'approved' : 'denied'}`, {
+    surface: record.surface,
+    surfaceId: record.surfaceId,
+    runId: record.runId,
+    approvalId: record.id,
+    toolCallId: record.toolCallId,
+    toolName: record.toolName,
+    fingerprint: record.fingerprint,
+    actor: decidedBy,
+    outcome: decision === 'approve' ? 'approved' : 'denied',
+  })
+  if (delivered && decision === 'approve') {
+    auditExecutionStarted(record)
+  }
 
   if (entries) {
     waiters.delete(id)
@@ -232,17 +300,32 @@ export function consumeApprovedApproval(id, expected = {}) {
   if (expected.surfaceId && record.surfaceId !== expected.surfaceId) return null
   const fingerprint = fingerprintToolCall(expected.toolName, expected.args || {})
   if (record.fingerprint !== fingerprint) return null
-  return updateRecord(id, () => ({
+  const resumed = updateRecord(id, () => ({
     status: 'resuming',
     resumedAt: Date.now(),
     resumedToolCallId: expected.toolCallId,
   }))
+  auditExecutionStarted(resumed, resumed.resumedToolCallId)
+  return resumed
 }
 
 export function completeApproval(id, executionStatus = 'completed') {
-  return updateRecord(id, () => ({
+  const completed = updateRecord(id, () => ({
     status: executionStatus === 'completed' ? 'completed' : 'failed',
     executionStatus,
     completedAt: Date.now(),
   }))
+  if (completed) {
+    appendAuditEvent(`approval.execution_${completed.status}`, {
+      surface: completed.surface,
+      surfaceId: completed.surfaceId,
+      runId: completed.runId,
+      approvalId: completed.id,
+      toolCallId: completed.resumedToolCallId || completed.toolCallId,
+      toolName: completed.toolName,
+      fingerprint: completed.fingerprint,
+      outcome: completed.status,
+    })
+  }
+  return completed
 }
