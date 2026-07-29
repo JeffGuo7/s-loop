@@ -31,3 +31,22 @@ jobs:
 
       - run: npm run test:server
         name: Run pi-server tests
+
+  windows-native:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Configure LLVM
+        shell: pwsh
+        run: |
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
+      - run: cargo test --manifest-path stt/Cargo.toml --lib
+        name: Test local speech engine
+
+      - run: cargo check --manifest-path src-tauri/Cargo.toml
+        name: Check Tauri native layer

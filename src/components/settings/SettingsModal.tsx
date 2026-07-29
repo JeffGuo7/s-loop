@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores'
-import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle, Globe, Plus, Trash2 } from 'lucide-react'
+import { X, Cpu, Eye, EyeOff, Server, Sparkles, RefreshCw, Search, CheckCircle, Check, Sun, Moon, AlertTriangle, Globe, Plus, Trash2, Mic } from 'lucide-react'
 import type { ProviderConfig, ProviderInfo } from '../../types'
 import { MCPSettings } from '../mcp'
 import { SkillSettings } from '../skills'
@@ -11,9 +11,11 @@ import { WebSearchSettings } from '../websearch'
 import { ScrollShadow } from "@heroui/react"
 import i18n from '../../i18n'
 import { COLOR_SCHEMES } from '../../themes'
+import { VoiceInputSettings } from './VoiceInputSettings'
 
 interface SettingsModalProps {
   onClose: () => void
+  initialTab?: string
 }
 
 const BUILT_IN_PROVIDERS: ProviderInfo[] = [
@@ -46,7 +48,7 @@ const BUILT_IN_PROVIDERS: ProviderInfo[] = [
   { id: 'custom', name: 'Custom Provider', env: '', source: '' },
 ]
 
-export function SettingsModal({ onClose }: SettingsModalProps) {
+export function SettingsModal({ onClose, initialTab = 'provider' }: SettingsModalProps) {
   const {
     activeProvider,
     setActiveProvider,
@@ -69,7 +71,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const { t } = useTranslation()
 
   const [showKey, setShowKey] = useState(false)
-  const [activeTab, setActiveTab] = useState('provider')
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
   const [localConfigs, setLocalConfigs] = useState<Record<string, ProviderConfig>>({})
   const [saving, setSaving] = useState(false)
@@ -183,6 +185,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               { id: 'mcp', icon: Server, label: t('settings.tabs.mcpServers') },
               { id: 'skills', icon: Sparkles, label: t('settings.tabs.skills') },
               { id: 'websearch', icon: Globe, label: t('settings.tabs.webSearch') },
+              { id: 'voice', icon: Mic, label: i18n.resolvedLanguage?.startsWith('zh') ? '语音输入' : 'Voice Input' },
               { id: 'appearance', icon: theme === 'light' ? Sun : Moon, label: t('settings.tabs.appearance') },
             ].map((item) => (
               <button
@@ -229,6 +232,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 {activeTab === 'mcp' && t('settings.sections.mcpServers')}
                 {activeTab === 'skills' && t('settings.sections.skills')}
                 {activeTab === 'websearch' && t('settings.sections.webSearch')}
+                {activeTab === 'voice' && (i18n.resolvedLanguage?.startsWith('zh') ? '本地语音输入' : 'Local Voice Input')}
                 {activeTab === 'appearance' && t('settings.sections.appearance')}
               </h3>
               <p className="text-[14px] text-text-tertiary font-medium mt-1 tracking-tight opacity-70">{t('settings.descriptions.manageSettings', { tab: activeTab })}</p>
@@ -682,6 +686,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             {activeTab === 'websearch' && (
               <ScrollShadow className="h-full px-16 py-12">
                 <WebSearchSettings />
+              </ScrollShadow>
+            )}
+            {activeTab === 'voice' && (
+              <ScrollShadow className="h-full">
+                <VoiceInputSettings />
               </ScrollShadow>
             )}
           </div>

@@ -1,8 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send, Square, X, File, Paperclip } from 'lucide-react'
+import { Send, Square, X, File, Paperclip, Mic, LoaderCircle } from 'lucide-react'
 import { TextField, TextArea } from "@heroui/react"
 import { Button, Card } from '../ui'
+import {
+  cancelDictation,
+  getDictationLevel,
+  getDictationStatus,
+  isTauriRuntime,
+  openVoiceInputSettings,
+  startDictation,
+  stopDictation,
+  type VoiceInputStatus,
+} from '../../utils/voiceInput'
 
 interface FileAttachment {
   path: string
@@ -33,10 +43,15 @@ export function ChatInput({
   placeholder,
   variant = 'default',
 }: ChatInputProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [dictation, setDictation] = useState<VoiceInputStatus | null>(null)
+  const [dictationBusy, setDictationBusy] = useState(false)
+  const [dictationError, setDictationError] = useState<string | null>(null)
+  const [levels, setLevels] = useState<number[]>([])
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
   const composingRef = useRef(false)
 
   const removeAttachment = useCallback((index: number) => {
@@ -100,6 +115,7 @@ export function ChatInput({
   }, [])
 
   const submitWithAttachments = useCallback(() => {
+    if (dictation?.recording || dictationBusy) return
     if (!input.trim() && attachments.length === 0) return
 
     const parts: string[] = []
@@ -127,18 +143,18 @@ export function ChatInput({
     onSubmit(parts.join('\n'), images.length > 0 ? images : undefined)
     setInput('')
     setAttachments([])
-  }, [input, attachments, onSubmit])
+  }, [input, attachments, onSubmit, dictation?.recording, dictationBusy])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey && !composingRef.current) {
         e.preventDefault()
-        if ((input.trim() || attachments.length > 0) && !isStreaming && !disabled) {
+        if ((input.trim() || attachments.length > 0) && !isStreaming && !disabled && !dictation?.recording && !dictationBusy) {
           submitWithAttachments()
         }
       }
     },
-    [input, attachments, isStreaming, disabled, submitWithAttachments],
+    [input, attachments, isStreaming, disabled, submitWithAttachments, dictation?.recording, dictationBusy],
   )
 
   const handleSubmit = useCallback(
@@ -190,6 +206,79 @@ export function ChatInput({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  useEffect(() => {
+    if (!isTauriRuntime()) return
+    const refresh = (event?: Event) => {
+      const supplied = (event as CustomEvent<VoiceInputStatus> | undefined)?.detail
+      if (supplied) {
+        setDictation(supplied)
+        return
+      }
+      void getDictationStatus().then(setDictation).catch(() => setDictation(null))
+    }
+    refresh()
+    window.addEventListener('snotra:voice-input-changed', refresh)
+    return () => window.removeEventListener('snotra:voice-input-changed', refresh)
+  }, [])
+
+  useEffect(() => {
+    if (!dictation?.recording) {
+      setLevels([])
+      setRecordingSeconds(0)
+      return
+    }
+    const started = Date.now()
+    const timer = window.setInterval(() => {
+      setRecordingSeconds(Math.floor((Date.now() - started) / 1000))
+      void getDictationLevel()
+        .then((level) => setLevels((current) => [...current.slice(-15), level]))
+        .catch(() => undefined)
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [dictation?.recording])
+
+  useEffect(() => {
+    if (!dictation?.recording) return
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      void cancelDictation()
+        .catch(() => undefined)
+        .finally(() => void getDictationStatus().then(setDictation))
+    }
+    window.addEventListener('keydown', cancelOnEscape)
+    return () => window.removeEventListener('keydown', cancelOnEscape)
+  }, [dictation?.recording])
+
+  const toggleDictation = async () => {
+    if (!isTauriRuntime() || dictationBusy) return
+    setDictationError(null)
+    try {
+      if (dictation?.recording) {
+        setDictationBusy(true)
+        const transcript = (await stopDictation()).trim()
+        if (transcript) {
+          setInput((draft) => draft.trim() ? `${draft.trimEnd()} ${transcript}` : transcript)
+        }
+        setDictation(await getDictationStatus())
+        textareaRef.current?.focus()
+        return
+      }
+      const current = dictation || await getDictationStatus()
+      if (!current.supported || !current.modelVerified || !current.testPassed) {
+        openVoiceInputSettings()
+        return
+      }
+      setDictationBusy(true)
+      setDictation(await startDictation())
+    } catch (reason) {
+      setDictationError(String(reason))
+      await getDictationStatus().then(setDictation).catch(() => undefined)
+    } finally {
+      setDictationBusy(false)
+    }
+  }
+
   // Auto-resize logic
   useEffect(() => {
     const textarea = textareaRef.current
@@ -200,6 +289,9 @@ export function ChatInput({
   }, [input])
 
   const isHero = variant === 'hero'
+  const voiceReady = !!dictation?.supported && !!dictation?.modelVerified && !!dictation?.testPassed
+  const recordingTime = `${Math.floor(recordingSeconds / 60)}:${String(recordingSeconds % 60).padStart(2, '0')}`
+  const chinese = i18n.resolvedLanguage?.startsWith('zh')
 
   return (
     <div
@@ -208,6 +300,11 @@ export function ChatInput({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
+      {dictationError && (
+        <div role="alert" className="mb-2 rounded-xl bg-red-500/10 px-4 py-2 text-sm text-red-500">
+          {dictationError}
+        </div>
+      )}
       <form onSubmit={handleSubmit}>
         <Card
           variant={isHero ? 'glass' : 'default'}
@@ -249,12 +346,26 @@ export function ChatInput({
               </div>
             )}
 
+            {dictation?.recording && (
+              <div className="mx-5 mt-4 flex items-center gap-3 rounded-2xl bg-red-500/5 px-4 py-3 text-red-500">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-bold">{chinese ? '正在聆听' : 'Listening'} · {recordingTime}</span>
+                <div className="ml-auto flex h-7 items-center gap-1" aria-label="Microphone input level">
+                  {Array.from({ length: 16 }, (_, index) => {
+                    const level = levels[levels.length - 16 + index] ?? 0
+                    return <span key={index} className="w-1 rounded-full bg-red-500/70" style={{ height: `${4 + level * 22}px` }} />
+                  })}
+                </div>
+                <span className="text-[11px] text-text-tertiary">Esc {chinese ? '取消' : 'to cancel'}</span>
+              </div>
+            )}
+
             <div className="flex items-end px-3">
             <div className="flex-1">
               <TextField
                 value={input}
                 onChange={setInput}
-                isDisabled={disabled || isStreaming}
+                isDisabled={disabled || isStreaming || !!dictation?.recording || dictationBusy}
                 className="w-full selection:bg-accent/20"
               >
                 <TextArea
@@ -283,24 +394,40 @@ export function ChatInput({
                     <Square size={16} fill="currentColor" />
                   </Button>
                 ) : (
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="icon"
-                    aria-label="Send message"
-                    isDisabled={(!input.trim() && attachments.length === 0) || disabled}
-                    className={`w-11 h-11 rounded-xl shadow-xl transition-all duration-700 ${
-                      input.trim() || attachments.length > 0 
-                        ? 'shadow-accent/50 scale-100 hover:scale-105 active:scale-95' 
-                        : 'shadow-none scale-90 opacity-20 grayscale pointer-events-none'
-                    }`}
-                  >
-                    <Send
-                      size={18}
-                      strokeWidth={3}
-                      className={input.trim() || attachments.length > 0 ? 'translate-x-0.5 -translate-y-0.5' : ''}
-                    />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {isTauriRuntime() && (
+                      <Button
+                        type="button"
+                        variant={dictation?.recording ? 'danger' : 'secondary'}
+                        size="icon"
+                        aria-label={dictation?.recording ? 'Stop dictation' : voiceReady ? 'Start dictation' : 'Configure voice input'}
+                        title={dictation?.recording ? (chinese ? '停止并转写' : 'Stop and transcribe') : voiceReady ? (chinese ? '本地语音输入' : 'Local voice input') : (chinese ? '先配置语音输入' : 'Configure voice input first')}
+                        isDisabled={dictationBusy || disabled || isStreaming}
+                        onClick={() => void toggleDictation()}
+                        className={`w-11 h-11 rounded-xl ${!voiceReady && !dictation?.recording ? 'opacity-50' : ''}`}
+                      >
+                        {dictationBusy ? <LoaderCircle size={17} className="animate-spin" /> : dictation?.recording ? <Square size={15} fill="currentColor" /> : <Mic size={18} />}
+                      </Button>
+                    )}
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="icon"
+                      aria-label="Send message"
+                      isDisabled={(!input.trim() && attachments.length === 0) || disabled || !!dictation?.recording || dictationBusy}
+                      className={`w-11 h-11 rounded-xl shadow-xl transition-all duration-700 ${
+                        (input.trim() || attachments.length > 0) && !dictation?.recording && !dictationBusy
+                          ? 'shadow-accent/50 scale-100 hover:scale-105 active:scale-95'
+                          : 'shadow-none scale-90 opacity-20 grayscale pointer-events-none'
+                      }`}
+                    >
+                      <Send
+                        size={18}
+                        strokeWidth={3}
+                        className={input.trim() || attachments.length > 0 ? 'translate-x-0.5 -translate-y-0.5' : ''}
+                      />
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

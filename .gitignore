@@ -59,6 +59,8 @@ tmp_*
 
 # Test coverage output
 coverage/
+/stt/target/
+/stt/Cargo.lock
 
 # Windows temp file
 nul

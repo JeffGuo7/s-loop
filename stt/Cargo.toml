@@ -1,0 +1,14 @@
+[package]
+name = "snotra-stt"
+version = "0.1.0"
+description = "Local, offline speech-to-text engine for Snotra"
+edition = "2021"
+rust-version = "1.77"
+license = "MIT"
+
+[dependencies]
+cpal = "0.15.3"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+ureq = "2.12"
+whisper-rs = "0.16"

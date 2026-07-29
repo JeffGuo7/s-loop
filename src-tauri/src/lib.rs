@@ -1,5 +1,6 @@
 mod commands;
 mod credential_store;
+mod dictation;
 mod mcp_manager;
 mod pi_server;
 mod skill_installer;
@@ -594,9 +595,20 @@ pub fn run() {
             mcp_call_tool,
             mcp_list_servers,
             mcp_get_status,
+            dictation::get_dictation_status,
+            dictation::start_dictation,
+            dictation::stop_dictation,
+            dictation::cancel_dictation,
+            dictation::download_dictation_model,
+            dictation::cancel_dictation_model_download,
+            dictation::verify_dictation_model,
+            dictation::mark_dictation_test_passed,
+            dictation::delete_dictation_model,
+            dictation::dictation_level,
         ])
         .manage(MCPManager::new())
         .setup(move |app| {
+            dictation::initialize(app)?;
             // Handle close → minimize (hide) behavior: clicking X should
             // hide the window to system tray, not quit the app.
             if let Some(window) = app.get_webview_window("main") {

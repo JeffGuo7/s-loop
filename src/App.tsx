@@ -34,9 +34,20 @@ function App() {
   const skills = useSkillStore((s) => s.skills)
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsTab, setSettingsTab] = useState('provider')
 
   useTaskScheduler()
   useTelegramChatSync()
+
+  useEffect(() => {
+    const openSettings = (event: Event) => {
+      const requestedTab = (event as CustomEvent<string>).detail
+      setSettingsTab(requestedTab || 'provider')
+      setShowSettings(true)
+    }
+    window.addEventListener('snotra:open-settings', openSettings)
+    return () => window.removeEventListener('snotra:open-settings', openSettings)
+  }, [])
 
   useEffect(() => {
     const tid = setTimeout(async () => {
@@ -266,7 +277,10 @@ function App() {
       </div>
 
       <Sidebar
-        onSettingsOpen={() => setShowSettings(true)}
+        onSettingsOpen={() => {
+          setSettingsTab('provider')
+          setShowSettings(true)
+        }}
         currentPage={currentPage}
         onNavigate={setCurrentPage}
         collapsed={sidebarCollapsed}
@@ -305,7 +319,7 @@ function App() {
 
       <SkillDropZone />
 
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsModal initialTab={settingsTab} onClose={() => setShowSettings(false)} />}
     </div>
   )
 }
