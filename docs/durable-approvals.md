@@ -1,16 +1,17 @@
 # Durable Unattended Approvals
 
-Scheduled tasks and Goal Loop runs use durable approvals. When either unattended
-surface reaches an `approval-required` policy decision, Snotra:
+Scheduled tasks, Goal Loop runs, and platform auto-replies use durable approvals.
+When an unattended surface reaches an `approval-required` policy decision, Snotra:
 
 1. persists a redacted approval request under the application data directory;
-2. marks the task or goal as `waiting_for_approval`;
+2. marks the task, goal, or platform run as `waiting_for_approval`;
 3. leaves the tool call unexecuted;
 4. exposes the request through the Approvals inbox and local sidecar API;
 5. resumes the parked call after approval, or fails the run after denial.
 
 Pending requests survive an application restart. A post-restart approval reconstructs
-the task or goal run and can authorize only the same tool name and canonical argument fingerprint.
+the task, goal, or platform run and can authorize only the same tool name and
+canonical argument fingerprint.
 The grant is consumed once. Safe read work may be repeated while reconstructing the
 run, but the approved side effect is not executed before the match succeeds.
 
@@ -27,6 +28,11 @@ that final ambiguity.
 Goal runs continue in the background if their SSE viewer disconnects. Waiting for a
 decision does not consume the Goal Loop's five-minute execution budget. Explicitly
 stopping a goal still aborts its controller and leaves the unexecuted approval inert.
+
+Platform runs persist the normalized inbound message and reply routing context, but
+never platform credentials. This lets an approved call reconstruct the original
+conversation after restart. Duplicate webhook deliveries reuse the existing run
+instead of starting the same message twice.
 
 Local API:
 

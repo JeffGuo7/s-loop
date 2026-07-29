@@ -66,6 +66,13 @@ import {
   resolveApproval,
   waitForApproval,
 } from './approval-store.mjs'
+import {
+  createPlatformRun,
+  findPlatformRun,
+  getPlatformRun,
+  initPlatformRunStore,
+  updatePlatformRun,
+} from './platform-run-store.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -84,6 +91,7 @@ const sessionRepo = createSessionRepo(DATA_DIR)
 const sessions = new Map()
 const inboundSeen = new Map()
 const goalLoopControllers = new Map()  // goalId → AbortController
+const platformRunsInFlight = new Set()
 const runtimeConfig = {
   providerID: 'anthropic',
   modelID: 'claude-sonnet-4-20250514',
@@ -735,7 +743,7 @@ function shouldProcessInbound(incoming) {
   return true
 }
 
-async function promptPlatformConversation(sessionId, content) {
+async function promptPlatformConversation(sessionId, content, platformRun, resumeApprovalId) {
   const provider = runtimeConfig.providerID || 'anthropic'
   const modelId = runtimeConfig.agentModel || runtimeConfig.modelID || 'claude-sonnet-4-20250514'
   const model = resolveModel(provider, modelId, runtimeConfig.providerConfig)
@@ -773,9 +781,83 @@ async function promptPlatformConversation(sessionId, content) {
       sessionId,
       getApiKey: async () => runtimeConfig.apiKey || '',
       beforeToolCall: async ({ toolCall }) => {
-        return await authorizeToolCall(wrapper, toolCall, wrapper.config, { interactive: false })
+        const decision = evaluateToolCall(toolCall, wrapper.config)
+        if (decision.allowed) return undefined
+        if (!decision.approvalRequired) {
+          return { block: true, reason: decision.reason }
+        }
+
+        const execution = wrapper.platformExecution
+        if (!execution) {
+          return { block: true, reason: `${decision.reason}; durable approval context is unavailable` }
+        }
+        execution.pauseTimeout()
+
+        if (execution.resumeApprovalId) {
+          const resumed = consumeApprovedApproval(execution.resumeApprovalId, {
+            surface: 'platform',
+            surfaceId: execution.platformRun.id,
+            toolName: toolCall.name,
+            args: toolCall.arguments || {},
+            toolCallId: toolCall.id,
+          })
+          if (resumed) {
+            execution.executingApprovals.set(toolCall.id, resumed.id)
+            execution.resumeApprovalId = undefined
+            updatePlatformRun(execution.platformRun.id, {
+              status: 'resuming',
+              pendingApprovalId: undefined,
+            })
+            execution.armTimeout()
+            return undefined
+          }
+        }
+
+        const approval = createApprovalRequest({
+          surface: 'platform',
+          surfaceId: execution.platformRun.id,
+          sessionId,
+          runId: execution.platformRun.runId,
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+          args: toolCall.arguments || {},
+          reason: decision.reason,
+          risk: decision.risk,
+          source: decision.source,
+          matchedRule: decision.matchedRule,
+          resolvedTargets: decision.resolvedTargets,
+        })
+        updatePlatformRun(execution.platformRun.id, {
+          status: 'waiting_for_approval',
+          pendingApprovalId: approval.id,
+        })
+        const approved = await waitForApproval(approval.id)
+        if (!approved) {
+          execution.deniedReason = `Approval denied or interrupted for ${toolCall.name}`
+          return {
+            block: true,
+            reason: execution.deniedReason,
+          }
+        }
+
+        execution.executingApprovals.set(toolCall.id, approval.id)
+        updatePlatformRun(execution.platformRun.id, {
+          status: 'resuming',
+          pendingApprovalId: undefined,
+        })
+        execution.armTimeout()
+        return undefined
       },
-      toolExecution: 'parallel',
+      afterToolCall: async ({ result, toolCall }) => {
+        const execution = wrapper.platformExecution
+        const approvalId = execution?.executingApprovals.get(toolCall?.id)
+        if (approvalId) {
+          execution.executingApprovals.delete(toolCall.id)
+          completeApproval(approvalId, result?.isError ? 'failed' : 'completed')
+        }
+        return undefined
+      },
+      toolExecution: 'sequential',
     })
     wrapper.previousMessageCount = initialMessages.length
   } else {
@@ -791,11 +873,37 @@ async function promptPlatformConversation(sessionId, content) {
     }
   }
 
-  const promptPromise = wrapper.agent.prompt(content)
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Platform conversation timed out')), 120_000)
-  })
-  await Promise.race([promptPromise, timeoutPromise])
+  let timeoutId
+  const execution = {
+    platformRun,
+    resumeApprovalId,
+    executingApprovals: new Map(),
+    deniedReason: '',
+    timedOut: false,
+    pauseTimeout() {
+      if (timeoutId) clearTimeout(timeoutId)
+      timeoutId = undefined
+    },
+    armTimeout() {
+      this.pauseTimeout()
+      timeoutId = setTimeout(() => {
+        this.timedOut = true
+        try { wrapper.agent.abort() } catch {}
+      }, 120_000)
+    },
+  }
+  wrapper.platformExecution = execution
+  execution.armTimeout()
+  try {
+    await wrapper.agent.prompt(content)
+    if (execution.deniedReason) throw new Error(execution.deniedReason)
+    if (execution.timedOut) throw new Error('Platform conversation timed out')
+  } finally {
+    execution.pauseTimeout()
+    if (wrapper.platformExecution === execution) {
+      wrapper.platformExecution = undefined
+    }
+  }
   try {
     await persistAgentMessages(wrapper)
   } catch (persistErr) {
@@ -803,6 +911,64 @@ async function promptPlatformConversation(sessionId, content) {
   }
   const last = [...wrapper.agent.state.messages].reverse().find((message) => message.role === 'assistant')
   return extractAssistantText(last)
+}
+
+async function executePlatformRun(platformRun, { resumeApprovalId } = {}) {
+  if (platformRunsInFlight.has(platformRun.id)) {
+    throw new Error('Platform run is already active')
+  }
+  platformRunsInFlight.add(platformRun.id)
+  const platform = getPlatformConfig(platformRun.platformId)
+  if (!resumeApprovalId) {
+    updatePlatformRun(platformRun.id, {
+      status: 'running',
+      error: undefined,
+    })
+  }
+
+  try {
+    const reply = await promptPlatformConversation(
+      platformRun.sessionId,
+      platformRun.incoming.text,
+      platformRun,
+      resumeApprovalId,
+    )
+    if (!reply.trim()) {
+      updatePlatformRun(platformRun.id, {
+        status: 'completed',
+        replied: false,
+        pendingApprovalId: undefined,
+      })
+      return { ok: true, replied: false }
+    }
+
+    await sendPlatformMessage(
+      platformRun.platformId,
+      reply,
+      platformRun.sendOptions || {},
+    )
+    recordPlatformOutbound({
+      ...platformRun.incoming,
+      text: reply,
+      replyKey: platformRun.incoming.messageId,
+    })
+    updatePlatformRun(platformRun.id, {
+      status: 'completed',
+      replied: true,
+      reply,
+      pendingApprovalId: undefined,
+    })
+    return { ok: true, replied: true }
+  } catch (error) {
+    updatePlatformRun(platformRun.id, {
+      status: 'failed',
+      error: error?.message || String(error),
+      pendingApprovalId: undefined,
+    })
+    throw error
+  } finally {
+    platformRunsInFlight.delete(platformRun.id)
+  }
 }
 
 async function processPlatformInbound(platformId, incoming, options = {}) {
@@ -826,6 +992,20 @@ async function processPlatformInbound(platformId, incoming, options = {}) {
   // filesystem-safe. Colons (from platform:conversation:thread) are
   // illegal in Windows filenames — replace any unsafe char with '_'.
   const sessionId = `${platformId}:${incoming.conversationId}`.replace(/[:<>"/\\|?* -]/g, '_')
+  const existingRun = findPlatformRun(platformId, incoming.messageId)
+  if (existingRun) {
+    return {
+      ok: true,
+      duplicate: true,
+      status: existingRun.status,
+    }
+  }
+  const platformRun = createPlatformRun({
+    platformId,
+    sessionId,
+    incoming,
+    sendOptions: options.sendOptions || {},
+  })
   // Best-effort typing indicator while the AI generates (adapters that
   // support it, e.g. Telegram). Never block or fail the flow on this.
   const adapter = tryGetAdapter(platformId)
@@ -833,15 +1013,7 @@ async function processPlatformInbound(platformId, incoming, options = {}) {
     adapter.sendTyping(platform, options.sendOptions || {}).catch(() => {})
   }
   try {
-    const reply = await promptPlatformConversation(sessionId, incoming.text)
-    if (!reply.trim()) return { ok: true, replied: false }
-    await sendPlatformMessage(platformId, reply, options.sendOptions || {})
-    recordPlatformOutbound({
-      ...incoming,
-      text: reply,
-      replyKey: incoming.messageId,
-    })
-    return { ok: true, replied: true }
+    return await executePlatformRun(platformRun)
   } catch (err) {
     console.error(`[pi-server] ${platformId} inbound failed:`, err)
     const fallback = `S-Loop 处理消息失败：${err?.message || String(err)}`
@@ -850,6 +1022,10 @@ async function processPlatformInbound(platformId, incoming, options = {}) {
       ...incoming,
       text: fallback,
       replyKey: `${incoming.messageId}:error`,
+    })
+    updatePlatformRun(platformRun.id, {
+      status: 'failed',
+      error: err?.message || String(err),
     })
     return { ok: false, error: err?.message || String(err) }
   }
@@ -1154,6 +1330,29 @@ createServer((req, res) => {
           updateGoal(goal.id, {
             status: 'failed',
             finalResult: `Approval denied for ${record.toolName}`,
+            pendingApprovalId: undefined,
+          })
+        }
+      }
+      if ((result.changed || shouldResume) && !result.delivered && record.surface === 'platform') {
+        const platformRun = getPlatformRun(record.surfaceId)
+        if (
+          shouldResume
+          && platformRun?.status === 'waiting_for_approval'
+          && platformRun.pendingApprovalId === record.id
+        ) {
+          void executePlatformRun(platformRun, {
+            resumeApprovalId: record.id,
+          }).catch((error) => {
+            console.error('[approvals] failed to resume platform run:', error?.message)
+          })
+        } else if (
+          data.decision === 'deny'
+          && platformRun?.pendingApprovalId === record.id
+        ) {
+          updatePlatformRun(platformRun.id, {
+            status: 'failed',
+            error: `Approval denied for ${record.toolName}`,
             pendingApprovalId: undefined,
           })
         }
@@ -2191,7 +2390,6 @@ createServer((req, res) => {
 }).listen(PORT, '127.0.0.1', () => {
   const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
   initApprovalStore(sLoopDir)
-  console.log(`[pi-server] listening on http://127.0.0.1:${PORT}`)
 
   // Detect parent process exit via stdin pipe close (works on all platforms)
   if (process.stdin) {
@@ -2204,10 +2402,12 @@ createServer((req, res) => {
 
   // Initialize and start task scheduler
   initPlatformCenter(sLoopDir)
+  initPlatformRunStore(sLoopDir)
   initTelegramMonitor(sLoopDir)
   initTelegramChatSync(sLoopDir)
   initTasks(sLoopDir)
   initGoalPersistence(sLoopDir)
+  console.log(`[pi-server] listening on http://127.0.0.1:${PORT}`)
   startTicker({
     projectDir: sLoopDir,
     apiKey: process.env.PI_API_KEY || '',

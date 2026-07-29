@@ -4,19 +4,28 @@ import { PlatformCard } from './PlatformCard'
 import { PlatformMessageLog } from './PlatformMessageLog'
 import { useEffect, useMemo, useState } from 'react'
 import { Bot, MessageSquare } from 'lucide-react'
+import { ApprovalInbox } from '../tasks/ApprovalInbox'
+import { useApprovalStore } from '../../stores/approvalStore'
 
 type Tab = 'platforms' | 'log'
 
 export function PlatformCenter() {
   const { t } = useTranslation()
   const { platforms, messages, error, load } = usePlatformStore()
+  const refreshApprovals = useApprovalStore((state) => state.refresh)
   const [activeTab, setActiveTab] = useState<Tab>('platforms')
 
   const connectedCount = useMemo(() => platforms.filter((p) => p.connected).length, [platforms])
 
   useEffect(() => {
     void load()
-  }, [load])
+    void refreshApprovals()
+    const id = setInterval(() => {
+      void load()
+      void refreshApprovals()
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [load, refreshApprovals])
 
   return (
     <div className="h-full flex overflow-hidden bg-transparent">
@@ -74,6 +83,7 @@ export function PlatformCenter() {
           </h3>
         </header>
 
+        <ApprovalInbox />
         <div className="flex-1 overflow-y-auto px-10 py-10 scrollbar-subtle">
           <div className="max-w-2xl mx-auto space-y-8 animate-fade-in-up">
             {error && (

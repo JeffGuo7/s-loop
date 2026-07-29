@@ -46,8 +46,10 @@ export const useApprovalStore = create<ApprovalState>()((set, get) => ({
       }))
       const { useTaskStore } = await import('./taskStore')
       const { useGoalStore } = await import('./goalStore')
+      const { usePlatformStore } = await import('./platformStore')
       setTimeout(() => useTaskStore.getState().refresh(), 250)
       setTimeout(() => useGoalStore.getState().fetchGoals(), 250)
+      setTimeout(() => usePlatformStore.getState().load(), 250)
       setTimeout(() => get().refresh(), 500)
     } catch (error) {
       set({ error: error instanceof Error ? error.message : String(error) })
