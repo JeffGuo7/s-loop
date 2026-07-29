@@ -7,6 +7,8 @@ import { useAppStore } from '../../stores/appStore'
 import { GoalInput } from './GoalInput'
 import { GoalProgress } from './GoalProgress'
 import { GoalPlan } from './GoalPlan'
+import { ApprovalInbox } from '../tasks/ApprovalInbox'
+import { useApprovalStore } from '../../stores/approvalStore'
 import type { GoalState } from '../../types/goal'
 
 export function GoalPage() {
@@ -14,10 +16,17 @@ export function GoalPage() {
     goals, error, activeGoal, isRunning,
     fetchGoals, createGoal, removeGoal, startGoal, abortGoal, clearActive,
   } = useGoalStore()
+  const refreshApprovals = useApprovalStore((state) => state.refresh)
 
   useEffect(() => {
     fetchGoals()
-  }, []) // stable mount-only effect
+    refreshApprovals()
+    const id = setInterval(() => {
+      fetchGoals()
+      refreshApprovals()
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [fetchGoals, refreshApprovals])
 
   const handleCreate = async (goal: string) => {
     try {
@@ -35,7 +44,11 @@ export function GoalPage() {
   }
 
   const handleViewGoal = (goal: GoalState) => {
-    useGoalStore.setState({ activeGoal: goal, isRunning: false, error: null })
+    useGoalStore.setState({
+      activeGoal: goal,
+      isRunning: goal.status === 'running' || goal.status === 'waiting_for_approval',
+      error: null,
+    })
   }
 
   const handleSendToChat = (goal: GoalState) => {
@@ -57,10 +70,11 @@ export function GoalPage() {
 
   // Active goal without steps — still running or finished without subagent calls
   if (activeGoal && activeGoal.steps.length === 0) {
-    const isRunning_ = activeGoal.status === 'running'
+    const isRunning_ = activeGoal.status === 'running' || activeGoal.status === 'waiting_for_approval'
     const hasResult = !!activeGoal.finalResult
     return (
       <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
+        <ApprovalInbox />
         <div className="max-w-[680px] mx-auto p-6 space-y-6">
           <div className="flex items-center gap-3">
             <button
@@ -88,7 +102,9 @@ export function GoalPage() {
               <div className="flex flex-col items-center gap-3">
                 <Loader2 size={24} className="animate-spin-slow text-accent" />
                 <span className="text-[12px] font-bold text-text-tertiary">
-                  Working on goal...
+                  {activeGoal.status === 'waiting_for_approval'
+                    ? 'Waiting for your approval...'
+                    : 'Working on goal...'}
                 </span>
               </div>
             </div>
@@ -140,6 +156,7 @@ export function GoalPage() {
 
     return (
       <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
+        <ApprovalInbox />
         <div className="max-w-[680px] mx-auto p-6 space-y-6">
           <div className="flex items-center gap-3">
             <button
@@ -234,6 +251,7 @@ export function GoalPage() {
   // Goal list / input
   return (
     <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
+      <ApprovalInbox />
       <div className="max-w-[680px] mx-auto p-6 space-y-6">
         <GoalInput onSubmit={handleCreate} loading={isRunning} />
 
@@ -268,6 +286,7 @@ export function GoalPage() {
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black ${
                           goal.status === 'completed' ? 'bg-green-500/10 text-green-500' :
                           goal.status === 'failed' || goal.status === 'aborted' ? 'bg-red-500/10 text-red-500' :
+                          goal.status === 'waiting_for_approval' ? 'bg-amber-500/10 text-amber-500' :
                           'bg-accent/10 text-accent'
                         }`}>
                           {goal.status}
@@ -284,7 +303,7 @@ export function GoalPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {(goal.status === 'pending' || goal.status === 'failed') && (
+                      {(goal.status === 'pending' || goal.status === 'failed' || goal.status === 'aborted') && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleStartGoal(goal.id) }}
                           className="flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1.5 text-[10px] font-bold text-white shadow-sm hover:shadow-md transition-all"

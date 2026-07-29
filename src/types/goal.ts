@@ -1,4 +1,10 @@
-export type GoalStatus = 'pending' | 'running' | 'completed' | 'failed' | 'aborted'
+export type GoalStatus =
+  | 'pending'
+  | 'running'
+  | 'waiting_for_approval'
+  | 'completed'
+  | 'failed'
+  | 'aborted'
 
 export interface GoalStep {
   agent: string
@@ -18,6 +24,8 @@ export interface GoalState {
   status: GoalStatus
   steps: GoalStep[]
   finalResult: string | null
+  pendingApprovalId?: string
+  lastRunId?: string
   createdAt: number
   updatedAt: number
 }
@@ -25,5 +33,7 @@ export interface GoalState {
 export type GoalSSEEvent =
   | { type: 'goal_step_start'; agent: string; task: string; stepIndex: number }
   | { type: 'goal_step_end'; stepIndex: number; result: GoalStep['result'] }
+  | { type: 'goal_waiting_for_approval'; approvalId: string; toolName: string; goalState: GoalState }
+  | { type: 'goal_resumed'; approvalId: string; goalState: GoalState }
   | { type: 'goal_done'; goalState: GoalState }
   | { type: 'goal_error'; message: string }

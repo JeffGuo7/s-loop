@@ -60,6 +60,8 @@ export function createRunSubagentTool(goalState, opts) {
           }
         },
         projectDir: opts.projectDir,
+        requestToolApproval: opts.requestToolApproval,
+        onToolCallFinished: opts.onToolCallFinished,
       })
 
       // Update step with result

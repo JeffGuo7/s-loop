@@ -28,12 +28,14 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
   const statusColor = (() => {
     if (goal.status === 'completed') return 'text-green-500'
     if (goal.status === 'failed' || goal.status === 'aborted') return 'text-red-500'
+    if (goal.status === 'waiting_for_approval') return 'text-amber-500'
     return 'text-accent'
   })()
 
   const statusLabel = (() => {
     switch (goal.status) {
       case 'running': return 'Running'
+      case 'waiting_for_approval': return 'Waiting for approval'
       case 'completed': return 'Completed'
       case 'failed': return 'Failed'
       case 'aborted': return 'Aborted'

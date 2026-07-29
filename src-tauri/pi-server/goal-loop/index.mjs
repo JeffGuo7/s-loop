@@ -22,6 +22,8 @@ const MAX_GOAL_TIMEOUT = 300_000  // 5 minutes
  * @param {AbortSignal} [opts.signal]
  * @param {Function} [opts.onUpdate] - event callback for SSE
  * @param {Function} [opts.persistFn] - called to persist goal state
+ * @param {Function} [opts.requestToolApproval] - durable approval callback
+ * @param {Function} [opts.onToolCallFinished] - approval completion callback
  */
 export async function runGoalLoop({
   goalState,
@@ -32,6 +34,8 @@ export async function runGoalLoop({
   signal,
   onUpdate,
   persistFn,
+  requestToolApproval,
+  onToolCallFinished,
 }) {
   // 1. Resolve model
   const providerID = runtimeConfig.providerID || 'anthropic'
@@ -62,6 +66,10 @@ export async function runGoalLoop({
   const contextTools = allTools.filter((t) => contextToolNames.has(t.name))
   const runSubagentTool = createRunSubagentTool(goalState, {
     runtimeConfig, resolveModel, getTools, projectDir,
+    requestToolApproval: requestToolApproval
+      ? (toolCall, decision) => authorize(toolCall, decision)
+      : undefined,
+    onToolCallFinished,
   })
   const tools = [...contextTools, runSubagentTool]
   const effectiveConfig = {
@@ -77,6 +85,27 @@ export async function runGoalLoop({
   const apiKey = runtimeConfig.apiKey || ''
 
   goalState.status = 'running'
+  let executionTimeout
+  let blockedApprovalReason = ''
+
+  const pauseExecutionTimeout = () => {
+    if (executionTimeout) clearTimeout(executionTimeout)
+    executionTimeout = undefined
+  }
+  const armExecutionTimeout = () => {
+    pauseExecutionTimeout()
+    executionTimeout = setTimeout(() => agent.abort(), MAX_GOAL_TIMEOUT)
+  }
+  const authorize = async (toolCall, decision) => {
+    pauseExecutionTimeout()
+    try {
+      const result = await requestToolApproval(toolCall, decision)
+      if (result?.approvalDenied) blockedApprovalReason = result.reason
+      return result
+    } finally {
+      if (!signal?.aborted && !blockedApprovalReason) armExecutionTimeout()
+    }
+  }
 
   const agent = new Agent({
     initialState: {
@@ -90,10 +119,17 @@ export async function runGoalLoop({
     beforeToolCall: async ({ toolCall }) => {
       const decision = evaluateToolCall(toolCall, effectiveConfig)
       if (decision.allowed) return undefined
+      if (decision.approvalRequired && requestToolApproval) {
+        return await authorize(toolCall, decision)
+      }
       const reason = decision.approvalRequired
         ? `${decision.reason}; interactive approval is unavailable`
         : decision.reason
       return { block: true, reason }
+    },
+    afterToolCall: async ({ result, toolCall }) => {
+      onToolCallFinished?.(toolCall, result)
+      return undefined
     },
     toolExecution: 'sequential',
   })
@@ -115,12 +151,15 @@ export async function runGoalLoop({
   let usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 }
 
   try {
-    const timeoutId = setTimeout(() => agent.abort(), MAX_GOAL_TIMEOUT)
+    armExecutionTimeout()
     const abortHandler = () => agent.abort()
     signal?.addEventListener('abort', abortHandler, { once: true })
 
     try {
       await agent.prompt(initialPrompt)
+      if (blockedApprovalReason) {
+        throw new Error(blockedApprovalReason)
+      }
 
       // Collect results from messages
       const messages = agent.state.messages || []
@@ -163,7 +202,7 @@ export async function runGoalLoop({
         onUpdate({ type: 'goal_done', goalState })
       }
     } finally {
-      clearTimeout(timeoutId)
+      pauseExecutionTimeout()
       signal?.removeEventListener('abort', abortHandler)
     }
   } catch (err) {

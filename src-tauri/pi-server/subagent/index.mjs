@@ -33,6 +33,7 @@ const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
  * @param {Function} [opts.onUpdate] - Streaming update callback
  * @param {string} [opts.projectDir] - Project directory for agent discovery
  * @param {Function} [opts.requestToolApproval] - interactive parent policy hook
+ * @param {Function} [opts.onToolCallFinished] - approval completion callback
  * @returns {Promise<Object>} SubagentResult
  */
 export async function runSubagent({
@@ -45,6 +46,7 @@ export async function runSubagent({
   onUpdate,
   projectDir,
   requestToolApproval,
+  onToolCallFinished,
 }) {
   // 1. Look up agent definition
   const def = loadAgentDefinition(agentName, projectDir)
@@ -115,15 +117,22 @@ export async function runSubagent({
     sessionId,
     getApiKey: async () => apiKey,
     beforeToolCall: async ({ toolCall }) => {
-      if (requestToolApproval) return await requestToolApproval(toolCall)
       const decision = evaluateToolCall(toolCall, effectiveConfig)
       if (decision.allowed) return undefined
+      if (decision.approvalRequired && requestToolApproval) {
+        return await requestToolApproval(toolCall, decision)
+      }
       const reason = decision.approvalRequired
         ? `${decision.reason}; interactive approval is unavailable`
         : decision.reason
       return { block: true, reason }
     },
-    toolExecution: 'parallel',
+    afterToolCall: async ({ result, toolCall }) => {
+      onToolCallFinished?.(toolCall, result)
+      return undefined
+    },
+    // Durable approvals expose one pending side effect at a time.
+    toolExecution: requestToolApproval ? 'sequential' : 'parallel',
   })
 
   // 5. Subscribe to events for streaming

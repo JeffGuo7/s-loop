@@ -47,6 +47,7 @@ import { discoverAgents, formatAgentList, loadAgentDefinition } from './subagent
 import { runSubagent, runParallel, runChain } from './subagent/index.mjs'
 import { initGoalPersistence, loadGoals, getGoal, createGoal, updateGoal, deleteGoal, saveGoalRunOutput } from './goal-loop/persistence.mjs'
 import { runGoalLoop } from './goal-loop/index.mjs'
+import { createGoalApprovalCoordinator } from './goal-loop/approval.mjs'
 import { tryGetAdapter } from './platforms/registry.mjs'
 import { authorizeInbound } from './platforms/access-control.mjs'
 import { ToolGuard } from './tool-guardrails.mjs'
@@ -987,6 +988,73 @@ function createTaskRunDependencies(task, params = {}, overrides = {}) {
   }
 }
 
+async function executeGoalRun(goalId, {
+  resumeApprovalId,
+  runId = randomUUID(),
+  onUpdate,
+} = {}) {
+  if (goalLoopControllers.has(goalId)) {
+    throw new Error('Goal is already running')
+  }
+
+  const storedGoal = getGoal(goalId)
+  if (!storedGoal) throw new Error('Goal not found')
+
+  const goal = {
+    ...storedGoal,
+    status: 'running',
+    steps: [],
+    finalResult: null,
+    pendingApprovalId: undefined,
+    lastRunId: runId,
+  }
+  updateGoal(goalId, goal)
+
+  const apiKey = runtimeConfig.apiKey || process.env.PI_API_KEY || ''
+  const projectDir = runtimeConfig.workspaceDir || DATA_DIR
+  const goalController = new AbortController()
+  goalLoopControllers.set(goalId, goalController)
+
+  const approvalCoordinator = createGoalApprovalCoordinator({
+    goalState: goal,
+    runId,
+    resumeApprovalId,
+    signal: goalController.signal,
+    persistFn: (updated) => updateGoal(goalId, updated),
+    onUpdate,
+  })
+
+  try {
+    const result = await runGoalLoop({
+      goalState: goal,
+      runtimeConfig: { ...runtimeConfig, apiKey },
+      resolveModel: (providerID, modelID, providerConfig) =>
+        getModel(providerID, modelID, {
+          apiKey,
+          ...(providerConfig.api ? { api: providerConfig.api } : {}),
+          ...(providerConfig.baseUrl ? { baseUrl: providerConfig.baseUrl } : {}),
+        }),
+      getTools,
+      projectDir,
+      signal: goalController.signal,
+      persistFn: (updated) => updateGoal(goalId, updated),
+      requestToolApproval: approvalCoordinator.request,
+      onToolCallFinished: approvalCoordinator.complete,
+      onUpdate,
+    })
+
+    const finalGoal = result.goalState
+    const output = finalGoal.status === 'completed'
+      ? `# Goal: ${finalGoal.goal}\n\n## Result\n${finalGoal.finalResult || 'Completed'}\n\n## Steps\n${(finalGoal.steps || []).map(s => `- ${s.agent}: ${s.task}`).join('\n')}`
+      : `# Goal: ${finalGoal.goal}\n\n## Error\n${finalGoal.finalResult || 'Unknown error'}`
+    saveGoalRunOutput(goalId, output)
+    return result
+  } finally {
+    goalLoopControllers.delete(goalId)
+    resetBrowser().catch(() => {})
+  }
+}
+
 createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   if (!guardSidecarRequest(req, res, url, API_TOKEN)) return
@@ -1060,6 +1128,32 @@ createServer((req, res) => {
             lastStatus: 'failed',
             lastError: `Approval denied for ${record.toolName}`,
             lastFinishedAt: Date.now(),
+            pendingApprovalId: undefined,
+          })
+        }
+      }
+      if ((result.changed || shouldResume) && !result.delivered && record.surface === 'goal') {
+        const goal = getGoal(record.surfaceId)
+        if (
+          shouldResume
+          && goal?.status === 'waiting_for_approval'
+          && goal.pendingApprovalId === record.id
+        ) {
+          void executeGoalRun(goal.id, {
+            resumeApprovalId: record.id,
+            runId: record.runId || randomUUID(),
+          }).catch((error) => {
+            updateGoal(goal.id, {
+              status: 'failed',
+              finalResult: error?.message || String(error),
+              pendingApprovalId: undefined,
+            })
+            console.error('[approvals] failed to resume goal:', error?.message)
+          })
+        } else if (data.decision === 'deny' && goal?.pendingApprovalId === record.id) {
+          updateGoal(goal.id, {
+            status: 'failed',
+            finalResult: `Approval denied for ${record.toolName}`,
             pendingApprovalId: undefined,
           })
         }
@@ -1423,54 +1517,17 @@ createServer((req, res) => {
       try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`) } catch {}
     }
 
-    const apiKey = runtimeConfig.apiKey || process.env.PI_API_KEY || ''
-    const projectDir = runtimeConfig.workspaceDir || DATA_DIR
-
-    const goalController = new AbortController()
-    goalLoopControllers.set(goalId, goalController)
-
-    const cleanupController = () => {
-      goalLoopControllers.delete(goalId)
-      // Subagents may have used web_search and left the shared browser
-      // in a bad state (e.g. mid-navigation when aborted). Reset it.
-      resetBrowser().catch(() => {})
-    }
-
-    res.on('close', () => {
-      goalController.abort()
-      cleanupController()
-      resetBrowser().catch(() => {})
-    })
-
-    runGoalLoop({
-      goalState: goal,
-      runtimeConfig: { ...runtimeConfig, apiKey },
-      resolveModel: (providerID, modelID, providerConfig) =>
-        getModel(providerID, modelID, {
-          apiKey,
-          ...(providerConfig.api ? { api: providerConfig.api } : {}),
-          ...(providerConfig.baseUrl ? { baseUrl: providerConfig.baseUrl } : {}),
-        }),
-      getTools,
-      projectDir,
-      signal: goalController.signal,
-      persistFn: (updated) => updateGoal(goalId, updated),
+    executeGoalRun(goalId, {
       onUpdate: (ev) => {
         emit('goal_event', ev)
-        if (ev.type === 'goal_done' || ev.type === 'goal_error') {
-          emit('done', {})
-          cleanupController()
-          // Save final output
-          const output = ev.type === 'goal_done'
-            ? `# Goal: ${goal.goal}\n\n## Result\n${goal.finalResult || 'Completed'}\n\n## Steps\n${(goal.steps || []).map(s => `- ${s.agent}: ${s.task}`).join('\n')}`
-            : `# Goal: ${goal.goal}\n\n## Error\n${ev.message || 'Unknown error'}`
-          saveGoalRunOutput(goalId, output)
-        }
       },
+    }).then(() => {
+      emit('done', {})
+      try { res.end() } catch {}
     }).catch((err) => {
       emit('goal_event', { type: 'goal_error', message: err.message || String(err) })
       emit('done', {})
-      cleanupController()
+      try { res.end() } catch {}
     })
 
     return
@@ -1481,8 +1538,7 @@ createServer((req, res) => {
   if (req.method === 'POST' && goalAbortMatch) {
     const abortId = goalAbortMatch[1]
     const goal = getGoal(abortId)
-    if (goal && goal.status === 'running') {
-      updateGoal(abortId, { status: 'aborted' })
+    if (goal && (goal.status === 'running' || goal.status === 'waiting_for_approval')) {
       const ctrl = goalLoopControllers.get(abortId)
       if (ctrl) {
         ctrl.abort()
@@ -1491,6 +1547,14 @@ createServer((req, res) => {
         // and left the puppeteer browser in a bad state.
         resetBrowser().catch(() => {})
       }
+      if (goal.pendingApprovalId) {
+        resolveApproval(goal.pendingApprovalId, 'deny', 'goal-abort')
+      }
+      updateGoal(abortId, {
+        status: 'aborted',
+        finalResult: 'Goal was aborted.',
+        pendingApprovalId: undefined,
+      })
     }
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok: true }))

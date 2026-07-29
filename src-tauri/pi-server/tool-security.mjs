@@ -32,7 +32,9 @@ const BUILTIN_TOOL_SECURITY = new Map([
   ['delegate_task', metadata('exec')],
   ['delegate_parallel', metadata('exec')],
   ['delegate_chain', metadata('exec')],
-  ['run_subagent', metadata('exec')],
+  // Delegation itself has no host side effect. The delegated agent's tools are
+  // evaluated independently and inherit the parent's approval callback.
+  ['run_subagent', metadata('read')],
 ])
 
 const MCP_DEFAULT_SECURITY = metadata('external', {

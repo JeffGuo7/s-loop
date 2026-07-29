@@ -35,8 +35,17 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
     try {
       const res = await fetch(`${BASE()}/goals`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const goals = await res.json()
-      set({ goals, loading: false })
+      const goals: GoalState[] = await res.json()
+      set((state) => {
+        const refreshedActive = state.activeGoal
+          ? goals.find((goal) => goal.id === state.activeGoal?.id)
+          : undefined
+        return {
+          goals,
+          activeGoal: refreshedActive || state.activeGoal,
+          loading: false,
+        }
+      })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err), loading: false })
     }
@@ -165,6 +174,13 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
                       }))
                     }
                     get().fetchGoals()
+                  } else if (
+                    data.type === 'goal_waiting_for_approval'
+                    || data.type === 'goal_resumed'
+                  ) {
+                    if (data.goalState) {
+                      set({ activeGoal: data.goalState, isRunning: true })
+                    }
                   } else if (data.type === 'goal_error') {
                     set((s) => ({
                       error: data.message,
@@ -193,11 +209,22 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
   },
 
   abortGoal: () => {
-    const { abortFn } = get()
+    const { abortFn, activeGoal } = get()
+    if (activeGoal?.id) {
+      fetch(`${BASE()}/goals/${encodeURIComponent(activeGoal.id)}/abort`, {
+        method: 'POST',
+      }).catch(() => {})
+    }
     if (abortFn) {
       abortFn()
-      set({ isRunning: false, abortFn: null })
     }
+    set((state) => ({
+      isRunning: false,
+      abortFn: null,
+      activeGoal: state.activeGoal
+        ? { ...state.activeGoal, status: 'aborted' as const }
+        : null,
+    }))
   },
 
   clearActive: () => {

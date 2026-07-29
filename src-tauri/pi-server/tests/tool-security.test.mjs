@@ -22,6 +22,20 @@ test('built-in tools resolve to structured policy decisions', () => {
   assert.equal(decision.resolvedTargets.length, 1)
 })
 
+test('subagent delegation is safe orchestration while delegated tools remain policy-checked', () => {
+  const decision = evaluateToolCall(
+    {
+      name: 'run_subagent',
+      arguments: { agent: 'coder', task: 'Inspect the project' },
+    },
+    { workspaceDir: process.cwd(), permissionMode: 'ask' },
+  )
+
+  assert.equal(decision.outcome, 'allow')
+  assert.equal(decision.risk, 'read')
+  assert.equal(decision.source, 'builtin')
+})
+
 test('unknown tools require approval even in allow mode', () => {
   const decision = evaluateToolCall(
     { name: 'third_party_magic', arguments: {} },
