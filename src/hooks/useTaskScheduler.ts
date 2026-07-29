@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useTaskStore } from '../stores'
+import { useApprovalStore } from '../stores/approvalStore'
 
 /**
  * Hook that refreshes task list periodically from pi-server.
@@ -9,15 +10,20 @@ import { useTaskStore } from '../stores'
 export function useTaskScheduler() {
   const refresh = useTaskStore((s) => s.refresh)
   const loading = useTaskStore((s) => s.loading)
+  const refreshApprovals = useApprovalStore((s) => s.refresh)
 
   useEffect(() => {
     // Initial load
     refresh()
+    refreshApprovals()
 
     // Poll every 30s for status updates
-    const id = setInterval(refresh, 30_000)
+    const id = setInterval(() => {
+      refresh()
+      refreshApprovals()
+    }, 30_000)
     return () => clearInterval(id)
-  }, [refresh])
+  }, [refresh, refreshApprovals])
 
   return { loading }
 }

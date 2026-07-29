@@ -25,6 +25,7 @@ function statusDot(status: ScheduledTask['lastStatus']) {
   const base = 'shrink-0 w-2 h-2 rounded-full';
   switch (status) {
     case 'running': return `${base} bg-accent animate-pulse`;
+    case 'waiting_for_approval': return `${base} bg-amber-500 animate-pulse`;
     case 'completed': return `${base} bg-green-500`;
     case 'failed': return `${base} bg-red-500`;
     default: return `${base} bg-text-tertiary/30`;

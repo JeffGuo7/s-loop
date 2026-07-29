@@ -8,7 +8,19 @@ import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-codin
 import { webSearch, fetchUrl, resetBrowser } from './searchProviders.mjs'
 import { createDefaultEngine, calculateContextTokens, truncateContent } from './context-engine/index.mjs'
 import { createSessionRepo, findSession } from './session-store.mjs'
-import { init as initTasks, loadTasks, getTask, createTask, updateTask, removeTask, getTaskOutputs, runTask, startTicker } from './task-scheduler.mjs'
+import {
+  init as initTasks,
+  loadTasks,
+  getTask,
+  createTask,
+  updateTask,
+  removeTask,
+  getTaskOutputs,
+  runTask,
+  startTicker,
+  markTaskApprovalResuming,
+  markTaskWaitingForApproval,
+} from './task-scheduler.mjs'
 import {
   clearPlatformMessages,
   connectPlatform,
@@ -44,6 +56,15 @@ import { init as initExtensions, listExtensions, installExtension, removeExtensi
 import { connectSseMcpServer, disconnectSseMcpServer, getAllSseMcpTools, getSseMcpStatus, disconnectAllSseMcp, callSseMcpTool } from './mcp-sse.mjs'
 import { guardSidecarRequest } from './http-security.mjs'
 import { buildToolSecurityIndex } from './tool-security.mjs'
+import {
+  completeApproval,
+  consumeApprovedApproval,
+  createApprovalRequest,
+  initApprovalStore,
+  listApprovals,
+  resolveApproval,
+  waitForApproval,
+} from './approval-store.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -866,8 +887,15 @@ const createCronPrompt = async (content, options) => {
     if (!model) return { text: '', error: 'Model not found' }
     const cwd = options.workspaceDir || process.cwd()
     const tools = getTools(cwd, options.webSearchConfig)
+    const policyConfig = {
+      ...options,
+      toolSecurity: buildToolSecurityIndex(tools),
+    }
     const sysPrompt = options.systemPrompt || 'You are a helpful assistant.'
     const fullPrompt = options.workspaceDir ? `${sysPrompt}\n\nWorkspace: ${options.workspaceDir}` : sysPrompt
+    const executingApprovals = new Map()
+    let resumeApprovalId = options.resumeApprovalId
+    let deniedReason = ''
     const agent = new Agent({
       initialState: {
         systemPrompt: fullPrompt,
@@ -878,16 +906,62 @@ const createCronPrompt = async (content, options) => {
       sessionId: options.sessionId || 'cron-' + Date.now(),
       getApiKey: async () => options.apiKey || process.env.PI_API_KEY || '',
       beforeToolCall: async ({ toolCall }) => {
-        const decision = evaluateToolCall(toolCall, options)
+        const decision = evaluateToolCall(toolCall, policyConfig)
         if (decision.allowed) return undefined
-        const reason = decision.approvalRequired
-          ? `${decision.reason}; interactive approval is unavailable`
-          : decision.reason
-        return { block: true, reason }
+        if (!decision.approvalRequired) return { block: true, reason: decision.reason }
+
+        if (resumeApprovalId) {
+          const resumed = consumeApprovedApproval(resumeApprovalId, {
+            surface: 'task',
+            surfaceId: options.taskId,
+            toolName: toolCall.name,
+            args: toolCall.arguments || {},
+            toolCallId: toolCall.id,
+          })
+          if (resumed) {
+            executingApprovals.set(toolCall.id, resumed.id)
+            resumeApprovalId = undefined
+            markTaskApprovalResuming(options.taskId, options.runId)
+            return undefined
+          }
+        }
+
+        const approval = createApprovalRequest({
+          surface: 'task',
+          surfaceId: options.taskId,
+          sessionId: options.sessionId,
+          runId: options.runId,
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+          args: toolCall.arguments || {},
+          reason: decision.reason,
+          risk: decision.risk,
+          source: decision.source,
+          matchedRule: decision.matchedRule,
+          resolvedTargets: decision.resolvedTargets,
+        })
+        markTaskWaitingForApproval(options.taskId, options.runId, approval.id)
+        const approved = await waitForApproval(approval.id, { signal: agent.signal })
+        if (!approved) {
+          deniedReason = `Approval denied for ${toolCall.name}`
+          return { block: true, reason: deniedReason }
+        }
+        executingApprovals.set(toolCall.id, approval.id)
+        markTaskApprovalResuming(options.taskId, options.runId)
+        return undefined
       },
-      toolExecution: 'parallel',
+      afterToolCall: async ({ result, toolCall }) => {
+        const approvalId = executingApprovals.get(toolCall?.id)
+        if (approvalId) {
+          executingApprovals.delete(toolCall.id)
+          completeApproval(approvalId, result?.isError ? 'failed' : 'completed')
+        }
+        return undefined
+      },
+      toolExecution: 'sequential',
     })
     await agent.prompt(content)
+    if (deniedReason) return { text: '', error: deniedReason }
     const msgs = agent.state.messages
     const last = [...msgs].reverse().find(m => m.role === 'assistant')
     const text = last?.content?.find?.(c => c.type === 'text')?.text || last?.content?.find?.(c => c.type === 'thinking')?.text || ''
@@ -898,6 +972,20 @@ const createCronPrompt = async (content, options) => {
 }
 
 // ── Server ───────────────────────────────────────────────
+
+function createTaskRunDependencies(task, params = {}, overrides = {}) {
+  return {
+    projectDir: params.projectDir || task.workspaceDir || runtimeConfig.workspaceDir || process.cwd(),
+    apiKey: task.apiKey || params.apiKey || runtimeConfig.apiKey || '',
+    defaultProvider: params.defaultProvider || runtimeConfig.providerID || 'anthropic',
+    defaultModel: params.defaultModel || runtimeConfig.modelID || 'claude-sonnet-4-20250514',
+    prompt: createCronPrompt,
+    makeSession: true,
+    trigger: overrides.trigger || 'scheduled',
+    resumeApprovalId: overrides.resumeApprovalId,
+    runtimeConfig,
+  }
+}
 
 createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
@@ -925,6 +1013,63 @@ createServer((req, res) => {
     }).catch((e) => {
       res.writeHead(400, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: e.message }))
+    })
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/approvals') {
+    const requestedStatus = url.searchParams.getAll('status')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(listApprovals({
+      status: requestedStatus.length > 0 ? requestedStatus : undefined,
+    })))
+    return
+  }
+
+  const approvalDecisionMatch = url.pathname.match(/^\/approvals\/([^/]+)\/decision$/)
+  if (req.method === 'POST' && approvalDecisionMatch) {
+    readJsonBody(req).then((data) => {
+      const result = resolveApproval(
+        approvalDecisionMatch[1],
+        data.decision,
+        'local-user',
+      )
+      if (!result) {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Approval request not found' }))
+        return
+      }
+
+      const record = result.record
+      const shouldResume = (
+        data.decision === 'approve'
+        && !result.delivered
+        && record.status === 'approved'
+      )
+      if ((result.changed || shouldResume) && !result.delivered && record.surface === 'task') {
+        const task = getTask(record.surfaceId)
+        if (shouldResume && task) {
+          void runTask(task, createTaskRunDependencies(task, {}, {
+            trigger: 'manual',
+            resumeApprovalId: record.id,
+          })).catch((error) => {
+            console.error('[approvals] failed to resume task:', error?.message)
+          })
+        } else if (data.decision === 'deny' && task?.pendingApprovalId === record.id) {
+          updateTask(task.id, {
+            lastStatus: 'failed',
+            lastError: `Approval denied for ${record.toolName}`,
+            lastFinishedAt: Date.now(),
+            pendingApprovalId: undefined,
+          })
+        }
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(result.record))
+    }).catch((error) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: error.message }))
     })
     return
   }
@@ -1131,15 +1276,10 @@ createServer((req, res) => {
         if (!task) { res.writeHead(404); res.end('Task not found'); return }
 
         const params = body ? JSON.parse(body) : {}
-        const result = await runTask(task, {
-          projectDir: params.projectDir || task.workspaceDir || process.cwd(),
-          apiKey: task.apiKey || params.apiKey || '',
-          defaultProvider: params.defaultProvider || 'anthropic',
-          defaultModel: params.defaultModel || 'claude-sonnet-4-20250514',
-          prompt: createCronPrompt,
-          makeSession: true,
-          trigger: 'manual',
-        })
+        const result = await runTask(
+          task,
+          createTaskRunDependencies(task, params, { trigger: 'manual' }),
+        )
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(result))
       } catch (e) {
@@ -1985,6 +2125,8 @@ createServer((req, res) => {
     try { res.end() } catch {}
   })
 }).listen(PORT, '127.0.0.1', () => {
+  const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+  initApprovalStore(sLoopDir)
   console.log(`[pi-server] listening on http://127.0.0.1:${PORT}`)
 
   // Detect parent process exit via stdin pipe close (works on all platforms)
@@ -1997,7 +2139,6 @@ createServer((req, res) => {
   }
 
   // Initialize and start task scheduler
-  const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
   initPlatformCenter(sLoopDir)
   initTelegramMonitor(sLoopDir)
   initTelegramChatSync(sLoopDir)
@@ -2009,6 +2150,7 @@ createServer((req, res) => {
     defaultProvider: 'anthropic',
     defaultModel: 'claude-sonnet-4-20250514',
     prompt: createCronPrompt,
+    runtimeConfig,
   })
   void ensureTelegramMonitorState()
   // Load installed pi.dev extensions

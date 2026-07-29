@@ -6,3 +6,4 @@ export { useMCPStore } from './mcpStore';
 export { useSkillStore } from './skillStore';
 export { useAgentStore } from './agentStore';
 export { useWebSearchStore } from './websearchStore';
+export { useApprovalStore } from './approvalStore';

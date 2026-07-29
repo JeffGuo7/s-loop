@@ -165,6 +165,7 @@ export function getDueTasks() {
 
   for (const task of tasks) {
     if (!task.enabled) continue
+    if (task.lastStatus === 'waiting_for_approval') continue
     if (task.lastStatus === 'running') {
       const startedAt = task.lastStartedAt || task.lastRunAt || now
       if (now - startedAt > RUNNING_STALE_MS) {
@@ -213,20 +214,45 @@ export function markTaskRunning(taskId, runMeta = {}) {
   if (!task) return null
 
   const now = Date.now()
-  if (!task.enabled) return null
+  if (!task.enabled && !runMeta.resume) return null
   if (task.lastStatus === 'running') return null
+  if (task.lastStatus === 'waiting_for_approval' && !runMeta.resume) return null
 
   task.lastStatus = 'running'
   task.lastError = undefined
   task.lastStartedAt = now
-  task.lastRunId = runMeta.runId || randomUUID()
+  task.lastRunId = runMeta.runId || task.lastRunId || randomUUID()
   task.lastTrigger = runMeta.trigger || 'scheduled'
-  task.nextRunAt = _computeNextRun(task.schedule, now)
+  task.pendingApprovalId = undefined
+  if (!runMeta.resume) {
+    task.nextRunAt = _computeNextRun(task.schedule, now)
+  }
 
-  if (!task.nextRunAt && task.schedule.kind === 'once') {
+  if (!runMeta.resume && !task.nextRunAt && task.schedule.kind === 'once') {
     task.enabled = false
   }
 
+  _saveTasks(tasks)
+  return { ...task }
+}
+
+export function markTaskWaitingForApproval(taskId, runId, approvalId) {
+  const tasks = _loadTasksRaw()
+  const task = tasks.find(t => t.id === taskId)
+  if (!task || task.lastRunId !== runId) return null
+  task.lastStatus = 'waiting_for_approval'
+  task.pendingApprovalId = approvalId
+  task.lastError = undefined
+  _saveTasks(tasks)
+  return { ...task }
+}
+
+export function markTaskApprovalResuming(taskId, runId) {
+  const tasks = _loadTasksRaw()
+  const task = tasks.find(t => t.id === taskId)
+  if (!task || task.lastRunId !== runId) return null
+  task.lastStatus = 'running'
+  task.pendingApprovalId = undefined
   _saveTasks(tasks)
   return { ...task }
 }
@@ -241,6 +267,7 @@ export function markTaskRun(taskId, status, output, error, runMeta = {}) {
   task.lastFinishedAt = now
   task.lastStatus = status
   task.lastError = error || undefined
+  task.pendingApprovalId = undefined
   task.deliveryError = undefined
   if (runMeta.runId) {
     task.lastRunId = runMeta.runId
@@ -304,7 +331,9 @@ export function getTaskOutputs(taskId) {
 export async function runTask(task, deps) {
   const { apiKey } = deps
   const startTime = Date.now()
-  const runId = randomUUID()
+  const runId = deps.resumeApprovalId && task.lastRunId
+    ? task.lastRunId
+    : randomUUID()
   let output = ''
   let error = undefined
   let activeTask = null
@@ -316,6 +345,7 @@ export async function runTask(task, deps) {
   activeTask = markTaskRunning(task.id, {
     runId,
     trigger: deps.trigger || 'scheduled',
+    resume: Boolean(deps.resumeApprovalId),
   })
 
   if (!activeTask) {
@@ -371,12 +401,16 @@ export async function runTask(task, deps) {
     const sessionId = `cron_${task.id}_${Date.now()}`
     // Reuse the pi-server's Agent if this is a scheduled task
     const options = {
+      ...(deps.runtimeConfig || {}),
       systemPrompt: undefined,
       providerID: activeTask.provider || deps.defaultProvider,
       modelID: activeTask.model || deps.defaultModel,
       thinkingLevel: 'off',
       apiKey: activeTask.apiKey || apiKey,
       workspaceDir: activeTask.workspaceDir || deps.projectDir,
+      taskId: activeTask.id,
+      runId,
+      resumeApprovalId: deps.resumeApprovalId,
     }
     if (deps.makeSession) {
       // If running inside pi-server, create a session
@@ -468,7 +502,8 @@ export function init(baseDir) {
 // Re-export for pi-server
 const cronJobs = {
   init, loadTasks, getTask, createTask, updateTask, removeTask,
-  getDueTasks, markTaskRunning, markTaskRun, saveTaskOutput, getTaskOutputs,
+  getDueTasks, markTaskRunning, markTaskWaitingForApproval,
+  markTaskApprovalResuming, markTaskRun, saveTaskOutput, getTaskOutputs,
   runTask, startTicker, stopTicker,
 }
 

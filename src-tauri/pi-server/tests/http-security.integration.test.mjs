@@ -110,4 +110,13 @@ test('full sidecar enforces token and browser origin while keeping health public
   })
   assert.equal(authorized.status, 200)
   assert.equal(authorized.headers.get('access-control-allow-origin'), 'tauri://localhost')
+
+  const approvals = await fetch(`${baseUrl}/approvals?status=pending`, {
+    headers: {
+      'X-Snotra-Token': TOKEN,
+      Origin: 'tauri://localhost',
+    },
+  })
+  assert.equal(approvals.status, 200)
+  assert.deepEqual(await approvals.json(), [])
 })

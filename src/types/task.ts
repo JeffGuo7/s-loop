@@ -15,7 +15,13 @@ export interface TaskSchedule {
   display: string
 }
 
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type TaskStatus =
+  | 'pending'
+  | 'running'
+  | 'waiting_for_approval'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 
 export interface RepeatConfig {
   /** Number of runs before auto-removal. null = infinite */
@@ -53,6 +59,7 @@ export interface ScheduledTask {
   lastStartedAt?: number | null
   lastFinishedAt?: number | null
   lastRunId?: string
+  pendingApprovalId?: string
   lastTrigger?: 'manual' | 'scheduled'
   lastStatus: TaskStatus
   lastError?: string
