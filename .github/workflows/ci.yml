@@ -43,6 +43,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - uses: actions/cache@v4
+        with:
+          path: stt/target/sherpa-onnx-prebuilt
+          key: sherpa-onnx-1.13.4-windows-x64-static-mt
+
       - name: Configure LLVM
         shell: pwsh
         run: |
@@ -57,3 +62,5 @@ jobs:
 
       - run: cargo check --manifest-path src-tauri/Cargo.toml
         name: Check Tauri native layer
+        env:
+          SHERPA_ONNX_ARCHIVE_DIR: ${{ github.workspace }}\stt\target\sherpa-onnx-prebuilt

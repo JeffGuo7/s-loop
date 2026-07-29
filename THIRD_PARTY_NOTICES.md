@@ -9,3 +9,14 @@ Copyright (c) 2024 Andrew Ng
 
 Licensed under the MIT License. The full license text is available in the OpenWorker source
 distribution and at <https://opensource.org/license/mit>.
+
+## sherpa-onnx
+
+Streaming speech recognition, voice activity detection, and text-to-speech use the sherpa-onnx
+Rust API and native runtime.
+
+Copyright (c) the sherpa-onnx contributors.
+
+Licensed under the Apache License 2.0. See <https://github.com/k2-fsa/sherpa-onnx>.
+
+Downloaded speech models remain under the licenses distributed inside their model archives.

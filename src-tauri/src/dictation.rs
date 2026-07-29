@@ -1,7 +1,7 @@
 use std::{process::Command, sync::Arc};
 
+use s_loop_speech::{Dictation, DownloadProgress};
 use serde::Serialize;
-use snotra_stt::{Dictation, DownloadProgress};
 use tauri::{Emitter, Manager};
 
 #[derive(Clone, Serialize)]

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle, Download, Mic, Square, Trash2, X } from 'lucide-react'
 import i18n from '../../i18n'
+import { VoiceRuntimeSettings } from './VoiceRuntimeSettings'
 import {
   cancelDictation,
   cancelDictationModelDownload,
@@ -265,6 +266,7 @@ export function VoiceInputSettings() {
       <div className={`rounded-2xl px-5 py-4 text-sm font-bold ${status?.modelVerified && status?.testPassed ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600'}`}>
         {status?.modelVerified && status?.testPassed ? text.ready : text.notReady}
       </div>
+      <VoiceRuntimeSettings />
     </div>
   )
 }

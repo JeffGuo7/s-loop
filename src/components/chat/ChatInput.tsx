@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send, Square, X, File, Paperclip, Mic, LoaderCircle } from 'lucide-react'
+import { Send, Square, X, File, Paperclip, Mic, LoaderCircle, AudioLines, PhoneCall } from 'lucide-react'
 import { TextField, TextArea } from "@heroui/react"
 import { Button, Card } from '../ui'
 import {
@@ -13,6 +13,24 @@ import {
   stopDictation,
   type VoiceInputStatus,
 } from '../../utils/voiceInput'
+import {
+  cancelRealtimeVoice,
+  getVoiceRuntimeStatus,
+  listenRealtimeVoice,
+  listenSpeechPlayback,
+  startRealtimeVoice,
+  stopRealtimeVoice,
+  stopSpeaking,
+  voiceAsset,
+  type VoiceRuntimeStatus,
+} from '../../utils/voiceRuntime'
+import {
+  getVoiceConversation,
+  listenVoiceConversation,
+  setVoiceConversation,
+  setVoiceConversationState,
+  type VoiceConversationSnapshot,
+} from '../../utils/voiceConversation'
 
 interface FileAttachment {
   path: string
@@ -52,7 +70,18 @@ export function ChatInput({
   const [dictationError, setDictationError] = useState<string | null>(null)
   const [levels, setLevels] = useState<number[]>([])
   const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [voiceRuntime, setVoiceRuntime] = useState<VoiceRuntimeStatus | null>(null)
+  const [realtimeMode, setRealtimeMode] = useState<'dictation' | 'conversation' | null>(null)
+  const [realtimePartial, setRealtimePartial] = useState('')
+  const [realtimeLevel, setRealtimeLevel] = useState(0)
+  const [realtimeBusy, setRealtimeBusy] = useState(false)
+  const [conversation, setConversationSnapshot] = useState<VoiceConversationSnapshot>(
+    getVoiceConversation(),
+  )
   const composingRef = useRef(false)
+  const realtimeModeRef = useRef<'dictation' | 'conversation' | null>(null)
+  const turnSubmittedRef = useRef(false)
+  const isStreamingRef = useRef(isStreaming)
 
   const removeAttachment = useCallback((index: number) => {
     setAttachments((prev) => {
@@ -115,7 +144,7 @@ export function ChatInput({
   }, [])
 
   const submitWithAttachments = useCallback(() => {
-    if (dictation?.recording || dictationBusy) return
+    if (dictation?.recording || dictationBusy || realtimeMode || realtimeBusy) return
     if (!input.trim() && attachments.length === 0) return
 
     const parts: string[] = []
@@ -143,18 +172,18 @@ export function ChatInput({
     onSubmit(parts.join('\n'), images.length > 0 ? images : undefined)
     setInput('')
     setAttachments([])
-  }, [input, attachments, onSubmit, dictation?.recording, dictationBusy])
+  }, [input, attachments, onSubmit, dictation?.recording, dictationBusy, realtimeMode, realtimeBusy])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey && !composingRef.current) {
         e.preventDefault()
-        if ((input.trim() || attachments.length > 0) && !isStreaming && !disabled && !dictation?.recording && !dictationBusy) {
+        if ((input.trim() || attachments.length > 0) && !isStreaming && !disabled && !dictation?.recording && !dictationBusy && !realtimeMode && !realtimeBusy) {
           submitWithAttachments()
         }
       }
     },
-    [input, attachments, isStreaming, disabled, submitWithAttachments, dictation?.recording, dictationBusy],
+    [input, attachments, isStreaming, disabled, submitWithAttachments, dictation?.recording, dictationBusy, realtimeMode, realtimeBusy],
   )
 
   const handleSubmit = useCallback(
@@ -217,9 +246,151 @@ export function ChatInput({
       void getDictationStatus().then(setDictation).catch(() => setDictation(null))
     }
     refresh()
-    window.addEventListener('snotra:voice-input-changed', refresh)
-    return () => window.removeEventListener('snotra:voice-input-changed', refresh)
+    window.addEventListener('s-loop:voice-input-changed', refresh)
+    return () => window.removeEventListener('s-loop:voice-input-changed', refresh)
   }, [])
+
+  useEffect(() => {
+    realtimeModeRef.current = realtimeMode
+  }, [realtimeMode])
+
+  useEffect(() => {
+    isStreamingRef.current = isStreaming
+  }, [isStreaming])
+
+  useEffect(() => {
+    if (
+      !conversation.active ||
+      conversation.state !== 'listening' ||
+      realtimeMode ||
+      realtimeBusy ||
+      isStreaming
+    ) {
+      return
+    }
+    turnSubmittedRef.current = false
+    realtimeModeRef.current = 'conversation'
+    setRealtimeMode('conversation')
+    setRealtimeBusy(true)
+    void startRealtimeVoice()
+      .then(setVoiceRuntime)
+      .catch((reason) => {
+        setDictationError(String(reason))
+        setVoiceConversation(false, 'error', String(reason))
+      })
+      .finally(() => setRealtimeBusy(false))
+  }, [conversation.active, conversation.state, realtimeMode, realtimeBusy, isStreaming])
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return
+    void getVoiceRuntimeStatus().then(setVoiceRuntime).catch(() => setVoiceRuntime(null))
+    const disposeConversation = listenVoiceConversation(setConversationSnapshot)
+    let disposeRealtime: (() => void) | undefined
+    let disposePlayback: (() => void) | undefined
+
+    void listenRealtimeVoice((event) => {
+      if (event.kind === 'level') {
+        setRealtimeLevel(event.level ?? 0)
+        return
+      }
+      if (event.kind === 'partial') {
+        setRealtimePartial(event.text?.trim() ?? '')
+        return
+      }
+      if (event.kind === 'final') {
+        const transcript = event.text?.trim() ?? ''
+        setRealtimePartial('')
+        if (!transcript) return
+
+        const currentConversation = getVoiceConversation()
+        if (
+          realtimeModeRef.current === 'conversation' &&
+          currentConversation.active &&
+          event.turnComplete &&
+          !turnSubmittedRef.current &&
+          !isStreamingRef.current
+        ) {
+          turnSubmittedRef.current = true
+          realtimeModeRef.current = null
+          setRealtimeMode(null)
+          setVoiceConversationState('thinking')
+          void cancelRealtimeVoice().then(setVoiceRuntime).catch(() => undefined)
+          onSubmit(transcript)
+          return
+        }
+
+        if (realtimeModeRef.current === 'dictation') {
+          setInput((draft) =>
+            draft.trim() ? `${draft.trimEnd()} ${transcript}` : transcript,
+          )
+        }
+        return
+      }
+      if (event.kind === 'state') {
+        if (event.state === 'listening') {
+          setRealtimeBusy(false)
+          if (getVoiceConversation().active) {
+            setVoiceConversationState('listening')
+          }
+        }
+        if (event.state === 'stopped') {
+          setRealtimeBusy(false)
+          setRealtimeLevel(0)
+          setRealtimePartial('')
+          if (!getVoiceConversation().active) {
+            realtimeModeRef.current = null
+            setRealtimeMode(null)
+          }
+        }
+        return
+      }
+      if (event.kind === 'error') {
+        setDictationError(event.message || 'Real-time voice recognition failed.')
+        setRealtimeBusy(false)
+        realtimeModeRef.current = null
+        setRealtimeMode(null)
+        setVoiceConversation(false, 'error', event.message || undefined)
+      }
+    }).then((dispose) => {
+      disposeRealtime = dispose
+    })
+
+    void listenSpeechPlayback((event) => {
+      const current = getVoiceConversation()
+      if (!current.active) return
+      if (event.state === 'loading' || event.state === 'speaking') {
+        setVoiceConversationState('speaking')
+        return
+      }
+      if (event.state === 'error') {
+        setVoiceConversation(false, 'error', event.message || undefined)
+        setDictationError(event.message || 'Local speech playback failed.')
+        return
+      }
+      if (event.state === 'idle' && current.state === 'speaking') {
+        setVoiceConversationState('starting')
+        turnSubmittedRef.current = false
+        realtimeModeRef.current = 'conversation'
+        setRealtimeMode('conversation')
+        setRealtimeBusy(true)
+        void startRealtimeVoice()
+          .then(setVoiceRuntime)
+          .catch((reason) => {
+            setRealtimeBusy(false)
+            setDictationError(String(reason))
+            setVoiceConversation(false, 'error', String(reason))
+          })
+      }
+    }).then((dispose) => {
+      disposePlayback = dispose
+    })
+
+    return () => {
+      disposeConversation()
+      disposeRealtime?.()
+      disposePlayback?.()
+    }
+  }, [onSubmit])
 
   useEffect(() => {
     if (!dictation?.recording) {
@@ -250,6 +421,23 @@ export function ChatInput({
     return () => window.removeEventListener('keydown', cancelOnEscape)
   }, [dictation?.recording])
 
+  useEffect(() => {
+    if (!realtimeMode) return
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setVoiceConversation(false)
+      realtimeModeRef.current = null
+      setRealtimeMode(null)
+      setRealtimePartial('')
+      setRealtimeLevel(0)
+      void cancelRealtimeVoice().then(setVoiceRuntime).catch(() => undefined)
+      void stopSpeaking().catch(() => undefined)
+    }
+    window.addEventListener('keydown', cancelOnEscape)
+    return () => window.removeEventListener('keydown', cancelOnEscape)
+  }, [realtimeMode])
+
   const toggleDictation = async () => {
     if (!isTauriRuntime() || dictationBusy) return
     setDictationError(null)
@@ -276,6 +464,99 @@ export function ChatInput({
       await getDictationStatus().then(setDictation).catch(() => undefined)
     } finally {
       setDictationBusy(false)
+    }
+  }
+
+  const realtimeReady =
+    !!voiceAsset(voiceRuntime, 'streaming-asr')?.installed &&
+    !!voiceAsset(voiceRuntime, 'vad')?.installed
+  const conversationReady =
+    realtimeReady && !!voiceAsset(voiceRuntime, 'tts')?.installed
+
+  const toggleRealtimeDictation = async () => {
+    if (!isTauriRuntime() || realtimeBusy || conversation.active) return
+    setDictationError(null)
+    setRealtimeBusy(true)
+    try {
+      if (realtimeMode === 'dictation') {
+        await stopRealtimeVoice()
+        realtimeModeRef.current = null
+        setRealtimeMode(null)
+        setRealtimePartial('')
+        setRealtimeLevel(0)
+        setVoiceRuntime(await getVoiceRuntimeStatus())
+        textareaRef.current?.focus()
+        return
+      }
+      const current = voiceRuntime || await getVoiceRuntimeStatus()
+      setVoiceRuntime(current)
+      if (
+        !voiceAsset(current, 'streaming-asr')?.installed ||
+        !voiceAsset(current, 'vad')?.installed
+      ) {
+        openVoiceInputSettings()
+        return
+      }
+      turnSubmittedRef.current = false
+      realtimeModeRef.current = 'dictation'
+      setRealtimeMode('dictation')
+      setVoiceRuntime(await startRealtimeVoice())
+    } catch (reason) {
+      realtimeModeRef.current = null
+      setRealtimeMode(null)
+      setDictationError(String(reason))
+    } finally {
+      setRealtimeBusy(false)
+    }
+  }
+
+  const toggleConversation = async () => {
+    if (!isTauriRuntime() || realtimeBusy) return
+    setDictationError(null)
+
+    if (conversation.active) {
+      if (conversation.state === 'speaking') {
+        await stopSpeaking().catch((reason) => setDictationError(String(reason)))
+        return
+      }
+      setVoiceConversation(false)
+      realtimeModeRef.current = null
+      setRealtimeMode(null)
+      setRealtimePartial('')
+      setRealtimeLevel(0)
+      await Promise.all([
+        cancelRealtimeVoice().catch(() => undefined),
+        stopSpeaking().catch(() => undefined),
+      ])
+      setVoiceRuntime(await getVoiceRuntimeStatus().catch(() => voiceRuntime))
+      return
+    }
+
+    const current = voiceRuntime || await getVoiceRuntimeStatus()
+    setVoiceRuntime(current)
+    if (
+      !voiceAsset(current, 'streaming-asr')?.installed ||
+      !voiceAsset(current, 'vad')?.installed ||
+      !voiceAsset(current, 'tts')?.installed
+    ) {
+      openVoiceInputSettings()
+      return
+    }
+
+    setRealtimeBusy(true)
+    setVoiceConversation(true, 'starting')
+    turnSubmittedRef.current = false
+    realtimeModeRef.current = 'conversation'
+    setRealtimeMode('conversation')
+    try {
+      setVoiceRuntime(await startRealtimeVoice())
+    } catch (reason) {
+      realtimeModeRef.current = null
+      setRealtimeMode(null)
+      setVoiceConversation(false, 'error', String(reason))
+      setDictationError(String(reason))
+    } finally {
+      setRealtimeBusy(false)
     }
   }
 
@@ -360,12 +641,57 @@ export function ChatInput({
               </div>
             )}
 
+            {realtimeMode && (
+              <div className="mx-5 mt-4 rounded-2xl bg-accent/5 px-4 py-3 text-accent">
+                <div className="flex items-center gap-3">
+                  <span className="h-2.5 w-2.5 rounded-full bg-accent animate-pulse" />
+                  <span className="text-xs font-bold">
+                    {realtimeMode === 'conversation'
+                      ? chinese
+                        ? conversation.state === 'thinking'
+                          ? '正在思考'
+                          : conversation.state === 'speaking'
+                            ? '正在回答'
+                            : '实时通话 · 正在聆听'
+                        : conversation.state === 'thinking'
+                          ? 'Thinking'
+                          : conversation.state === 'speaking'
+                            ? 'Speaking'
+                            : 'Voice call · Listening'
+                      : chinese
+                        ? '实时字幕'
+                        : 'Live captions'}
+                  </span>
+                  <div className="ml-auto flex h-7 items-center gap-1" aria-label="Real-time microphone input level">
+                    {Array.from({ length: 16 }, (_, index) => (
+                      <span
+                        key={index}
+                        className="w-1 rounded-full bg-accent/70 transition-all"
+                        style={{
+                          height: `${4 + Math.max(0.04, realtimeLevel) * (10 + (index % 5) * 3)}px`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[11px] text-text-tertiary">
+                    Esc {chinese ? '结束' : 'to stop'}
+                  </span>
+                </div>
+                {realtimePartial && (
+                  <p className="mt-2 border-t border-accent/10 pt-2 text-sm font-medium text-text-secondary">
+                    {realtimePartial}
+                    <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-accent align-middle" />
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex items-end px-3">
             <div className="flex-1">
               <TextField
                 value={input}
                 onChange={setInput}
-                isDisabled={disabled || isStreaming || !!dictation?.recording || dictationBusy}
+                isDisabled={disabled || isStreaming || !!dictation?.recording || dictationBusy || !!realtimeMode || realtimeBusy}
                 className="w-full selection:bg-accent/20"
               >
                 <TextArea
@@ -396,27 +722,79 @@ export function ChatInput({
                 ) : (
                   <div className="flex items-center gap-2">
                     {isTauriRuntime() && (
-                      <Button
-                        type="button"
-                        variant={dictation?.recording ? 'danger' : 'secondary'}
-                        size="icon"
-                        aria-label={dictation?.recording ? 'Stop dictation' : voiceReady ? 'Start dictation' : 'Configure voice input'}
-                        title={dictation?.recording ? (chinese ? '停止并转写' : 'Stop and transcribe') : voiceReady ? (chinese ? '本地语音输入' : 'Local voice input') : (chinese ? '先配置语音输入' : 'Configure voice input first')}
-                        isDisabled={dictationBusy || disabled || isStreaming}
-                        onClick={() => void toggleDictation()}
-                        className={`w-11 h-11 rounded-xl ${!voiceReady && !dictation?.recording ? 'opacity-50' : ''}`}
-                      >
-                        {dictationBusy ? <LoaderCircle size={17} className="animate-spin" /> : dictation?.recording ? <Square size={15} fill="currentColor" /> : <Mic size={18} />}
-                      </Button>
+                      <>
+                        <Button
+                          type="button"
+                          variant={dictation?.recording ? 'danger' : 'secondary'}
+                          size="icon"
+                          aria-label={dictation?.recording ? 'Stop dictation' : voiceReady ? 'Start dictation' : 'Configure voice input'}
+                          title={dictation?.recording ? (chinese ? '停止并转写' : 'Stop and transcribe') : voiceReady ? (chinese ? '本地语音输入' : 'Local voice input') : (chinese ? '先配置语音输入' : 'Configure voice input first')}
+                          isDisabled={dictationBusy || disabled || isStreaming || !!realtimeMode || realtimeBusy}
+                          onClick={() => void toggleDictation()}
+                          className={`w-11 h-11 rounded-xl ${!voiceReady && !dictation?.recording ? 'opacity-50' : ''}`}
+                        >
+                          {dictationBusy ? <LoaderCircle size={17} className="animate-spin" /> : dictation?.recording ? <Square size={15} fill="currentColor" /> : <Mic size={18} />}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={realtimeMode === 'dictation' ? 'danger' : 'secondary'}
+                          size="icon"
+                          aria-label={realtimeMode === 'dictation' ? 'Stop live captions' : 'Start live captions'}
+                          title={
+                            realtimeMode === 'dictation'
+                              ? chinese ? '停止实时字幕' : 'Stop live captions'
+                              : realtimeReady
+                                ? chinese ? '流式中间字幕' : 'Live partial captions'
+                                : chinese ? '先安装实时语音模型' : 'Configure real-time voice first'
+                          }
+                          isDisabled={disabled || isStreaming || dictationBusy || !!dictation?.recording || realtimeBusy || conversation.active}
+                          onClick={() => void toggleRealtimeDictation()}
+                          className={`w-11 h-11 rounded-xl ${!realtimeReady && realtimeMode !== 'dictation' ? 'opacity-50' : ''}`}
+                        >
+                          {realtimeBusy && realtimeMode !== 'conversation' ? (
+                            <LoaderCircle size={17} className="animate-spin" />
+                          ) : realtimeMode === 'dictation' ? (
+                            <Square size={15} fill="currentColor" />
+                          ) : (
+                            <AudioLines size={18} />
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={conversation.active ? 'danger' : 'secondary'}
+                          size="icon"
+                          aria-label={conversation.active ? 'Stop voice conversation' : 'Start voice conversation'}
+                          title={
+                            conversation.active && conversation.state === 'speaking'
+                              ? chinese ? '打断回答并继续说话' : 'Interrupt and speak'
+                              : conversation.active
+                                ? chinese ? '结束实时通话' : 'End voice conversation'
+                                : conversationReady
+                                  ? chinese ? '开始实时语音通话' : 'Start voice conversation'
+                                  : chinese ? '先安装实时识别、VAD 和 TTS 模型' : 'Install real-time voice and TTS models first'
+                          }
+                          isDisabled={disabled || !!dictation?.recording || dictationBusy || (isStreaming && !conversation.active) || (realtimeMode === 'dictation')}
+                          onClick={() => void toggleConversation()}
+                          className={`w-11 h-11 rounded-xl ${!conversationReady && !conversation.active ? 'opacity-50' : ''}`}
+                        >
+                          {realtimeBusy && realtimeMode === 'conversation' ? (
+                            <LoaderCircle size={17} className="animate-spin" />
+                          ) : conversation.active && conversation.state !== 'speaking' ? (
+                            <Square size={15} fill="currentColor" />
+                          ) : (
+                            <PhoneCall size={18} />
+                          )}
+                        </Button>
+                      </>
                     )}
                     <Button
                       type="submit"
                       variant="primary"
                       size="icon"
                       aria-label="Send message"
-                      isDisabled={(!input.trim() && attachments.length === 0) || disabled || !!dictation?.recording || dictationBusy}
+                      isDisabled={(!input.trim() && attachments.length === 0) || disabled || !!dictation?.recording || dictationBusy || !!realtimeMode || realtimeBusy}
                       className={`w-11 h-11 rounded-xl shadow-xl transition-all duration-700 ${
-                        (input.trim() || attachments.length > 0) && !dictation?.recording && !dictationBusy
+                        (input.trim() || attachments.length > 0) && !dictation?.recording && !dictationBusy && !realtimeMode && !realtimeBusy
                           ? 'shadow-accent/50 scale-100 hover:scale-105 active:scale-95'
                           : 'shadow-none scale-90 opacity-20 grayscale pointer-events-none'
                       }`}

@@ -1,46 +1,89 @@
-# Local voice input
+# Local voice runtime
 
-Snotra's first voice feature intentionally matches OpenWorker's current scope: local dictation
-only. It does not implement text-to-speech, a voice assistant loop, partial streaming transcripts,
-or remote audio processing.
+S-Loop keeps the real-time audio path in Rust and uses Tauri events as the typed boundary to the
+React UI. Node.js and the agent server are not involved in microphone capture or audio playback.
+
+## Capabilities
+
+- Final local dictation uses multilingual Whisper Base. The transcript is inserted into the draft
+  and is never sent automatically.
+- Streaming captions use sherpa-onnx with a bilingual Chinese/English Zipformer model.
+- Voice activity detection uses sherpa-onnx with Silero VAD.
+- Text-to-speech uses sherpa-onnx with the Chinese/English Kokoro model.
+- Voice conversation mode follows `listening → thinking → speaking → listening`. A finalized user
+  turn is sent to the current chat, the final assistant response is spoken, and listening resumes
+  after playback.
+- Clicking the call button while the assistant is speaking stops playback and resumes listening.
+  This is the initial interruption mechanism; acoustic echo cancellation is intentionally a later
+  layer.
+
+Streaming hypotheses are visually distinct from finalized text because partial results can be
+revised by the recognizer.
 
 ## Architecture
 
-- `stt/` is a Tauri-independent Rust crate that owns microphone capture, model provisioning, and
-  final Whisper transcription.
-- `src-tauri/src/dictation.rs` exposes the engine as Tauri commands and reports compatibility.
-- `src/utils/voiceInput.ts` is the typed frontend boundary.
-- Settings own model download, checksum verification, microphone testing, and deletion.
-- The chat input owns the recording UX. A transcript is appended to the editable draft and is
-  never sent automatically.
+- `stt/` is a Tauri-independent Rust crate.
+  - `lib.rs` retains CPAL capture and Whisper final transcription.
+  - `voice_assets.rs` downloads, safely extracts, validates, and deletes optional voice models.
+  - `realtime.rs` owns CPAL capture, linear resampling, Silero VAD, Zipformer decoding, endpointing,
+    and partial/final events.
+  - `tts.rs` owns Kokoro initialization, incremental generation, CPAL/rodio playback, and
+    cancellation.
+- `src-tauri/src/dictation.rs` exposes final Whisper dictation.
+- `src-tauri/src/voice.rs` exposes model management, streaming recognition, and speech playback.
+- `src/utils/voiceRuntime.ts` is the typed frontend command/event boundary.
+- `src/utils/voiceConversation.ts` owns the UI conversation state machine and converts assistant
+  Markdown into speakable text.
 
-Audio samples remain in memory for the active recording and are discarded after transcription or
-cancel. The only persistent files are the downloaded model and small verification/readiness
-markers in the app data `models` directory.
+Audio remains in memory. Model files are the only persistent voice data.
 
-## Model
+## Models
 
-Snotra uses multilingual Whisper Base (`ggml-base.bin`) so Chinese and English can be detected
-automatically. The model is downloaded on explicit user action and is not bundled into `.exe`,
-`.msi`, or `.dmg` installers.
+Models are downloaded only after explicit user action and are not bundled into `.exe` or `.msi`
+installers.
 
-- Download size: `147951465` bytes
-- SHA-256: `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`
-- Source: `ggerganov/whisper.cpp` on Hugging Face
+| Capability | Model | Source |
+| --- | --- | --- |
+| Final dictation | Whisper Base multilingual | `ggerganov/whisper.cpp` |
+| Streaming ASR | Streaming Zipformer bilingual zh/en | `k2-fsa/sherpa-onnx` releases |
+| VAD | Silero VAD ONNX | `k2-fsa/sherpa-onnx` releases |
+| TTS | Kokoro multi-language v1.0 | `k2-fsa/sherpa-onnx` releases |
 
-Downloads are written to a `.part` file, can be cancelled, and only replace the active model after
-both the expected size and SHA-256 pass.
+Downloads use temporary `.part` files. Archives are extracted into a staging directory, archive
+paths are checked for traversal, required model files are validated, and only then is the model
+activated. Interrupted downloads and installations never replace an active model.
+
+## Events
+
+- `dictation-download-progress`
+- `voice-asset-progress`
+- `voice-realtime`
+  - `state`
+  - `level`
+  - `speech-start`
+  - `speech-end`
+  - `partial`
+  - `final`
+  - `error`
+- `voice-playback`
+  - `loading`
+  - `speaking`
+  - `idle`
+  - `error`
 
 ## Native build requirements
 
-`whisper-rs` compiles whisper.cpp during the Rust build. Build machines need:
+`whisper-rs` compiles whisper.cpp during the Rust build. The sherpa-onnx Rust crate downloads the
+matching prebuilt static native library during its build. Windows build machines need Rust MSVC,
+Visual Studio C++ Build Tools, a Windows SDK, CMake, and LLVM/libclang.
 
-- Rust with the MSVC target on Windows
-- Visual Studio C++ Build Tools and a Windows SDK
-- CMake
-- LLVM/libclang (set `LIBCLANG_PATH` if it is not discoverable)
+These are build-time requirements only. Installed S-Loop users do not need Node.js, Git, Python,
+LLVM, CMake, or Visual Studio for voice features.
 
-These are build-time requirements only. End users do not need Node.js, Git, Python, LLVM, CMake, or
-Visual Studio to use voice input in an installed Snotra build.
+## Current audio limitation
 
-macOS builds also merge `src-tauri/Info.plist`, which contains the microphone usage description.
+The first real-time conversation implementation pauses microphone recognition while synthesized
+speech is playing. This prevents the assistant from recognizing its own speaker output without
+requiring a fragile software echo suppressor. Users can click the active call button to interrupt
+playback and immediately resume listening. A future full-duplex mode should add a tested acoustic
+echo-cancellation layer before keeping microphone recognition active during playback.

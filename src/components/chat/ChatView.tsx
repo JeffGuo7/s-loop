@@ -12,6 +12,11 @@ import { ChatInput } from './ChatInput'
 import { ModelSwitcher } from './ModelSwitcher'
 import { FilePreviewPanel } from '../preview'
 import * as Pi from '../../utils/piClient'
+import {
+  getVoiceConversation,
+  setVoiceConversation,
+  speakVoiceConversationResponse,
+} from '../../utils/voiceConversation'
 import type { KiloMessage } from '../../types'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -312,6 +317,9 @@ export function ChatView() {
         setError(result.error)
         finishStreaming(sid)
         usePetStore.getState().onError()
+        if (getVoiceConversation().active) {
+          setVoiceConversation(false, 'error', result.error)
+        }
         return
       }
 
@@ -342,6 +350,11 @@ export function ChatView() {
       }
 
       commitStreamingMessage(sid, completedMessage)
+      const responseText = accumulatedParts
+        .filter((part) => part.type === 'text' && 'text' in part)
+        .map((part) => ('text' in part ? part.text : ''))
+        .join('\n')
+      void speakVoiceConversationResponse(responseText)
       useAppStore.getState().incrementFileTreeVersion()
       usePetStore.getState().onResponded()
     },
@@ -359,6 +372,7 @@ export function ChatView() {
       streamUnsubsRef.current.delete(activePiSessionId)
     }
     if (activeSessionId) finishStreaming(activeSessionId)
+    if (getVoiceConversation().active) setVoiceConversation(false)
     usePetStore.getState().onResponded()
   }, [activePiSessionId, activeSessionId, finishStreaming])
 

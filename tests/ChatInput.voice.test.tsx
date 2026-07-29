@@ -28,7 +28,7 @@ describe('ChatInput local dictation', () => {
     vi.mocked(invoke).mockImplementation(async (command) => {
       if (command === 'get_dictation_status') return ready
       if (command === 'start_dictation') return { ...ready, recording: true }
-      if (command === 'stop_dictation') return '你好 Snotra'
+      if (command === 'stop_dictation') return '你好 S-Loop'
       if (command === 'dictation_level') return 0.5
       return undefined
     })
@@ -42,7 +42,7 @@ describe('ChatInput local dictation', () => {
     fireEvent.click(await screen.findByLabelText('Stop dictation'))
 
     await waitFor(() => {
-      expect(screen.getByRole('textbox')).toHaveValue('你好 Snotra')
+      expect(screen.getByRole('textbox')).toHaveValue('你好 S-Loop')
     })
     expect(onSubmit).not.toHaveBeenCalled()
   })

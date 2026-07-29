@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Snotra uses the microphone only while you record local voice input.</string>
+  <string>S-Loop uses the microphone only while you record local voice input.</string>
 </dict>
 </plist>

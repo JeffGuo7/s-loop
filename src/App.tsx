@@ -45,8 +45,8 @@ function App() {
       setSettingsTab(requestedTab || 'provider')
       setShowSettings(true)
     }
-    window.addEventListener('snotra:open-settings', openSettings)
-    return () => window.removeEventListener('snotra:open-settings', openSettings)
+    window.addEventListener('s-loop:open-settings', openSettings)
+    return () => window.removeEventListener('s-loop:open-settings', openSettings)
   }, [])
 
   useEffect(() => {

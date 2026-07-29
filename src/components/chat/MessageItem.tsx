@@ -135,6 +135,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming = fa
                 content={allText}
                 timestamp={message.info.time.created}
                 align="start"
+                speakable
               />
               {!isStreaming && message.info.cost !== undefined && (
                 <div className="text-[10px] font-bold text-text-tertiary tracking-[0.1em] uppercase flex items-center gap-3 opacity-50">

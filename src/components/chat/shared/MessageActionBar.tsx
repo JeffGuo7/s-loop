@@ -1,11 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { CopyButton } from './CopyButton'
+import { SpeechButton } from './SpeechButton'
 
 interface MessageActionBarProps {
   content?: string
   timestamp?: number
   align?: 'start' | 'end'
+  speakable?: boolean
 }
 
 function formatRelativeTime(ts: number, t: TFunction): string {
@@ -16,8 +18,8 @@ function formatRelativeTime(ts: number, t: TFunction): string {
   return t('chat.time.daysAgo', { n: Math.floor(diff / 86400) })
 }
 
-export function MessageActionBar({ content, timestamp, align = 'start' }: MessageActionBarProps) {
-  const { t } = useTranslation()
+export function MessageActionBar({ content, timestamp, align = 'start', speakable = false }: MessageActionBarProps) {
+  const { t, i18n } = useTranslation()
   return (
     <div
       className={`flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${
@@ -30,6 +32,12 @@ export function MessageActionBar({ content, timestamp, align = 'start' }: Messag
         </span>
       )}
       {content && <CopyButton text={content} label={t('chat.copy.copy')} />}
+      {content && speakable && (
+        <SpeechButton
+          text={content}
+          label={i18n.resolvedLanguage?.startsWith('zh') ? '朗读' : 'Speak'}
+        />
+      )}
     </div>
   )
 }

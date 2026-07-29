@@ -1,4 +1,4 @@
-//! Local, offline speech-to-text for Snotra.
+//! Local speech input, streaming recognition, and speech synthesis for S-Loop.
 //!
 //! The design follows OpenWorker's MIT-licensed `ocw-stt` crate: this crate deliberately has no
 //! Tauri or UI dependency. Audio is held in memory only for the active recording; the host owns
@@ -23,6 +23,14 @@ use cpal::{
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+
+mod realtime;
+mod tts;
+mod voice_assets;
+
+pub use realtime::{RealtimeEventKind, RealtimeRecognizer, RealtimeState, RealtimeVoiceEvent};
+pub use tts::{SpeechPlaybackEvent, SpeechPlaybackState, SpeechSynthesizer};
+pub use voice_assets::{VoiceAssetKind, VoiceAssetProgress, VoiceAssetStatus, VoiceAssets};
 
 /// Multilingual Whisper Base supports Chinese and English while keeping the download around 141 MiB.
 pub const DEFAULT_MODEL_FILE: &str = "ggml-base.bin";
@@ -471,7 +479,7 @@ fn build_stream(
     samples: Arc<Mutex<Vec<f32>>>,
 ) -> Result<Stream, String> {
     let channels = config.channels as usize;
-    let on_error = |error| eprintln!("[snotra-stt] microphone stream error: {error}");
+    let on_error = |error| eprintln!("[s-loop-speech] microphone stream error: {error}");
     match sample_format {
         SampleFormat::F32 => device
             .build_input_stream(
@@ -618,7 +626,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("snotra-stt-readiness-{unique}"));
+        let dir = std::env::temp_dir().join(format!("s-loop-speech-readiness-{unique}"));
         fs::create_dir_all(&dir).unwrap();
         let model = dir.join(DEFAULT_MODEL_FILE);
         fs::File::create(&model)

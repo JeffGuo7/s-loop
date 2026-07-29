@@ -5,6 +5,7 @@ mod mcp_manager;
 mod pi_server;
 mod skill_installer;
 mod skills_cli;
+mod voice;
 
 use crate::mcp_manager::MCPManager;
 use crate::pi_server::{ensure_pi_server_extracted, PiServerProcess, PiServerState};
@@ -605,10 +606,20 @@ pub fn run() {
             dictation::mark_dictation_test_passed,
             dictation::delete_dictation_model,
             dictation::dictation_level,
+            voice::get_voice_runtime_status,
+            voice::download_voice_asset,
+            voice::cancel_voice_asset_download,
+            voice::delete_voice_asset,
+            voice::speak_text,
+            voice::stop_speaking,
+            voice::start_realtime_voice,
+            voice::stop_realtime_voice,
+            voice::cancel_realtime_voice,
         ])
         .manage(MCPManager::new())
         .setup(move |app| {
             dictation::initialize(app)?;
+            voice::initialize(app)?;
             // Handle close → minimize (hide) behavior: clicking X should
             // hide the window to system tray, not quit the app.
             if let Some(window) = app.get_webview_window("main") {

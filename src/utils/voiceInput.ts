@@ -60,9 +60,9 @@ export const listenDictationDownloadProgress = (
   })
 
 export const publishVoiceInputStatus = (status?: VoiceInputStatus) => {
-  window.dispatchEvent(new CustomEvent('snotra:voice-input-changed', { detail: status }))
+  window.dispatchEvent(new CustomEvent('s-loop:voice-input-changed', { detail: status }))
 }
 
 export const openVoiceInputSettings = () => {
-  window.dispatchEvent(new CustomEvent('snotra:open-settings', { detail: 'voice' }))
+  window.dispatchEvent(new CustomEvent('s-loop:open-settings', { detail: 'voice' }))
 }
