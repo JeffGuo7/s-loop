@@ -17,6 +17,7 @@ import { loadAgentDefinition, formatAgentList } from './agent-registry.mjs'
 import { evaluateToolCall } from '../execution-policy.mjs'
 import { buildToolSecurityIndex } from '../tool-security.mjs'
 import { createToolAuditTracker } from '../audit-store.mjs'
+import { deriveSubagentAuthority } from './authority.mjs'
 
 const MAX_CONCURRENCY = 4
 const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
@@ -97,17 +98,31 @@ export async function runSubagent({
   const allTools = getTools
     ? getTools(parentConfig.workspaceDir, parentConfig.webSearchConfig)
     : []
-  const toolWhitelist = new Set(def.tools.map((t) => t.toLowerCase().trim()))
-  const allowedTools = toolWhitelist.size > 0
-    ? allTools.filter((t) => toolWhitelist.has(t.name.toLowerCase()))
-    : allTools
+  let authority
+  try {
+    authority = deriveSubagentAuthority(def, parentConfig, allTools)
+  } catch (error) {
+    return {
+      agent: agentName,
+      task,
+      exitCode: 1,
+      messages: [],
+      finalOutput: '',
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
+      stopReason: 'denied',
+      errorMessage: error?.message || String(error),
+    }
+  }
+  const allowedTools = authority.allowedTools
   const effectiveConfig = {
-    ...parentConfig,
+    ...authority.config,
     toolSecurity: buildToolSecurityIndex(allowedTools),
   }
   const toolAudit = createToolAuditTracker({
     ...(auditContext || {}),
     actor: `subagent:${agentName}`,
+    parentAgent: effectiveConfig.delegationParent,
+    delegationDepth: effectiveConfig.delegationDepth,
   })
 
   // 4. Create independent Agent instance
@@ -150,8 +165,20 @@ export async function runSubagent({
   })
 
   // 5. Subscribe to events for streaming
-  if (onUpdate) {
-    agent.subscribe((event) => {
+  let completedTurns = 0
+  let turnLimitReached = false
+  agent.subscribe((event) => {
+      if (event.type === 'message_end' && event.message?.role === 'assistant') {
+        completedTurns += 1
+        if (
+          completedTurns >= authority.maxTurns
+          && ['toolUse', 'tool_use'].includes(event.message?.stopReason)
+        ) {
+          turnLimitReached = true
+          try { agent.abort() } catch {}
+        }
+      }
+      if (onUpdate) {
       switch (event.type) {
         case 'message_start':
           onUpdate({ type: 'message_start', agentName, data: event.message })
@@ -175,8 +202,8 @@ export async function runSubagent({
           onUpdate({ type: 'tool_end', agentName, toolName: event.toolName, result: event.result, isError: event.isError })
           break
       }
+      }
     })
-  }
 
   // 6. Execute with timeout and abortion support
   let aborted = false
@@ -237,6 +264,14 @@ export async function runSubagent({
         exitCode: 1,
         stopReason: 'timeout',
         errorMessage: `Sub-agent timed out after ${MAX_SUBAGENT_TIMEOUT / 1000}s`,
+      }
+    }
+    if (turnLimitReached) {
+      return {
+        ...results,
+        exitCode: 1,
+        stopReason: 'turn-limit',
+        errorMessage: `Sub-agent reached its ${authority.maxTurns}-turn authority budget`,
       }
     }
 

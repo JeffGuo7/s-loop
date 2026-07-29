@@ -88,7 +88,9 @@ function parseAgentMarkdown(filePath) {
     tools: Array.isArray(frontmatter.tools) ? frontmatter.tools : [],
     thinkingLevel: frontmatter.thinkingLevel || 'off',
     maxTurns: parseInt(frontmatter.maxTurns, 10) || 10,
-    permissionMode: frontmatter.permissionMode || 'allow',
+    permissionMode: ['allow', 'ask', 'deny'].includes(frontmatter.permissionMode)
+      ? frontmatter.permissionMode
+      : 'ask',
     systemPrompt: body,
   }
 }

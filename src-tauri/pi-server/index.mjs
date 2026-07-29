@@ -54,7 +54,16 @@ import { ToolGuard } from './tool-guardrails.mjs'
 import { evaluateToolCall } from './execution-policy.mjs'
 import { sanitizeChildEnvironment } from './sandbox.mjs'
 import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
-import { connectSseMcpServer, disconnectSseMcpServer, getAllSseMcpTools, getSseMcpStatus, disconnectAllSseMcp, callSseMcpTool } from './mcp-sse.mjs'
+import {
+  callSseMcpTool,
+  completeSseMcpOAuth,
+  connectSseMcpServer,
+  disconnectAllSseMcp,
+  disconnectSseMcpServer,
+  getAllSseMcpTools,
+  getSseMcpOAuthCredentials,
+  getSseMcpStatus,
+} from './mcp-sse.mjs'
 import { guardSidecarRequest } from './http-security.mjs'
 import { buildToolSecurityIndex } from './tool-security.mjs'
 import {
@@ -284,6 +293,8 @@ function createDelegateTaskTool({ runtimeConfig, resolveModel, getTools, project
           permissionMode: wrapper?.config?.permissionMode,
           permissionRules: wrapper?.config?.permissionRules,
           toolSecurity: wrapper?.config?.toolSecurity,
+          agentId: wrapper?.auditContext?.actor || 'chat',
+          delegationDepth: wrapper?.config?.delegationDepth || 0,
         },
         resolveModel,
         getTools,
@@ -391,6 +402,8 @@ function createDelegateParallelTool({ runtimeConfig, resolveModel, getTools, pro
           permissionMode: wrapper?.config?.permissionMode,
           permissionRules: wrapper?.config?.permissionRules,
           toolSecurity: wrapper?.config?.toolSecurity,
+          agentId: wrapper?.auditContext?.actor || 'chat',
+          delegationDepth: wrapper?.config?.delegationDepth || 0,
         },
         resolveModel,
         getTools,
@@ -468,6 +481,8 @@ function createDelegateChainTool({ runtimeConfig, resolveModel, getTools, projec
           permissionMode: wrapper?.config?.permissionMode,
           permissionRules: wrapper?.config?.permissionRules,
           toolSecurity: wrapper?.config?.toolSecurity,
+          agentId: wrapper?.auditContext?.actor || 'chat',
+          delegationDepth: wrapper?.config?.delegationDepth || 0,
         },
         resolveModel,
         getTools,
@@ -1975,6 +1990,39 @@ createServer((req, res) => {
   // ── SSE MCP Endpoints ──
 
   // GET /mcp-sse/status — list connected SSE MCP servers and their tools
+  const oauthCallbackMatch = url.pathname.match(/^\/mcp-oauth\/callback\/([^/]+)$/)
+  if (req.method === 'GET' && oauthCallbackMatch) {
+    const name = decodeURIComponent(oauthCallbackMatch[1])
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+    if (!code || !state) {
+      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end('<h1>Snotra OAuth failed</h1><p>The authorization response is missing code or state.</p>')
+      return
+    }
+    completeSseMcpOAuth(name, code, state).then(() => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end('<h1>Authorization complete</h1><p>You can close this window and return to Snotra.</p>')
+    }).catch((error) => {
+      const message = String(error?.message || error).replace(/[<>&"']/g, '')
+      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end(`<h1>Snotra OAuth failed</h1><p>${message}</p>`)
+    })
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/mcp-oauth/credentials') {
+    const name = url.searchParams.get('name')
+    if (!name) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Missing "name"' }))
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(getSseMcpOAuthCredentials(name)))
+    return
+  }
+
   if (req.method === 'GET' && url.pathname === '/mcp-sse/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(getSseMcpStatus()))
@@ -1985,9 +2033,16 @@ createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/mcp-sse/connect') {
     readJsonBody(req).then(async (data) => {
       try {
-        const { name, url, headers, transport } = data
+        const { name, url, headers, transport, auth, toolFilter } = data
         if (!name || !url) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name" or "url"' })); return }
-        const result = await connectSseMcpServer(name, url, headers || {}, transport || 'http')
+        const result = await connectSseMcpServer(
+          name,
+          url,
+          headers || {},
+          transport || 'http',
+          auth || {},
+          toolFilter || {},
+        )
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, ...result }))
       } catch (e) {

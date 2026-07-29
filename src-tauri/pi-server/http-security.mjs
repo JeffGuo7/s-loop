@@ -4,6 +4,7 @@ export const API_TOKEN_HEADER = 'x-snotra-token'
 
 const ALLOWED_ORIGIN = /^(?:tauri:\/\/localhost|https?:\/\/tauri\.localhost|https?:\/\/localhost(?::\d+)?|https?:\/\/127\.0\.0\.1(?::\d+)?)$/
 const PLATFORM_INBOUND = /^\/platforms\/inbound\/[a-z0-9_-]+$/
+const MCP_OAUTH_CALLBACK = /^\/mcp-oauth\/callback\/[^/]+$/
 
 export function isAllowedOrigin(origin) {
   return !origin || ALLOWED_ORIGIN.test(origin)
@@ -11,6 +12,7 @@ export function isAllowedOrigin(origin) {
 
 function isPublicRequest(method, pathname) {
   return (method === 'GET' && pathname === '/health')
+    || (method === 'GET' && MCP_OAUTH_CALLBACK.test(pathname))
     || (method === 'POST' && PLATFORM_INBOUND.test(pathname))
 }
 

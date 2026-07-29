@@ -1,4 +1,5 @@
 mod commands;
+mod credential_store;
 mod mcp_manager;
 mod pi_server;
 mod skill_installer;
@@ -575,6 +576,9 @@ pub fn run() {
             commands::parse_skill_file,
             commands::search_remote_skills,
             commands::download_remote_skill_archive,
+            credential_store::mcp_secret_get,
+            credential_store::mcp_secret_merge,
+            credential_store::mcp_secret_delete,
             skills_cli::skills_cli_search,
             skills_cli::clawhub_install_skill,
             skills_cli::skills_cli_update,

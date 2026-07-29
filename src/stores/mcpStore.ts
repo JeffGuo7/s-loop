@@ -1,8 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import type { MCPServerConfig, MCPServerStatus, MCPTool, MCPResource } from '../types/mcp';
 import { getBaseUrl, waitForServer } from '../utils/piClient';
+import {
+  redactMCPServersForPersistence,
+  splitMCPServerSecrets,
+  type MCPSecretBundle,
+} from '../utils/mcpConfigSecurity';
 
 // ---- Tauri command response types (matches Rust mcp_manager.rs) ----
 
@@ -30,6 +36,38 @@ interface RemoteMCPResource {
   uri: string;
   description?: string;
   mimeType?: string;
+}
+
+async function loadServerSecrets(name: string): Promise<MCPSecretBundle> {
+  try {
+    return await invoke<MCPSecretBundle>('mcp_secret_get', { name });
+  } catch (error) {
+    console.warn(`[mcp] Unable to load protected credentials for "${name}":`, error);
+    return {};
+  }
+}
+
+async function saveServerSecrets(config: MCPServerConfig): Promise<MCPServerConfig> {
+  const split = splitMCPServerSecrets(config);
+  if (Object.keys(split.secrets).length > 0) {
+    await invoke('mcp_secret_merge', { name: config.name, values: split.secrets });
+  }
+  return split.config;
+}
+
+async function syncOAuthCredentials(name: string): Promise<void> {
+  try {
+    const response = await fetch(
+      `${getBaseUrl()}/mcp-oauth/credentials?name=${encodeURIComponent(name)}`,
+    );
+    if (!response.ok) return;
+    const oauth = await response.json();
+    if (oauth && Object.keys(oauth).length > 0) {
+      await invoke('mcp_secret_merge', { name, values: { oauth } });
+    }
+  } catch {
+    // OAuth credentials are exported only after a successful flow.
+  }
 }
 
 async function ensurePiServer(): Promise<void> {
@@ -108,17 +146,31 @@ export const useMCPStore = create<MCPState>()(
       serverStatuses: {},
 
       addServer: (config) => {
+        const split = splitMCPServerSecrets(config);
         set((state) => ({
-          servers: [...state.servers, config],
+          servers: [...state.servers, split.config],
         }));
+        if (Object.keys(split.secrets).length > 0) {
+          invoke('mcp_secret_merge', { name: config.name, values: split.secrets }).catch((error) => {
+            console.warn(`[mcp] Unable to protect credentials for "${config.name}":`, error);
+          });
+        }
       },
 
       updateServer: (name, updates) => {
+        const existing = get().servers.find((server) => server.name === name);
+        if (!existing) return;
+        const split = splitMCPServerSecrets({ ...existing, ...updates, name });
         set((state) => ({
-          servers: state.servers.map((s) =>
-            s.name === name ? { ...s, ...updates } : s
+          servers: state.servers.map((server) =>
+            server.name === name ? split.config : server
           ),
         }));
+        if (Object.keys(split.secrets).length > 0) {
+          invoke('mcp_secret_merge', { name, values: split.secrets }).catch((error) => {
+            console.warn(`[mcp] Unable to protect credentials for "${name}":`, error);
+          });
+        }
       },
 
       removeServer: (name) => {
@@ -134,6 +186,7 @@ export const useMCPStore = create<MCPState>()(
         } else {
           invoke('mcp_disconnect', { name }).catch(() => {});
         }
+        invoke('mcp_secret_delete', { name }).catch(() => {});
 
         set((state) => {
           const newStatuses = { ...state.serverStatuses };
@@ -189,13 +242,24 @@ export const useMCPStore = create<MCPState>()(
           try {
             await ensurePiServer();
             const base = getBaseUrl();
+            const secrets = server.hasStoredSecrets || server.auth?.type === 'oauth'
+              ? await loadServerSecrets(name)
+              : {};
             const res = await fetch(`${base}/mcp-sse/connect`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 name: server.name,
                 url: server.url,
-                headers: server.headers || {},
+                headers: { ...(secrets.headers || {}), ...(server.headers || {}) },
+                auth: server.auth?.type === 'oauth'
+                  ? {
+                      ...server.auth,
+                      credentials: secrets.oauth || {},
+                      redirectUrl: `${base}/mcp-oauth/callback/${encodeURIComponent(server.name)}`,
+                    }
+                  : server.auth,
+                toolFilter: server.toolFilter,
                 // Older S-Loop versions inferred every URL as `sse`. Treat
                 // that persisted value as auto-detect so existing configs also
                 // get the modern-first path.
@@ -205,8 +269,51 @@ export const useMCPStore = create<MCPState>()(
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Connection failed');
 
+            if (data.authRequired && data.authorizationUrl) {
+              get().setServerStatus(name, {
+                status: 'auth-required',
+                authorizationUrl: data.authorizationUrl,
+                error: undefined,
+                tools: [],
+                resources: [],
+              });
+              await openUrl(data.authorizationUrl);
+              void (async () => {
+                for (let attempt = 0; attempt < 120; attempt += 1) {
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                  try {
+                    const statusResponse = await fetch(`${base}/mcp-sse/status`);
+                    if (!statusResponse.ok) continue;
+                    const statuses = await statusResponse.json();
+                    const connected = statuses.find(
+                      (item: { name?: string; status?: string }) =>
+                        item.name === name && item.status === 'connected',
+                    );
+                    if (!connected) continue;
+                    await syncOAuthCredentials(name);
+                    useMCPStore.getState().setServerStatus(name, {
+                      status: 'connected',
+                      transport: connected.transport,
+                      authorizationUrl: undefined,
+                      error: undefined,
+                      tools: mapRemoteTools(connected.tools || []),
+                      resources: mapRemoteResources(connected.resources || []),
+                    });
+                    return;
+                  } catch {
+                    // Keep polling while the browser authorization flow is active.
+                  }
+                }
+              })();
+              return;
+            }
+
+            await syncOAuthCredentials(name);
             get().setServerStatus(name, {
               status: 'connected',
+              transport: data.transport,
+              authorizationUrl: undefined,
+              error: undefined,
               tools: mapRemoteTools(data.tools || []),
               resources: mapRemoteResources(data.resources || []),
             });
@@ -227,12 +334,16 @@ export const useMCPStore = create<MCPState>()(
         try {
           const command = server.type === 'stdio' ? (server.command || '') : '';
           const args = server.type === 'stdio' ? (server.args || []) : [];
+          const secrets = server.hasStoredSecrets
+            ? await loadServerSecrets(name)
+            : {};
+          const resolvedEnv = { ...(secrets.env || {}), ...(server.env || {}) };
 
           const result = await invoke<RustMCPServerStatus>('mcp_connect', {
             name,
             command,
             args,
-            ...(server.env ? { env: server.env } : {}),
+            ...(Object.keys(resolvedEnv).length > 0 ? { env: resolvedEnv } : {}),
           });
 
           get().setServerStatus(name, mapRustStatus(result));
@@ -288,14 +399,15 @@ export const useMCPStore = create<MCPState>()(
       },
 
       installRemoteServer: async (config, autoConnect = true) => {
+        const publicConfig = await saveServerSecrets(config);
         const existing = get().servers.find((server) => server.name === config.name);
         if (existing) {
-          get().updateServer(config.name, config);
+          get().updateServer(config.name, publicConfig);
         } else {
-          get().addServer(config);
+          get().addServer(publicConfig);
         }
 
-        if (autoConnect && !config.disabled) {
+        if (autoConnect && !publicConfig.disabled) {
           await get().connectServer(config.name);
         }
       },
@@ -318,8 +430,12 @@ export const useMCPStore = create<MCPState>()(
               const sseStatuses = await res.json();
               const sseServer = sseStatuses.find((s: any) => s.name === name);
               if (sseServer) {
+                await syncOAuthCredentials(name);
                 get().setServerStatus(name, {
                   status: 'connected',
+                  transport: sseServer.transport,
+                  authorizationUrl: undefined,
+                  error: undefined,
                   tools: mapRemoteTools(sseServer.tools || []),
                   resources: mapRemoteResources(sseServer.resources || []),
                 });
@@ -379,10 +495,15 @@ export const useMCPStore = create<MCPState>()(
             if (res.ok) {
               const sseStatuses = await res.json();
               for (const s of sseStatuses) {
+                if (s.status === 'connected') {
+                  await syncOAuthCredentials(s.name);
+                }
                 statusMap[s.name] = {
                   name: s.name,
                   status: s.status || (s.connected ? 'connected' : 'error'),
                   error: s.error || undefined,
+                  authorizationUrl: s.authorizationUrl || undefined,
+                  transport: s.transport,
                   tools: mapRemoteTools(s.tools || []),
                   resources: mapRemoteResources(s.resources || []),
                 };
@@ -414,8 +535,22 @@ export const useMCPStore = create<MCPState>()(
     {
       name: 'snotra-mcp-storage',
       partialize: (state) => ({
-        servers: state.servers,
+        servers: redactMCPServersForPersistence(state.servers),
       }),
+      merge: (persisted, current) => {
+        const stored = (persisted as Partial<MCPState>)?.servers || [];
+        const servers = stored.map((server) => {
+          const split = splitMCPServerSecrets(server);
+          if (Object.keys(split.secrets).length > 0) {
+            invoke('mcp_secret_merge', {
+              name: server.name,
+              values: split.secrets,
+            }).catch(() => {});
+          }
+          return split.config;
+        });
+        return { ...current, servers };
+      },
     }
   )
 );

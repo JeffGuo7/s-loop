@@ -111,6 +111,7 @@ function MCPServerCard({
   const statusColors: Record<string, string> = {
     connected: 'bg-[var(--color-success)]',
     connecting: 'bg-yellow-500 animate-pulse',
+    'auth-required': 'bg-orange-500 animate-pulse',
     error: 'bg-[var(--color-error)]',
     disabled: 'bg-[var(--color-text-tertiary)]',
   };
@@ -314,6 +315,8 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
           url: server.url as string | undefined,
           headers: server.headers as Record<string, string> | undefined,
           env: server.env as Record<string, string> | undefined,
+          auth: server.auth as MCPServerConfig['auth'],
+          toolFilter: server.toolFilter as MCPServerConfig['toolFilter'],
           disabled: false,
         });
       }
@@ -334,6 +337,8 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
           url: server.url as string | undefined,
           env: server.env as Record<string, string> | undefined,
           headers: server.headers as Record<string, string> | undefined,
+          auth: server.auth as MCPServerConfig['auth'],
+          toolFilter: server.toolFilter as MCPServerConfig['toolFilter'],
           disabled: false,
         });
       }
@@ -351,6 +356,8 @@ function parseJSONConfig(data: unknown): MCPServerConfig[] {
       url: obj.url as string | undefined,
       headers: obj.headers as Record<string, string> | undefined,
       env: obj.env as Record<string, string> | undefined,
+      auth: obj.auth as MCPServerConfig['auth'],
+      toolFilter: obj.toolFilter as MCPServerConfig['toolFilter'],
       disabled: false,
     });
   }
@@ -371,6 +378,11 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
   const [args, setArgs] = useState('');
   const [url, setUrl] = useState('');
   const [headers, setHeaders] = useState('');
+  const [authType, setAuthType] = useState<'none' | 'bearer' | 'oauth'>('none');
+  const [oauthClientId, setOauthClientId] = useState('');
+  const [oauthScopes, setOauthScopes] = useState('');
+  const [toolAllow, setToolAllow] = useState('');
+  const [toolDeny, setToolDeny] = useState('');
   const [inputMode, setInputMode] = useState<'form' | 'json'>('form');
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -401,7 +413,35 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
       type,
       ...(type === 'stdio'
         ? { command, args: args.split(' ').filter(Boolean) }
-        : { url, ...(headers.trim() ? { headers: parseHeaders(headers) } : {}) }),
+        : {
+            url,
+            ...(headers.trim() ? { headers: parseHeaders(headers) } : {}),
+            ...(authType !== 'none'
+              ? {
+                  auth: {
+                    type: authType,
+                    ...(authType === 'oauth' && oauthClientId.trim()
+                      ? { clientId: oauthClientId.trim() }
+                      : {}),
+                    ...(authType === 'oauth' && oauthScopes.trim()
+                      ? { scopes: oauthScopes.split(/[\s,]+/).filter(Boolean) }
+                      : {}),
+                  },
+                }
+              : {}),
+            ...((toolAllow.trim() || toolDeny.trim())
+              ? {
+                  toolFilter: {
+                    ...(toolAllow.trim()
+                      ? { allow: toolAllow.split(/[\s,]+/).filter(Boolean) }
+                      : {}),
+                    ...(toolDeny.trim()
+                      ? { deny: toolDeny.split(/[\s,]+/).filter(Boolean) }
+                      : {}),
+                  },
+                }
+              : {}),
+          }),
     };
 
     addServer(config);
@@ -560,6 +600,52 @@ function AddMCPServerModal({ onClose }: AddMCPServerModalProps) {
                       className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
                       placeholder={"Authorization: Bearer xxx\nX-Custom: value"}
                       rows={3}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)] ml-1">Authentication</label>
+                    <select
+                      value={authType}
+                      onChange={(e) => setAuthType(e.target.value as typeof authType)}
+                      className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm"
+                    >
+                      <option value="none">None / custom headers</option>
+                      <option value="bearer">Bearer token in protected headers</option>
+                      <option value="oauth">OAuth 2.1 (PKCE)</option>
+                    </select>
+                  </div>
+                  {authType === 'oauth' && (
+                    <div className="grid grid-cols-1 gap-3">
+                      <input
+                        type="text"
+                        value={oauthClientId}
+                        onChange={(e) => setOauthClientId(e.target.value)}
+                        className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                        placeholder="Pre-registered client ID (optional)"
+                      />
+                      <input
+                        type="text"
+                        value={oauthScopes}
+                        onChange={(e) => setOauthScopes(e.target.value)}
+                        className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                        placeholder="Scopes, separated by spaces (optional)"
+                      />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 gap-3">
+                    <input
+                      type="text"
+                      value={toolAllow}
+                      onChange={(e) => setToolAllow(e.target.value)}
+                      className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                      placeholder="Allowed tools, e.g. company_* (optional)"
+                    />
+                    <input
+                      type="text"
+                      value={toolDeny}
+                      onChange={(e) => setToolDeny(e.target.value)}
+                      className="w-full px-4 py-3 bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-xl focus:ring-2 focus:ring-[var(--color-accent)] outline-none text-sm font-mono"
+                      placeholder="Denied tools, e.g. *_delete (optional)"
                     />
                   </div>
                 </div>

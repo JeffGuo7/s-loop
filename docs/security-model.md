@@ -269,8 +269,10 @@ The baseline review identified these implementation gaps:
 - third-party tool risk still relies on name/category inference: phase 3.
 - non-interactive approvals are blocked rather than parked: phase 4.
 - tool policy and execution do not yet share a durable audit store: phase 5.
-- remote MCP still needs layered config, secret references, filters, and OAuth: phase 6.
-- delegation needs a formal least-authority profile and Explorer contract: phase 7.
+- remote MCP uses layered config, DPAPI-backed secret references, tool filters, and
+  OAuth 2.1/PKCE: phase 6 complete.
+- delegation derives a formal least-authority envelope and includes a fixed Explorer
+  contract: phase 7 complete.
 - approved shell commands are not OS-isolated: phase 8.
 
 Security changes should be implemented in this order so later features depend on one

@@ -150,6 +150,10 @@ export function createToolAuditTracker(contextProvider) {
       toolName: toolCall?.name,
       fingerprint: toolFingerprint(toolCall),
       actor: context.actor || context.agentId || 'agent',
+      ...(context.parentAgent ? { parentActor: context.parentAgent } : {}),
+      ...(context.delegationDepth !== undefined
+        ? { delegationDepth: context.delegationDepth }
+        : {}),
     }
   }
 

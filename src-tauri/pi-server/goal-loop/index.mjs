@@ -67,8 +67,15 @@ export async function runGoalLoop({
     : []
   const contextToolNames = new Set(['read', 'grep', 'find', 'ls', 'web_search', 'web_fetch'])
   const contextTools = allTools.filter((t) => contextToolNames.has(t.name))
+  const delegationRuntimeConfig = {
+    ...runtimeConfig,
+    agentId: 'goal-loop',
+    delegationDepth: 0,
+    allowedToolNames: allTools.map((tool) => tool.name),
+    toolSecurity: buildToolSecurityIndex(allTools),
+  }
   const runSubagentTool = createRunSubagentTool(goalState, {
-    runtimeConfig, resolveModel, getTools, projectDir,
+    runtimeConfig: delegationRuntimeConfig, resolveModel, getTools, projectDir,
     requestToolApproval: requestToolApproval
       ? (toolCall, decision) => authorize(toolCall, decision)
       : undefined,

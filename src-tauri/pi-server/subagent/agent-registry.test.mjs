@@ -100,6 +100,7 @@ No tools agent.`
       assert.ok(def)
       assert.deepEqual(def.tools, [])
       assert.equal(def.model, null, 'model should default to null')
+      assert.equal(def.permissionMode, 'ask')
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true })
     }

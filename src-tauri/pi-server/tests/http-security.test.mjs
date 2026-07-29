@@ -72,6 +72,12 @@ test('keeps health, signed platform ingress, and trusted preflight tokenless', (
     expectedToken: TOKEN,
   }).allowed, true)
 
+  assert.equal(evaluateSidecarRequest({
+    method: 'GET',
+    pathname: '/mcp-oauth/callback/example',
+    expectedToken: TOKEN,
+  }).allowed, true)
+
   const preflight = evaluateSidecarRequest({
     method: 'OPTIONS',
     pathname: '/session',
