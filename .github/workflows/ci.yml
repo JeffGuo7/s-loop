@@ -51,5 +51,9 @@ jobs:
       - run: cargo test --manifest-path stt/Cargo.toml --lib
         name: Test local speech engine
 
+      - name: Create generated resource placeholder
+        shell: pwsh
+        run: New-Item -ItemType File -Path src-tauri/pi-server.zip -Force
+
       - run: cargo check --manifest-path src-tauri/Cargo.toml
         name: Check Tauri native layer
