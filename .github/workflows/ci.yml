@@ -29,6 +29,9 @@ jobs:
       - run: npx vitest run
         name: Run tests
 
+      - run: npm ci --prefix src-tauri/pi-server
+        name: Install pi-server dependencies
+
       - run: npm run test:server
         name: Run pi-server tests
 
