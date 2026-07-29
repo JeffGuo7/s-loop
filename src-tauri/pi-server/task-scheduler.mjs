@@ -520,6 +520,25 @@ export function stopTicker() {
 
 export function init(baseDir) {
   _initPaths(baseDir)
+  const tasks = _loadTasksRaw()
+  let changed = false
+  for (const task of tasks) {
+    if (task.lastStatus !== 'running') continue
+    const now = Date.now()
+    task.lastStatus = 'failed'
+    task.lastError = 'Execution was interrupted by application restart'
+    task.lastFinishedAt = now
+    appendAuditEvent('run.interrupted', {
+      surface: 'task',
+      surfaceId: task.id,
+      runId: task.lastRunId,
+      actor: 'recovery',
+      outcome: 'interrupted',
+      details: { reason: task.lastError },
+    })
+    changed = true
+  }
+  if (changed) _saveTasks(tasks)
 }
 
 // Re-export for pi-server

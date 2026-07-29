@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { appendAuditEvent } from '../audit-store.mjs'
 
 let _goalsFile = ''
 let _outputDir = ''
@@ -18,6 +19,28 @@ export function initGoalPersistence(baseDir) {
   _goalsFile = join(goalsDir, 'goals.json')
   mkdirSync(goalsDir, { recursive: true })
   mkdirSync(_outputDir, { recursive: true })
+  const goals = _loadRaw()
+  let changed = false
+  for (const goal of goals) {
+    if (goal.status !== 'running') continue
+    goal.status = 'failed'
+    goal.finalResult = 'Goal execution was interrupted by application restart.'
+    goal.pendingApprovalId = undefined
+    goal.steps = (goal.steps || []).map((step) =>
+      step.status === 'running' ? { ...step, status: 'failed' } : step
+    )
+    goal.updatedAt = Date.now()
+    appendAuditEvent('run.interrupted', {
+      surface: 'goal',
+      surfaceId: goal.id,
+      runId: goal.lastRunId,
+      actor: 'recovery',
+      outcome: 'interrupted',
+      details: { reason: goal.finalResult },
+    })
+    changed = true
+  }
+  if (changed) _save(goals)
 }
 
 function _loadRaw() {

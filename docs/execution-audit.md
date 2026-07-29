@@ -33,3 +33,12 @@ Both endpoints are protected by the per-launch sidecar token and Origin policy.
 Hash chaining detects modification; it does not prevent a local administrator or
 malware with filesystem access from deleting the entire log. OS-backed signing or
 remote archival can be added later when that stronger threat model is required.
+
+## Restart recovery
+
+At startup, persisted task, Goal, or platform runs still marked `running` or
+`resuming` are treated as uncertain executions. Snotra marks them failed/interrupted,
+emits `run.interrupted`, and never replays them automatically. Runs parked at
+`waiting_for_approval` remain resumable because their side-effecting tool call has
+not started. Approval records already in `resuming` follow the same conservative
+interrupted rule.

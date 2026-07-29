@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { appendAuditEvent } from './audit-store.mjs'
 
 const MAX_RUNS = 200
 let runsFile = ''
@@ -41,6 +42,14 @@ export function initPlatformRunStore(baseDir) {
       run.status = 'interrupted'
       run.error = 'Platform execution was interrupted by application restart'
       run.updatedAt = Date.now()
+      appendAuditEvent('run.interrupted', {
+        surface: 'platform',
+        surfaceId: run.id,
+        runId: run.runId,
+        actor: 'recovery',
+        outcome: 'interrupted',
+        details: { reason: run.error },
+      })
       changed = true
     }
   }
