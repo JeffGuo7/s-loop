@@ -182,6 +182,21 @@ export function getToolPathArguments(toolName, args = {}) {
   return values
 }
 
+export function getDeclaredPathArguments(args = {}, pathArguments = [], defaultPath) {
+  const values = []
+  for (const key of Array.isArray(pathArguments) ? pathArguments : []) {
+    const value = args?.[key]
+    if (typeof value === 'string' && value.trim()) values.push(value)
+    if (Array.isArray(value)) {
+      values.push(...value.filter((item) => typeof item === 'string' && item.trim()))
+    }
+  }
+  if (values.length === 0 && typeof defaultPath === 'string' && defaultPath.trim()) {
+    values.push(defaultPath)
+  }
+  return values
+}
+
 export function checkToolWorkspace(toolName, args, workspaceDir, workspaceRoots = [], requiredAccess = 'read') {
   for (const filePath of getToolPathArguments(toolName, args)) {
     const result = checkWorkspacePath(filePath, workspaceDir, workspaceRoots, requiredAccess)

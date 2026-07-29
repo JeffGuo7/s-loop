@@ -14,6 +14,7 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel } from '@earendil-works/pi-ai/compat'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 import { evaluateToolCall } from './execution-policy.mjs'
+import { buildToolSecurityIndex } from './tool-security.mjs'
 import { sanitizeChildEnvironment } from './sandbox.mjs'
 import { webSearch } from './searchProviders.mjs'
 import { createSessionRepo, findSession } from './session-store.mjs'
@@ -76,6 +77,11 @@ export async function autoReply(msg, platform, runtimeConfig) {
     // 3. Build agent tools — full set including web_search and skills
     const baseTools = getToolsForPlatform(runtimeConfig)
     const skills = await resolveSkills(runtimeConfig)
+    const tools = [...baseTools, ...skills]
+    const effectiveConfig = {
+      ...runtimeConfig,
+      toolSecurity: buildToolSecurityIndex(tools),
+    }
 
     // 4. Resolve model
     const providerID = runtimeConfig.providerID || 'anthropic'
@@ -112,13 +118,13 @@ export async function autoReply(msg, platform, runtimeConfig) {
       initialState: {
         systemPrompt: buildPlatformSystemPrompt(msg, platform, skills),
         model,
-        tools: [...baseTools, ...skills],
+        tools,
         thinkingLevel: model.reasoning ? 'medium' : 'off',
       },
       sessionId,
       getApiKey: async () => runtimeConfig.apiKey || '',
       beforeToolCall: async ({ toolCall }) => {
-        const decision = evaluateToolCall(toolCall, runtimeConfig)
+        const decision = evaluateToolCall(toolCall, effectiveConfig)
         if (decision.allowed) return undefined
         const reason = decision.approvalRequired
           ? `${decision.reason}; interactive approval is unavailable`

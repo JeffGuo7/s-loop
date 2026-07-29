@@ -15,6 +15,7 @@
 import { Agent } from '@earendil-works/pi-agent-core'
 import { loadAgentDefinition, formatAgentList } from './agent-registry.mjs'
 import { evaluateToolCall } from '../execution-policy.mjs'
+import { buildToolSecurityIndex } from '../tool-security.mjs'
 
 const MAX_CONCURRENCY = 4
 const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
@@ -95,6 +96,10 @@ export async function runSubagent({
   const allowedTools = toolWhitelist.size > 0
     ? allTools.filter((t) => toolWhitelist.has(t.name.toLowerCase()))
     : allTools
+  const effectiveConfig = {
+    ...parentConfig,
+    toolSecurity: buildToolSecurityIndex(allowedTools),
+  }
 
   // 4. Create independent Agent instance
   const sessionId = `subagent-${agentName}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
@@ -111,7 +116,7 @@ export async function runSubagent({
     getApiKey: async () => apiKey,
     beforeToolCall: async ({ toolCall }) => {
       if (requestToolApproval) return await requestToolApproval(toolCall)
-      const decision = evaluateToolCall(toolCall, parentConfig)
+      const decision = evaluateToolCall(toolCall, effectiveConfig)
       if (decision.allowed) return undefined
       const reason = decision.approvalRequired
         ? `${decision.reason}; interactive approval is unavailable`

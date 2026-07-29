@@ -8,6 +8,7 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { buildGoalSystemPrompt } from './system-prompt.mjs'
 import { createRunSubagentTool } from './tools.mjs'
 import { evaluateToolCall } from '../execution-policy.mjs'
+import { buildToolSecurityIndex } from '../tool-security.mjs'
 
 const MAX_GOAL_TIMEOUT = 300_000  // 5 minutes
 
@@ -63,6 +64,10 @@ export async function runGoalLoop({
     runtimeConfig, resolveModel, getTools, projectDir,
   })
   const tools = [...contextTools, runSubagentTool]
+  const effectiveConfig = {
+    ...runtimeConfig,
+    toolSecurity: buildToolSecurityIndex(tools),
+  }
 
   // 3. Build system prompt
   const systemPrompt = buildGoalSystemPrompt(goalState, projectDir)
@@ -83,7 +88,7 @@ export async function runGoalLoop({
     sessionId,
     getApiKey: async () => apiKey,
     beforeToolCall: async ({ toolCall }) => {
-      const decision = evaluateToolCall(toolCall, runtimeConfig)
+      const decision = evaluateToolCall(toolCall, effectiveConfig)
       if (decision.allowed) return undefined
       const reason = decision.approvalRequired
         ? `${decision.reason}; interactive approval is unavailable`

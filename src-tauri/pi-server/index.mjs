@@ -43,6 +43,7 @@ import { sanitizeChildEnvironment } from './sandbox.mjs'
 import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
 import { connectSseMcpServer, disconnectSseMcpServer, getAllSseMcpTools, getSseMcpStatus, disconnectAllSseMcp, callSseMcpTool } from './mcp-sse.mjs'
 import { guardSidecarRequest } from './http-security.mjs'
+import { buildToolSecurityIndex } from './tool-security.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -245,6 +246,7 @@ function createDelegateTaskTool({ runtimeConfig, resolveModel, getTools, project
           providerConfig: runtimeConfig.providerConfig,
           permissionMode: wrapper?.config?.permissionMode,
           permissionRules: wrapper?.config?.permissionRules,
+          toolSecurity: wrapper?.config?.toolSecurity,
         },
         resolveModel,
         getTools,
@@ -350,6 +352,7 @@ function createDelegateParallelTool({ runtimeConfig, resolveModel, getTools, pro
           providerConfig: runtimeConfig.providerConfig,
           permissionMode: wrapper?.config?.permissionMode,
           permissionRules: wrapper?.config?.permissionRules,
+          toolSecurity: wrapper?.config?.toolSecurity,
         },
         resolveModel,
         getTools,
@@ -425,6 +428,7 @@ function createDelegateChainTool({ runtimeConfig, resolveModel, getTools, projec
           providerConfig: runtimeConfig.providerConfig,
           permissionMode: wrapper?.config?.permissionMode,
           permissionRules: wrapper?.config?.permissionRules,
+          toolSecurity: wrapper?.config?.toolSecurity,
         },
         resolveModel,
         getTools,
@@ -732,6 +736,10 @@ async function promptPlatformConversation(sessionId, content) {
   if (!wrapper.agent) {
     const cwd = runtimeConfig.workspaceDir || process.cwd()
     const tools = getTools(cwd, runtimeConfig.webSearchConfig)
+    wrapper.config = {
+      ...runtimeConfig,
+      toolSecurity: buildToolSecurityIndex(tools),
+    }
     wrapper.agent = new Agent({
       initialState: {
         systemPrompt,
@@ -743,14 +751,19 @@ async function promptPlatformConversation(sessionId, content) {
       sessionId,
       getApiKey: async () => runtimeConfig.apiKey || '',
       beforeToolCall: async ({ toolCall }) => {
-        return await authorizeToolCall(wrapper, toolCall, runtimeConfig, { interactive: false })
+        return await authorizeToolCall(wrapper, toolCall, wrapper.config, { interactive: false })
       },
       toolExecution: 'parallel',
     })
     wrapper.previousMessageCount = initialMessages.length
   } else {
     wrapper.agent.state.model = model
-    wrapper.agent.state.tools = getTools(runtimeConfig.workspaceDir || process.cwd(), runtimeConfig.webSearchConfig)
+    const tools = getTools(runtimeConfig.workspaceDir || process.cwd(), runtimeConfig.webSearchConfig)
+    wrapper.agent.state.tools = tools
+    wrapper.config = {
+      ...runtimeConfig,
+      toolSecurity: buildToolSecurityIndex(tools),
+    }
     if (wrapper.agent.state.systemPrompt !== systemPrompt) {
       wrapper.agent.state.systemPrompt = systemPrompt
     }
@@ -1857,6 +1870,7 @@ createServer((req, res) => {
           permissionRules,
           providerConfig: effectiveProviderConfig,
           mcpToolNames: new Set(mcpToolDefs.map((tool) => tool.name)),
+          toolSecurity: buildToolSecurityIndex(tools),
         }
         sessions.set(sessionId, wrapper)
         console.log('[pi-server] Tools:', tools.length, '| Provider:', provider, '| Model:', modelId)
@@ -1880,6 +1894,7 @@ createServer((req, res) => {
           permissionRules,
           providerConfig: effectiveProviderConfig,
           mcpToolNames: new Set(mcpToolDefs.map((tool) => tool.name)),
+          toolSecurity: buildToolSecurityIndex([...baseTools, ...mcpToolDefs]),
         }
       }
 
