@@ -156,34 +156,34 @@ export function Sidebar({
 
   return (
     <aside
-      className={`h-full flex flex-col bg-transparent sidebar-transition shrink-0 z-20 relative group/sidebar ${className}`}
+      className={`h-full flex flex-col bg-surface-secondary/45 sidebar-transition shrink-0 z-20 relative group/sidebar ${className}`}
       style={{ width }}
     >
-      <div className="px-4 pt-8 pb-6 relative z-10">
+      <div className="px-3 pt-4 pb-3 relative z-10">
         {!collapsed ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
             >
               <MagicButton
                 onClick={handleNewChat}
-                className="w-full gap-2.5 rounded-lg py-3.5 shadow-md shadow-accent/10 group transition-all duration-500 hover:shadow-accent/20 hover:-translate-y-0.5 active:translate-y-0"
+                className="w-full h-10 gap-2 rounded-lg px-3 shadow-none group"
               >
-                <Plus size={16} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-500" />
-                <span className="font-bold tracking-tight text-[14px]">{t('sidebar.newChat')}</span>
+                <Plus size={15} strokeWidth={2.2} />
+                <span className="font-semibold text-[13px]">{t('sidebar.newChat')}</span>
               </MagicButton>
             </motion.div>
 
-            <div className="space-y-2 px-1">
-              <div className="flex items-center gap-1.5 rounded-xl border border-border-light/80 bg-white/70 p-1 shadow-sm backdrop-blur-xl dark:bg-white/5">
+            <div className="space-y-2">
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
                 <button
                   onClick={() => setLeftPanelMode('sessions')}
-                  className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-black tracking-tight transition-all duration-300 ${
+                  className={`flex-1 rounded-md px-3 py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
                     !isFilesMode
-                      ? 'bg-accent text-white shadow-lg shadow-accent/15'
-                      : 'text-text-tertiary hover:text-text hover:bg-surface-secondary/70'
+                      ? 'bg-accent-subtle text-accent'
+                      : 'text-text-tertiary hover:text-text hover:bg-surface-secondary'
                   }`}
                 >
                   <span className="flex items-center justify-center gap-2">
@@ -193,10 +193,10 @@ export function Sidebar({
                 </button>
                 <button
                   onClick={() => setLeftPanelMode('files')}
-                  className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-black tracking-tight transition-all duration-300 ${
+                  className={`flex-1 rounded-md px-3 py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
                     isFilesMode
-                      ? 'bg-accent text-white shadow-lg shadow-accent/15'
-                      : 'text-text-tertiary hover:text-text hover:bg-surface-secondary/70'
+                      ? 'bg-accent-subtle text-accent'
+                      : 'text-text-tertiary hover:text-text hover:bg-surface-secondary'
                   }`}
                 >
                   <span className="flex items-center justify-center gap-2">
@@ -208,10 +208,10 @@ export function Sidebar({
 
               <div className="flex items-center justify-between px-1">
                 <div>
-                  <div className="text-[9px] font-black uppercase tracking-[0.18em] text-accent/50">
+                  <div className="section-eyebrow">
                     {isFilesMode ? t('sidebar.fileWorkspace') : t('sidebar.workspace')}
                   </div>
-                  <div className="mt-0.5 text-[13px] font-bold tracking-tight text-text">
+                  <div className="mt-0.5 text-[12px] font-semibold text-text">
                     {isFilesMode ? t('sidebar.fileExplorer') : t('sidebar.recent')}
                   </div>
                 </div>
@@ -249,7 +249,7 @@ export function Sidebar({
                     whileHover={{ scale: 1.05, x: -2 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={onToggleCollapse}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-surface-secondary/80 text-text-tertiary transition-all duration-300 shadow-sm border border-black/5 hover:text-accent dark:border-white/5"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface text-text-tertiary transition-colors duration-150 hover:text-accent"
                     title={t('sidebar.collapseTitle')}
                   >
                     <ChevronLeft size={14} strokeWidth={2.5} />
@@ -259,21 +259,21 @@ export function Sidebar({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-4 w-full items-center pt-2">
-            <motion.div whileHover={{ scale: 1.1, rotate: 10 }} whileTap={{ scale: 0.9 }}>
+          <div className="flex flex-col gap-3 w-full items-center pt-1">
+            <motion.div>
               <MagicButton
                 onClick={handleNewChat}
-                className="w-11 h-11 rounded-xl shadow-xl shadow-accent/20"
+                className="w-9 h-9 rounded-lg shadow-none"
               >
-                <Plus size={22} strokeWidth={3} className="text-white" />
+                <Plus size={18} strokeWidth={2.3} className="text-white" />
               </MagicButton>
             </motion.div>
             <button
               onClick={() => setLeftPanelMode(isFilesMode ? 'sessions' : 'files')}
-              className={`w-10 h-10 rounded-xl border transition-all duration-300 flex items-center justify-center ${
+              className={`w-9 h-9 rounded-lg border transition-colors duration-150 flex items-center justify-center ${
                 isFilesMode
-                  ? 'bg-accent/12 text-accent border-accent/20 shadow-md shadow-accent/10'
-                  : 'bg-surface-secondary/80 text-text-tertiary border-black/5 dark:border-white/5 hover:text-accent'
+                  ? 'bg-accent-subtle text-accent border-accent/20'
+                  : 'bg-surface text-text-tertiary border-border hover:text-accent'
               }`}
               title={isFilesMode ? t('sidebar.backToSessions') : t('sidebar.openFileTree')}
             >
@@ -283,7 +283,7 @@ export function Sidebar({
               whileHover={{ scale: 1.05, x: 2 }}
               whileTap={{ scale: 0.95 }}
               onClick={onToggleCollapse}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-surface-secondary/80 text-text-tertiary hover:text-accent transition-all duration-300 shadow-md border border-black/5 dark:border-white/5"
+              className="w-8 h-8 flex items-center justify-center rounded-md bg-surface text-text-tertiary hover:text-accent transition-colors duration-150 border border-border"
               title={t('sidebar.expandTitle')}
             >
               <ChevronRight size={16} strokeWidth={2.5} />
@@ -293,7 +293,7 @@ export function Sidebar({
       </div>
 
       {!isFilesMode ? (
-        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 scrollbar-subtle space-y-1">
+        <div className="flex-1 overflow-y-auto px-3 pb-3 pt-1 scrollbar-subtle space-y-0.5">
           {sessions.map((session) => {
           const isActive = session.id === activeSessionId
           const isStreaming = streamingMessage[session.id]?.isStreaming ?? false
@@ -306,14 +306,14 @@ export function Sidebar({
               <button
                 key={session.id}
                 onClick={() => handleSelect(session.id)}
-                className={`group relative w-full h-10 rounded-lg transition-all duration-500 flex items-center justify-center border ${
+                className={`group relative w-full h-9 rounded-md transition-colors duration-150 flex items-center justify-center border ${
                   isActive
-                    ? 'bg-accent/15 border-accent/25 shadow-md ring-1 ring-accent/10 cursor-default'
-                    : 'bg-transparent border-transparent hover:bg-surface-secondary/70 hover:border-black/5 dark:hover:border-white/5 cursor-pointer'
+                    ? 'bg-accent-subtle border-accent/20 cursor-default'
+                    : 'bg-transparent border-transparent hover:bg-surface cursor-pointer'
                 }`}
               >
-                <div className={`flex items-center justify-center w-6 h-6 rounded-md transition-all duration-500 ${
-                  isActive ? 'bg-accent/15 text-accent shadow-sm shadow-accent/10' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
+                <div className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors duration-150 ${
+                  isActive ? 'text-accent' : 'text-text-quaternary group-hover:text-text-secondary'
                 }`}>
                   <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
                 </div>
@@ -326,7 +326,7 @@ export function Sidebar({
                   <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-accent border-2 border-white dark:border-[#1a1a1a] animate-pulse shadow-sm" />
                 )}
                 {isActive && (
-                  <div className="absolute left-0 top-3 bottom-3 w-1 bg-accent rounded-r-full z-20 shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
+                  <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-accent rounded-r-full z-20" />
                 )}
               </button>
             )
@@ -336,21 +336,21 @@ export function Sidebar({
             <button
               key={session.id}
               onClick={() => handleSelect(session.id)}
-              className={`group relative flex w-full min-h-[44px] items-center gap-2.5 rounded-lg border pl-3 pr-8 py-2 transition-all duration-500 ${
+              className={`group relative flex w-full min-h-[40px] items-center gap-2.5 rounded-md border pl-3 pr-8 py-1.5 transition-colors duration-150 ${
                 isActive
-                  ? 'bg-accent/8 dark:bg-accent/15 border-accent/25 shadow-md ring-1 ring-accent/10 cursor-default'
-                  : 'bg-transparent border-transparent hover:bg-surface-secondary/70 hover:border-black/5 dark:hover:border-white/5 cursor-pointer'
+                  ? 'bg-accent-subtle border-accent/20 cursor-default'
+                  : 'bg-transparent border-transparent hover:bg-surface cursor-pointer'
               }`}
             >
-              <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-all duration-500 ${
-                isActive ? 'bg-accent/15 text-accent shadow-sm shadow-accent/10' : 'bg-surface-tertiary/40 text-text-quaternary group-hover:text-text-secondary'
+              <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors duration-150 ${
+                isActive ? 'text-accent' : 'text-text-quaternary group-hover:text-text-secondary'
               }`}>
                 <MessageSquare size={13} strokeWidth={isActive ? 2.5 : 1.5} />
               </div>
 
               <div className="min-w-0 flex-1 text-left">
-                <p className={`truncate text-[13px] tracking-tight transition-all duration-500 flex items-center gap-1.5 ${
-                  isActive ? 'font-bold text-accent' : 'font-medium text-text-secondary group-hover:text-text'
+                <p className={`truncate text-[12px] transition-colors duration-150 flex items-center gap-1.5 ${
+                  isActive ? 'font-semibold text-text' : 'font-medium text-text-secondary group-hover:text-text'
                 }`}>
                   <span className="truncate">{title}</span>
                   {isStreaming && (
@@ -429,7 +429,7 @@ export function Sidebar({
               )}
 
               {isActive && (
-                <div className="absolute left-0 top-2 bottom-2 z-20 w-1 rounded-r-full bg-accent shadow-[2px_0_8px_rgba(var(--color-accent-rgb),0.3)]" />
+                <div className="absolute left-0 top-1.5 bottom-1.5 z-20 w-0.5 rounded-r-full bg-accent" />
               )}
             </button>
           )
@@ -478,17 +478,17 @@ export function Sidebar({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-[22px] border border-border-light/70 bg-white/68 shadow-sm backdrop-blur-xl dark:bg-white/5">
+          <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-surface">
             {workspaceDir ? (
               <div className="h-full overflow-y-auto px-2 py-2 scrollbar-subtle">
                 <FileTree rootPath={normalizedWorkspaceDir} key={fileTreeVersion} />
               </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center px-5 text-center">
-                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-subtle text-accent">
                   <FolderTree size={18} strokeWidth={2.1} />
                 </div>
-                <h3 className="text-[15px] font-black tracking-tight text-text">
+                <h3 className="text-[14px] font-semibold text-text">
                   {t('sidebar.filesEmptyTitle')}
                 </h3>
                 <p className="mt-2 max-w-[180px] text-[11px] leading-relaxed text-text-tertiary">
@@ -496,7 +496,7 @@ export function Sidebar({
                 </p>
                 <button
                   onClick={handleSelectDir}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[11px] font-black text-white"
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[11px] font-semibold text-white"
                 >
                   <FolderOpen size={13} strokeWidth={2.2} />
                   {t('sidebar.pickWorkspace')}
@@ -507,10 +507,10 @@ export function Sidebar({
         </div>
       )}
 
-      <div className="p-4 pb-6 relative z-10 flex flex-col">
+      <div className="p-3 pb-4 relative z-10 flex flex-col">
         <div className="absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-border-light to-transparent opacity-50" />
         
-        <div className="flex flex-col gap-6 mt-4">
+        <div className="flex flex-col gap-1 mt-3">
           <NavItem
             icon={Clock}
             label={t('sidebar.tasks')}
@@ -551,10 +551,8 @@ export function Sidebar({
       {/* Theme & Settings Buttons */}
       <div className="mt-4 flex gap-2">
         <motion.button
-          whileHover={{ scale: 1.02, y: -1 }}
-          whileTap={{ scale: 0.98 }}
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-          className={`flex items-center justify-center rounded-lg bg-surface-secondary/60 hover:bg-accent/5 text-text-tertiary hover:text-accent transition-all duration-500 border border-transparent hover:border-accent/10 shadow-xs ${
+          className={`flex items-center justify-center rounded-md bg-surface hover:bg-accent-subtle text-text-tertiary hover:text-accent transition-colors duration-150 border border-border ${
             collapsed ? 'w-full h-9' : 'flex-1 h-9'
           }`}
         >
@@ -562,10 +560,8 @@ export function Sidebar({
         </motion.button>
         {!collapsed && (
           <motion.button
-            whileHover={{ scale: 1.02, y: -1 }}
-            whileTap={{ scale: 0.98 }}
             onClick={onSettingsOpen}
-            className="flex items-center justify-center w-9 h-9 rounded-lg bg-surface-secondary/60 hover:bg-surface-tertiary text-text-tertiary hover:text-text transition-all duration-500 border border-transparent hover:border-black/5 dark:hover:border-white/5 shadow-xs"
+            className="flex items-center justify-center w-9 h-9 rounded-md bg-surface text-text-tertiary hover:text-text transition-colors duration-150 border border-border"
           >
             <Settings size={16} />
           </motion.button>
@@ -588,16 +584,14 @@ badge?: boolean
 function NavItem({ icon: Icon, label, active, onClick, collapsed, badge }: NavItemProps) {
 return (
   <motion.button
-    whileHover={{ scale: 1.02, x: 3 }}
-    whileTap={{ scale: 0.98 }}
     onClick={onClick}
-    className={`flex items-center gap-3 rounded-lg transition-all duration-500 w-full relative group/nav ${
+    className={`flex items-center gap-3 rounded-md transition-colors duration-150 w-full relative group/nav ${
       active
-        ? 'bg-white dark:bg-white/10 text-accent shadow-lg shadow-accent/5 ring-1 ring-accent/10'
-        : 'hover:bg-white/40 dark:hover:bg-white/5 text-text-tertiary hover:text-text'
-    } ${collapsed ? 'h-10 w-10 justify-center mx-auto' : 'px-4 py-2.5'}`}
+        ? 'bg-accent-subtle text-text'
+        : 'hover:bg-surface text-text-tertiary hover:text-text'
+    } ${collapsed ? 'h-9 w-9 justify-center mx-auto' : 'px-3 py-2'}`}
   >
-    <div className={`relative transition-transform duration-700 ${active ? 'scale-110' : 'group-hover/nav:scale-110'}`}>
+    <div className={`relative ${active ? 'text-accent' : ''}`}>
       <Icon 
         size={collapsed ? 18 : 16} 
         strokeWidth={active ? 2.5 : 2} 
@@ -608,7 +602,7 @@ return (
     </div>
     
     {!collapsed && (
-      <span className={`text-[13px] tracking-tight transition-all duration-500 ${active ? 'font-black' : 'font-bold'}`}>
+      <span className={`text-[12px] transition-colors duration-150 ${active ? 'font-semibold' : 'font-medium'}`}>
         {label}
       </span>
     )}
@@ -616,8 +610,8 @@ return (
       {active && (
         <motion.div
           layoutId="activeNavIndicator"
-          className="absolute right-4 w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_10px_rgba(var(--color-accent-rgb),0.8)]"
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="absolute inset-y-1.5 left-0 w-0.5 rounded-r-full bg-accent"
+          transition={{ type: "spring", stiffness: 360, damping: 36 }}
         />
       )}
     </motion.button>

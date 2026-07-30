@@ -179,10 +179,10 @@ export function VoiceRuntimeSettings() {
   ]
 
   return (
-    <div className="rounded-[24px] border border-border-light bg-surface p-6">
-      <div className="mb-5">
-        <h4 className="text-lg font-bold text-text">{copy.title}</h4>
-        <p className="mt-2 text-sm leading-6 text-text-secondary">
+    <div className="settings-section">
+      <div className="mb-4">
+        <h4 className="text-[15px] font-semibold text-text">{copy.title}</h4>
+        <p className="mt-1.5 text-[13px] leading-5 text-text-secondary">
           {copy.description}
         </p>
       </div>
@@ -196,15 +196,15 @@ export function VoiceRuntimeSettings() {
           return (
             <div
               key={kind}
-              className="rounded-2xl border border-border-light bg-surface-secondary/50 p-4"
+              className="rounded-lg border border-border bg-surface-secondary/45 p-4"
             >
               <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-accent-subtle p-2 text-accent">
+                <div className="rounded-md bg-accent-subtle p-2 text-accent">
                   <Icon size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
-                    <h5 className="font-bold text-text">{title}</h5>
+                    <h5 className="font-semibold text-text">{title}</h5>
                     <span
                       className={`text-xs font-bold ${
                         asset?.installed ? 'text-green-600' : 'text-text-tertiary'
@@ -248,7 +248,7 @@ export function VoiceRuntimeSettings() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     {!asset?.installed && !downloading && (
                       <button
-                        className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white"
+                        className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-accent-foreground"
                         onClick={() => void install(kind)}
                       >
                         <Download size={14} /> {copy.download}
@@ -256,7 +256,7 @@ export function VoiceRuntimeSettings() {
                     )}
                     {downloading && (
                       <button
-                        className="flex items-center gap-1.5 rounded-xl bg-surface-tertiary px-3 py-2 text-xs font-bold"
+                        className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-tertiary px-3 py-2 text-xs font-semibold"
                         onClick={() => void cancelVoiceAssetDownload()}
                       >
                         <X size={14} /> {copy.cancel}
@@ -264,7 +264,7 @@ export function VoiceRuntimeSettings() {
                     )}
                     {asset?.installed && kind === 'tts' && (
                       <button
-                        className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white"
+                        className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-accent-foreground"
                         onClick={() => void testSpeech()}
                       >
                         {playback?.state === 'loading' ||
@@ -282,7 +282,7 @@ export function VoiceRuntimeSettings() {
                     )}
                     {asset?.installed && (
                       <button
-                        className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-500/10"
+                        className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/10"
                         disabled={busy !== null}
                         onClick={() => void remove(kind)}
                       >
@@ -305,16 +305,16 @@ export function VoiceRuntimeSettings() {
       {error && (
         <div
           role="alert"
-          className="mt-4 rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500"
+          className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500"
         >
           {error}
         </div>
       )}
       <div
-        className={`mt-4 rounded-2xl px-5 py-4 text-sm font-bold ${
+        className={`mt-4 rounded-lg border px-4 py-3 text-sm font-semibold ${
           realtimeReady
-            ? 'bg-green-500/10 text-green-600'
-            : 'bg-amber-500/10 text-amber-600'
+            ? 'border-green-500/20 bg-green-500/10 text-green-600'
+            : 'border-amber-500/20 bg-amber-500/10 text-amber-600'
         }`}
       >
         {realtimeReady ? copy.ready : copy.notReady}

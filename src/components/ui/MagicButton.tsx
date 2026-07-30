@@ -8,7 +8,7 @@ interface MagicButtonProps extends HeroButtonProps {
 export function MagicButton({ children, className = '', ...props }: MagicButtonProps) {
   return (
     <HeroButton
-      className={`relative inline-flex items-center justify-center bg-accent text-accent-foreground font-bold transition-all duration-500 hover:bg-accent-light active:scale-95 shadow-lg shadow-accent/20 ${className}`}
+      className={`relative inline-flex items-center justify-center rounded-lg border border-accent/80 bg-accent text-accent-foreground font-semibold shadow-sm transition-colors duration-150 hover:bg-accent-light ${className}`}
       {...props}
     >
       <span className="relative z-10 flex items-center justify-center gap-2">

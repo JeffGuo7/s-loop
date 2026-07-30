@@ -38,6 +38,14 @@ export function Button({
   }
 
   const { variant: heroVariant } = getHeroProps()
+  const variantStyles: Record<NonNullable<ButtonProps['variant']>, string> = {
+    primary: 'bg-accent text-accent-foreground border border-accent/80 hover:bg-accent-light',
+    secondary: 'bg-surface-secondary text-text-secondary border border-border hover:bg-surface-tertiary hover:text-text',
+    ghost: 'bg-transparent text-text-secondary border border-transparent hover:bg-surface-secondary hover:text-text',
+    danger: 'bg-red-500/10 text-red-600 border border-red-500/15 hover:bg-red-500/15',
+    'ghost-secondary': 'bg-transparent text-text-tertiary border border-border hover:bg-surface-secondary hover:text-text',
+    link: 'bg-transparent text-accent hover:bg-accent-subtle',
+  }
 
   const sizeMap: Record<string, 'sm' | 'md' | 'lg'> = {
     sm: 'sm',
@@ -54,7 +62,7 @@ export function Button({
       variant={heroVariant as any}
       size={sizeMap[size]}
       isDisabled={isDisabled}
-      className={`font-semibold rounded-xl transition-all duration-300 ${className}`}
+      className={`font-semibold rounded-lg shadow-none transition-colors duration-150 ${variantStyles[variant]} ${className}`}
       {...(isIcon ? { isIconOnly: true } : {})}
       {...props}
     >

@@ -283,14 +283,12 @@ export function WorkspacePanel() {
   if (collapsed) {
     return (
       <aside 
-        className="h-full flex flex-col items-center pt-10 bg-transparent sidebar-transition relative shrink-0"
+        className="h-full flex flex-col items-center pt-[58px] bg-surface-secondary/35 sidebar-transition relative shrink-0"
         style={{ width: 'var(--spacing-workspace-panel-collapsed)' }}
       >
         <motion.button
-          whileHover={{ scale: 1.1, x: -2 }}
-          whileTap={{ scale: 0.9 }}
           onClick={toggleWorkspace}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-secondary/80 text-accent shadow-lg shadow-accent/5 border border-white/10 backdrop-blur-md transition-all duration-500 hover:shadow-accent/20"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface text-accent border border-border transition-colors duration-150 hover:bg-accent-subtle"
           title={t('agentStudio.header.panelTooltip')}
         >
           <CoreGlyph className="h-5 w-5" />
@@ -301,23 +299,21 @@ export function WorkspacePanel() {
 
   return (
     <aside 
-      className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-transparent relative pt-10"
+      className="h-full flex flex-col overflow-hidden shrink-0 sidebar-transition bg-surface-secondary/30 relative pt-[42px]"
       style={{ width: 'var(--spacing-workspace-panel)' }}
     >
-      <div className="flex items-start justify-between px-5 pt-6 pb-3 relative z-10">
+      <div className="flex items-start justify-between px-5 pt-5 pb-4 relative z-10">
         <div className="flex flex-col gap-0.5">
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent opacity-40">
+          <span className="section-eyebrow">
             {t('agentStudio.header.eyebrow')}
           </span>
-          <h2 className="text-[17px] font-black text-text tracking-tighter leading-none">
+          <h2 className="text-[17px] font-semibold text-text tracking-[-0.02em] leading-none">
             {t('agentStudio.header.title')}
           </h2>
         </div>
         <motion.button
-          whileHover={{ scale: 1.05, x: 2 }}
-          whileTap={{ scale: 0.95 }}
           onClick={toggleWorkspace}
-          className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface-secondary/60 text-text-tertiary hover:text-accent transition-all duration-500 shadow-sm border border-black/5 dark:border-white/5 mt-0.5"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-surface text-text-tertiary hover:text-accent transition-colors duration-150 border border-border mt-0.5"
         >
           <ChevronRight size={14} strokeWidth={2.5} />
         </motion.button>
@@ -326,22 +322,22 @@ export function WorkspacePanel() {
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 scrollbar-subtle">
         <div className="space-y-4 pb-4">
           {feedback && (
-            <div className="rounded-[22px] border border-accent/15 bg-accent/8 px-4 py-3 text-[11px] font-medium text-accent">
+            <div className="rounded-lg border border-accent/15 bg-accent/8 px-3 py-2.5 text-[11px] font-medium text-accent">
               {feedback}
             </div>
           )}
 
           {panelMode === 'list' ? (
-            <div className="rounded-[28px] border border-border-light/60 bg-white/76 p-5 shadow-sm backdrop-blur-xl dark:bg-white/5">
+            <div className="rounded-xl border border-border bg-surface p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-[12px] font-black tracking-tight text-text">
+                  <div className="text-[12px] font-semibold tracking-tight text-text">
                     {t('agentStudio.list.title')}
                   </div>
                 </div>
                 <button
                   onClick={() => setShowCreateAgentModal(true)}
-                  className="rounded-full bg-accent px-3 py-1.5 text-[10px] font-black text-white shadow-sm shadow-accent/15 transition-all duration-300 hover:-translate-y-0.5"
+                  className="rounded-lg bg-accent px-3 py-1.5 text-[10px] font-semibold text-accent-foreground transition-colors duration-150 hover:bg-accent-light"
                 >
                   {t('agentStudio.list.new')}
                 </button>
@@ -349,7 +345,7 @@ export function WorkspacePanel() {
 
               <div className="space-y-2.5">
                 {agents.length === 0 ? (
-                  <div className="rounded-2xl bg-surface-secondary/45 px-4 py-6 text-center text-[11px] text-text-tertiary">
+                  <div className="rounded-lg border border-border bg-surface-secondary/45 px-4 py-6 text-center text-[11px] text-text-tertiary">
                     {t('agentStudio.list.emptyState')}
                   </div>
                 ) : (
@@ -358,10 +354,10 @@ export function WorkspacePanel() {
                     return (
                       <div
                         key={agent.id}
-                        className={`group rounded-[22px] border px-3 py-3 transition-all duration-300 ${
+                        className={`group relative rounded-lg border px-3 py-3 transition-colors duration-150 ${
                           selected
-                            ? 'border-accent/20 bg-accent/10 shadow-[0_12px_30px_rgba(69,116,255,0.08)]'
-                            : 'border-border-light/60 bg-surface-secondary/50 hover:-translate-y-0.5 hover:border-accent/15 hover:bg-white/80'
+                            ? 'border-accent/30 bg-accent-subtle before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-accent'
+                            : 'border-border bg-surface-secondary/50 hover:border-accent/20 hover:bg-surface-secondary'
                         }`}
                       >
                         <div className="flex items-start gap-2">
@@ -371,11 +367,11 @@ export function WorkspacePanel() {
                               setActiveAgent(agent.id)
                               setPanelMode('detail')
                             }}
-                            className="min-w-0 flex-1 rounded-[18px] text-left"
+                            className="min-w-0 flex-1 rounded-md text-left"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <div className={`truncate text-[12px] font-black tracking-tight ${
+                                <div className={`truncate text-[12px] font-semibold tracking-tight ${
                                   selected ? 'text-accent' : 'text-text'
                                 }`}>
                                   {agent.name}
@@ -384,10 +380,10 @@ export function WorkspacePanel() {
                                   {agent.description || t('agentStudio.list.noDescription')}
                                 </div>
                               </div>
-                              <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[10px] font-black transition-all duration-300 ${
+                              <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold transition-colors duration-150 ${
                                 selected
-                                  ? 'bg-white/85 text-accent'
-                                  : 'bg-white/75 text-text-secondary group-hover:bg-accent/10 group-hover:text-accent'
+                                  ? 'bg-surface text-accent'
+                                  : 'bg-surface text-text-secondary group-hover:bg-accent/10 group-hover:text-accent'
                               }`}>
                                 {selected ? t('agentStudio.list.current') : t('agentStudio.list.details')}
                                 <ChevronRight size={12} strokeWidth={2.5} />
@@ -427,7 +423,7 @@ export function WorkspacePanel() {
                                 e.stopPropagation()
                                 handleDeleteAgent(agent.id, agent.name)
                               }}
-                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/72 text-text-tertiary transition-all duration-300 hover:bg-red-50 hover:text-red-500 dark:bg-white/10 dark:hover:bg-red-500/10"
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface text-text-tertiary transition-colors duration-150 hover:bg-red-500/10 hover:text-red-500"
                               title={t('agentStudio.list.delete')}
                             >
                               <Trash2 size={14} strokeWidth={2.2} />
@@ -441,7 +437,7 @@ export function WorkspacePanel() {
               </div>
             </div>
           ) : (
-            <div className="rounded-[28px] border border-border-light/60 bg-white/76 p-5 shadow-sm backdrop-blur-xl dark:bg-white/5">
+            <div className="rounded-xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <button

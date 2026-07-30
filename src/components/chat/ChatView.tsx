@@ -6,11 +6,12 @@ import { useMCPStore } from '../../stores/mcpStore'
 import { useFilePreviewStore } from '../../stores/filePreviewStore'
 import { invoke } from '@tauri-apps/api/core'
 import type { ImageAttachment } from './ChatInput'
-import { Cpu, Sparkles, Paperclip, FolderTree, MessagesSquare, ShieldCheck, ShieldAlert, ShieldOff, Bot, ChevronUp } from 'lucide-react'
+import { Cpu, Paperclip, FolderTree, MessagesSquare, ShieldCheck, ShieldAlert, ShieldOff, Bot, ChevronUp } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ModelSwitcher } from './ModelSwitcher'
 import { FilePreviewPanel } from '../preview'
+import { SLoopMark } from '../ui'
 import * as Pi from '../../utils/piClient'
 import {
   getVoiceConversation,
@@ -496,32 +497,22 @@ export function ChatView() {
         <div className="absolute top-4 right-4 z-20">
           <button
             onClick={handleToggleLeftPanel}
-            className="inline-flex items-center gap-2 rounded-full border border-border-light bg-surface/80 px-3.5 py-2 text-[11px] font-black tracking-tight text-text-secondary shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-accent/20 hover:text-accent"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[11px] font-semibold text-text-secondary transition-colors duration-150 hover:border-accent/30 hover:text-accent"
           >
             {leftPanelMode === 'files' ? <MessagesSquare size={14} /> : <FolderTree size={14} />}
             {leftPanelMode === 'files' ? t('chat.layout.backToSessions') : t('chat.layout.openFiles')}
           </button>
         </div>
-        <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 sm:px-8 max-w-4xl mx-auto h-full">
-          <div className="mb-4 sm:mb-8 shrink-0">
-            <div className="relative group scale-75 sm:scale-90 transition-transform duration-700">
-              <div className="absolute inset-0 bg-accent/10 blur-[40px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-125" />
-              <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-[32%_68%_55%_45%/45%_35%_65%_55%] bg-white/95 dark:bg-white/5 border border-white/40 dark:border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-3xl animate-liquid overflow-hidden">
-                <Cpu size={32} className="sm:hidden text-accent drop-shadow-[0_4px_16px_rgba(var(--color-accent-rgb),0.4)]" />
-                <Cpu size={48} className="hidden sm:block text-accent drop-shadow-[0_8px_24px_rgba(var(--color-accent-rgb),0.5)]" />
-              </div>
-              <motion.div animate={{ y: [0, -8, 0], x: [0, 4, 0] }} transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }} className="absolute -top-2 -right-2 sm:-top-4 sm:-right-4 w-6 h-6 sm:w-10 sm:h-10 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl">
-                <Sparkles size={12} className="sm:hidden" />
-                <Sparkles size={20} className="hidden sm:block" />
-              </motion.div>
-            </div>
+        <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-8 max-w-3xl mx-auto h-full">
+          <div className="mb-7 shrink-0">
+            <SLoopMark size="hero" />
           </div>
-          <div className="space-y-3 sm:space-y-6 mb-6 sm:mb-12 w-full">
-            <h2 className="text-3xl sm:text-5xl lg:text-[4.5rem] font-bold tracking-tight text-text leading-tight drop-shadow-sm select-none">
-              {t('chat.welcome.title')} <span className="text-accent italic font-serif px-1">{t('chat.welcome.appName')}</span>
+          <div className="space-y-3 mb-10 w-full">
+            <h2 className="text-3xl sm:text-[38px] font-semibold tracking-[-0.035em] text-text leading-tight select-none">
+              {t('chat.welcome.title')} <span className="text-accent">{t('chat.welcome.appName')}</span>
             </h2>
             <div className="flex justify-center w-full">
-              <p className="text-sm sm:text-base lg:text-lg text-text-tertiary leading-relaxed max-w-lg sm:max-w-xl font-medium tracking-tight opacity-70 text-center">{t('chat.welcome.description')}</p>
+              <p className="text-sm text-text-secondary leading-6 max-w-xl font-normal text-center">{t('chat.welcome.description')}</p>
             </div>
           </div>
         </div>
@@ -542,7 +533,7 @@ export function ChatView() {
         <div className="absolute top-4 right-4 z-40">
           <button
             onClick={handleToggleLeftPanel}
-            className="inline-flex items-center gap-2 rounded-full border border-border-light bg-surface/82 px-3.5 py-2 text-[11px] font-black tracking-tight text-text-secondary shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-accent/20 hover:text-accent"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[11px] font-semibold text-text-secondary transition-colors duration-150 hover:border-accent/30 hover:text-accent"
           >
             {leftPanelMode === 'files' ? <MessagesSquare size={14} /> : <FolderTree size={14} />}
             {leftPanelMode === 'files' ? t('chat.layout.backToSessions') : t('chat.layout.openFiles')}
@@ -562,34 +553,21 @@ export function ChatView() {
         <div className="flex-1 min-h-0 relative bg-transparent">
           <AnimatePresence mode="wait">
             {isEmpty ? (
-              <motion.div key="empty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4, ease: 'easeOut' }} className="h-full flex flex-col items-center justify-center px-16 relative">
+              <motion.div key="empty" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2, ease: 'easeOut' }} className="h-full flex flex-col items-center justify-center px-10 relative">
                 <div className="text-center relative z-10 w-full flex flex-col items-center">
-                  <p className="text-[10px] font-bold tracking-[0.4em] uppercase text-accent opacity-50 mb-8">{t('chat.welcome.subtitle')}</p>
-                  <div className="flex justify-center w-full mb-8">
-                    <div className="relative group scale-90 transition-transform duration-700">
-                      <div className="absolute inset-0 bg-accent/10 blur-[56px] group-hover:bg-accent/20 transition-all duration-1000 rounded-full scale-125" />
-                      <div className="relative w-32 h-32 rounded-[32%_68%_55%_45%/45%_35%_65%_55%] bg-white/95 dark:bg-white/10 border border-white/60 dark:border-white/20 flex items-center justify-center shadow-4xl backdrop-blur-3xl animate-liquid overflow-hidden">
-                        <Cpu size={48} className="text-accent drop-shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.5)]" />
-                        <div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_3.5s_infinite]" />
-                      </div>
-                      <motion.div
-                        animate={{ y: [0, -8, 0], x: [0, 4, 0] }}
-                        transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-                        className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-surface border border-border-light shadow-xl flex items-center justify-center text-accent/40 backdrop-blur-xl"
-                      >
-                        <Sparkles size={20} />
-                      </motion.div>
-                    </div>
+                  <p className="section-eyebrow mb-6">{t('chat.welcome.subtitle')}</p>
+                  <div className="flex justify-center w-full mb-7">
+                    <SLoopMark size="hero" />
                   </div>
-                  <h2 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-text leading-none mb-6 drop-shadow-sm text-center">{t('chat.welcome.howCanIHelp')}</h2>
-                  <p className="text-sm sm:text-base lg:text-lg text-text-tertiary max-w-xl leading-relaxed font-bold opacity-70 text-center">{t('chat.welcome.emptyDesc')}</p>
+                  <h2 className="text-3xl sm:text-[38px] font-semibold tracking-[-0.035em] text-text leading-tight mb-3 text-center">{t('chat.welcome.howCanIHelp')}</h2>
+                  <p className="text-sm text-text-secondary max-w-xl leading-6 font-normal text-center">{t('chat.welcome.emptyDesc')}</p>
                 </div>
               </motion.div>
             ) : (
-              <motion.div key={activeSessionId} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3, ease: 'easeOut' }} className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden">
+              <motion.div key={activeSessionId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }} className="h-full flex flex-col w-full max-w-(--spacing-chat-max) mx-auto relative overflow-hidden">
                 {session && (session.sourceLabel || session.readOnly) && (
                   <div className="sticky top-0 z-10 px-4 pt-4">
-                    <div className="rounded-[20px] border border-border-light bg-surface/80 px-4 py-3 shadow-sm backdrop-blur-xl">
+                    <div className="rounded-lg border border-border bg-surface px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[13px] font-bold tracking-tight text-text">{session.title}</span>
                         {session.sourceLabel && (
@@ -613,7 +591,7 @@ export function ChatView() {
                 )}
                 <MessageList sessionId={activeSessionId!} />
                 {error && (
-                  <div className="absolute top-8 left-4 right-4 z-20 flex items-center gap-4 p-6 rounded-[24px] bg-red-500/10 text-red-500 text-[14px] font-bold border border-red-500/15 animate-shake shadow-sm backdrop-blur-md">
+                  <div className="absolute top-6 left-4 right-4 z-20 flex items-center gap-4 p-4 rounded-lg bg-surface text-red-500 text-[13px] font-semibold border border-red-500/20 shadow-lg">
                     <span>{error}</span>
                     <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:opacity-70 text-[10px] font-bold uppercase tracking-[0.2em]">{t('chat.errors.dismiss')}</button>
                   </div>

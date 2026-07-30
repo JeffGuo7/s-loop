@@ -172,18 +172,18 @@ export function VoiceInputSettings() {
   }
 
   if (!isTauriRuntime()) {
-    return <div className="p-8 rounded-[24px] border border-border bg-surface-secondary text-text-secondary">{text.browser}</div>
+    return <div className="m-8 rounded-lg border border-border bg-surface-secondary p-4 text-sm text-text-secondary">{text.browser}</div>
   }
 
   return (
-    <div className="p-10 space-y-6">
-      <div className="rounded-[24px] border border-border-light bg-surface-secondary/60 p-6">
+    <div className="max-w-3xl mx-auto px-8 py-7 space-y-4">
+      <div className="settings-section bg-surface-secondary/55">
         <div className="flex items-start gap-4">
-          <div className="p-3 rounded-2xl bg-accent-subtle text-accent"><Mic size={22} /></div>
+          <div className="p-2.5 rounded-lg bg-accent-subtle text-accent"><Mic size={20} /></div>
           <div className="flex-1">
-            <h4 className="text-lg font-bold text-text">{text.title}</h4>
-            <p className="mt-2 text-sm leading-6 text-text-secondary">{text.description}</p>
-            <div className="mt-4 flex items-center gap-2 text-xs font-bold">
+            <h4 className="text-[15px] font-semibold text-text">{text.title}</h4>
+            <p className="mt-1.5 text-[13px] leading-5 text-text-secondary">{text.description}</p>
+            <div className="mt-3 flex items-center gap-2 text-xs font-semibold">
               {status?.supported ? <CheckCircle size={15} className="text-green-500" /> : <AlertTriangle size={15} className="text-amber-500" />}
               <span>{status?.supported ? text.compatible : text.unsupported}</span>
               <span className="text-text-tertiary">· {status?.deviceSummary || '—'}</span>
@@ -193,10 +193,10 @@ export function VoiceInputSettings() {
         </div>
       </div>
 
-      <div className="rounded-[24px] border border-border-light bg-surface p-6">
+      <div className="settings-section">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h4 className="font-bold text-text">{text.model}</h4>
+            <h4 className="font-semibold text-text">{text.model}</h4>
             <p className="mt-1 text-xs text-text-tertiary">
               {status?.modelName || 'Whisper Base Multilingual'} · {formatBytes(status?.modelBytes || 0)}
             </p>
@@ -217,30 +217,30 @@ export function VoiceInputSettings() {
 
         <div className="mt-5 flex flex-wrap gap-3">
           {!status?.modelVerified && !status?.downloadInProgress && (
-            <button className="px-4 py-2 rounded-xl bg-accent text-white text-sm font-bold flex items-center gap-2" disabled={!!busy || !status?.supported} onClick={() => void run('download', downloadDictationModel)}>
+            <button className="px-3.5 py-2 rounded-lg bg-accent text-accent-foreground text-[13px] font-semibold flex items-center gap-2" disabled={!!busy || !status?.supported} onClick={() => void run('download', downloadDictationModel)}>
               <Download size={16} /> {text.download}
             </button>
           )}
           {(busy === 'download' || status?.downloadInProgress) && (
-            <button className="px-4 py-2 rounded-xl bg-surface-secondary text-sm font-bold flex items-center gap-2" onClick={() => void cancelDictationModelDownload()}>
+            <button className="px-3.5 py-2 rounded-lg border border-border bg-surface-secondary text-[13px] font-semibold flex items-center gap-2" onClick={() => void cancelDictationModelDownload()}>
               <X size={16} /> {text.cancel}
             </button>
           )}
           {status?.modelInstalled && (
-            <button className="px-4 py-2 rounded-xl bg-surface-secondary text-sm font-bold" disabled={!!busy} onClick={() => void run('verify', verifyDictationModel)}>
+            <button className="px-3.5 py-2 rounded-lg border border-border bg-surface-secondary text-[13px] font-semibold" disabled={!!busy} onClick={() => void run('verify', verifyDictationModel)}>
               {text.verify}
             </button>
           )}
           {status?.modelInstalled && (
-            <button className="px-4 py-2 rounded-xl text-red-500 hover:bg-red-500/10 text-sm font-bold flex items-center gap-2" disabled={!!busy} onClick={() => void run('delete', deleteDictationModel)}>
+            <button className="px-3.5 py-2 rounded-lg text-red-500 hover:bg-red-500/10 text-[13px] font-semibold flex items-center gap-2" disabled={!!busy} onClick={() => void run('delete', deleteDictationModel)}>
               <Trash2 size={15} /> {text.remove}
             </button>
           )}
         </div>
       </div>
 
-      <div className="rounded-[24px] border border-border-light bg-surface p-6">
-        <h4 className="font-bold text-text">{text.test}</h4>
+      <div className="settings-section">
+        <h4 className="font-semibold text-text">{text.test}</h4>
         <p className="mt-1 text-sm text-text-secondary">{text.testHint}</p>
         {status?.recording && (
           <div className="mt-5 flex items-center gap-1 h-10" aria-label="Microphone input level">
@@ -250,13 +250,13 @@ export function VoiceInputSettings() {
           </div>
         )}
         {transcript && (
-          <div className="mt-4 rounded-2xl bg-surface-secondary p-4 text-sm text-text">
+          <div className="mt-4 rounded-lg border border-border bg-surface-secondary p-3 text-sm text-text">
             <span className="block mb-1 text-xs font-bold text-text-tertiary">{text.transcript}</span>
             {transcript}
           </div>
         )}
         <button
-          className={`mt-5 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 ${status?.recording ? 'bg-red-500 text-white' : 'bg-accent text-white'}`}
+          className={`mt-5 px-3.5 py-2 rounded-lg text-[13px] font-semibold flex items-center gap-2 ${status?.recording ? 'bg-red-500 text-white' : 'bg-accent text-accent-foreground'}`}
           disabled={!!busy || !status?.modelVerified || !status?.supported}
           onClick={() => void toggleTest()}
         >
@@ -265,8 +265,8 @@ export function VoiceInputSettings() {
         </button>
       </div>
 
-      {error && <div role="alert" className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500">{error}</div>}
-      <div className={`rounded-2xl px-5 py-4 text-sm font-bold ${status?.modelVerified && status?.testPassed ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600'}`}>
+      {error && <div role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500">{error}</div>}
+      <div className={`rounded-lg border px-4 py-3 text-sm font-semibold ${status?.modelVerified && status?.testPassed ? 'border-green-500/20 bg-green-500/10 text-green-600' : 'border-amber-500/20 bg-amber-500/10 text-amber-600'}`}>
         {status?.modelVerified && status?.testPassed ? text.ready : text.notReady}
       </div>
       <VoiceRuntimeSettings />

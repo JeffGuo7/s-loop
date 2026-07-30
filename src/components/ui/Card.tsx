@@ -8,11 +8,11 @@ interface CardProps extends Omit<CardRootProps, 'variant'> {
 
 export function Card({ children, className = '', variant = 'primary', ...props }: CardProps) {
   const variantStyles = {
-    primary: "bg-surface border-border shadow-sm",
-    default: "bg-surface border-border shadow-sm",
-    secondary: "bg-surface-secondary/50 border-border-light",
-    tertiary: "bg-surface-tertiary/30 border-border-light",
-    glass: "glass-card border-white/10"
+    primary: "bg-surface border-border shadow-none",
+    default: "bg-surface border-border shadow-none",
+    secondary: "bg-surface-secondary border-border",
+    tertiary: "bg-surface-tertiary/50 border-border-light",
+    glass: "bg-surface/94 border-border shadow-sm backdrop-blur-xl"
   }
 
   const heroVariant = (variant === 'glass' || variant === 'default' || variant === 'primary') ? 'default' : variant
@@ -20,7 +20,7 @@ export function Card({ children, className = '', variant = 'primary', ...props }
   return (
     <CardRoot 
       variant={heroVariant as any}
-      className={`${variantStyles[variant]} ${className}`}
+      className={`rounded-xl ${variantStyles[variant]} ${className}`}
       {...props}
     >
       <CardContent className="p-0 overflow-visible">

@@ -29,23 +29,27 @@
   --color-border-light: #f1f0ed;
   --color-border-hover: #dfddd9;
 
-  --spacing-sidebar: 272px;
-  --spacing-sidebar-collapsed: 64px;
-  --spacing-chat-max: 820px;
-  --spacing-workspace-panel: 320px;
-  --spacing-workspace-panel-collapsed: 64px;
+  --spacing-sidebar: 248px;
+  --spacing-sidebar-collapsed: 56px;
+  --spacing-chat-max: 900px;
+  --spacing-workspace-panel: 328px;
+  --spacing-workspace-panel-collapsed: 56px;
 
   --radius-sm: 4px;
   --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
-  --radius-2xl: 20px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Inter Variable', 'Inter', 'Microsoft YaHei UI', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Inter Variable', 'Inter', 'Microsoft YaHei UI', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --shadow-panel: 0 1px 2px rgba(20, 20, 20, 0.04), 0 12px 32px rgba(20, 20, 20, 0.06);
+  --shadow-dialog: 0 24px 64px rgba(16, 16, 16, 0.18);
+  --titlebar-height: 42px;
 }
 
 @layer base {
@@ -63,10 +67,18 @@
   body {
     font-family: var(--font-sans);
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.45;
     background-color: var(--color-bg);
     color: var(--color-text);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
   }
 }
 
@@ -107,19 +119,67 @@
 }
 
 .sidebar-transition {
-  transition: width 0.4s var(--ease-out-expo);
+  transition: width 0.22s var(--ease-out);
 }
 
-/* Disable HeroUI default blue focus */
-[data-focus="true"], [data-focus-visible="true"], :focus, :focus-within {
-  outline: none !important;
+/* Keyboard focus stays visible while avoiding HeroUI's default blue treatment. */
+:where(button, input, textarea, select, [tabindex]):focus {
+  outline: none;
+}
+
+:where(button, input, textarea, select, [tabindex]):focus-visible,
+[data-focus-visible="true"] {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px !important;
   box-shadow: none !important;
 }
 
 /* ── Global Focus Styles ── */
 .focus-ring-accent:focus-within {
   border-color: var(--color-accent) !important;
-  box-shadow: 0 0 0 2px var(--color-accent-subtle), 0 0 12px var(--color-accent-glow) !important;
+  box-shadow: 0 0 0 3px var(--color-accent-subtle) !important;
+}
+
+.workbench-panel {
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-panel);
+}
+
+.settings-section {
+  padding: 24px 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.settings-section:first-child {
+  padding-top: 0;
+}
+
+.settings-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.control-field {
+  min-height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.control-field:focus-within {
+  border-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+.section-eyebrow {
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* ── Chat Input: Force text wrapping on HeroUI TextArea ── */
@@ -137,29 +197,27 @@ textarea[data-slot="input"] {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.625rem 1.375rem;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-accent);
   color: var(--color-accent-foreground);
   font-weight: 700;
   font-size: 0.8125rem;
   line-height: 1;
   letter-spacing: 0.01em;
-  transition: all 0.3s var(--ease-out);
-  border: none;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 78%, black);
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(var(--color-accent-rgb), 0.2);
+  box-shadow: 0 1px 2px rgba(var(--color-accent-rgb), 0.16);
   white-space: nowrap;
 }
 
 .btn-primary:hover {
   background: var(--color-accent-light);
-  box-shadow: 0 8px 24px rgba(var(--color-accent-rgb), 0.3);
-  transform: translateY(-1px);
+  box-shadow: 0 1px 3px rgba(var(--color-accent-rgb), 0.2);
 }
 
 .btn-primary:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(var(--color-accent-rgb), 0.15);
+  box-shadow: none;
 }
 
 .btn-primary:disabled {
@@ -175,14 +233,14 @@ textarea[data-slot="input"] {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.625rem 1.375rem;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-secondary);
   color: var(--color-text-secondary);
   font-weight: 600;
   font-size: 0.8125rem;
   line-height: 1;
   letter-spacing: 0.01em;
-  transition: all 0.3s var(--ease-out);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
   border: 1px solid var(--color-border);
   cursor: pointer;
   white-space: nowrap;
@@ -209,13 +267,13 @@ textarea[data-slot="input"] {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: transparent;
   color: var(--color-text-tertiary);
   font-weight: 600;
   font-size: 0.8125rem;
   line-height: 1;
-  transition: all 0.25s var(--ease-out);
+  transition: background-color 0.16s ease, color 0.16s ease;
   border: none;
   cursor: pointer;
 }
@@ -231,13 +289,13 @@ textarea[data-slot="input"] {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: transparent;
   color: var(--color-text-tertiary);
   font-weight: 600;
   font-size: 0.8125rem;
   line-height: 1;
-  transition: all 0.25s var(--ease-out);
+  transition: background-color 0.16s ease, color 0.16s ease;
   border: none;
   cursor: pointer;
 }
@@ -245,6 +303,17 @@ textarea[data-slot="input"] {
 .btn-ghost-danger:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 

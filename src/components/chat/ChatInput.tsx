@@ -591,28 +591,28 @@ export function ChatInput({
 
   return (
     <div
-      className="w-full max-w-(--spacing-chat-max) mx-auto px-4 pb-2"
+      className="w-full max-w-(--spacing-chat-max) mx-auto px-5 pb-3"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
       {dictationError && (
-        <div role="alert" className="mb-2 rounded-xl bg-red-500/10 px-4 py-2 text-sm text-red-500">
+        <div role="alert" className="mb-2 rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-sm text-red-500">
           {dictationError}
         </div>
       )}
       <form onSubmit={handleSubmit}>
         <Card
           variant={isHero ? 'glass' : 'default'}
-          className={`relative group p-2 transition-all duration-700 border border-border-light ${
-            isHero ? 'shadow-[0_24px_64px_rgba(0,0,0,0.1)]' : 'shadow-2xl hover:shadow-accent/5'
-          } ${isDragOver ? 'ring-2 ring-accent ring-offset-[8px] ring-offset-bg' : 'focus-ring-accent'} rounded-[24px] bg-surface/90 backdrop-blur-3xl`}
+          className={`relative group p-1.5 transition-colors duration-150 border border-border ${
+            isHero ? 'shadow-(--shadow-panel)' : 'shadow-sm'
+          } ${isDragOver ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : 'focus-ring-accent'} rounded-xl bg-surface/96`}
         >
           {isDragOver && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-surface/95 backdrop-blur-2xl pointer-events-none">
-              <div className="rounded-[20px] border-2 border-dashed border-accent/40 bg-accent-subtle px-10 py-6 animate-fade-in-scale">
-                <p className="text-base font-bold text-accent flex items-center gap-3">
-                  <Paperclip size={20} />
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-surface/96 pointer-events-none">
+              <div className="rounded-lg border border-dashed border-accent/50 bg-accent-subtle px-8 py-5 animate-fade-in">
+                <p className="text-sm font-semibold text-accent flex items-center gap-2">
+                  <Paperclip size={18} />
                   {t('chat.input.dropOverlay')}
                 </p>
               </div>
@@ -621,11 +621,11 @@ export function ChatInput({
 
           <div className="flex flex-col">
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-3 px-6 pt-5 pb-2 animate-fade-in">
+              <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1 animate-fade-in">
                 {attachments.map((att, idx) => (
                   <div
                     key={idx}
-                    className="group/att inline-flex items-center gap-3 rounded-[16px] border border-border-light bg-surface-secondary/60 pl-4 pr-3 py-2.5 text-[12px] transition-all hover:border-accent/50 hover:bg-surface-secondary shadow-sm"
+                    className="group/att inline-flex items-center gap-2 rounded-lg border border-border bg-surface-secondary/70 pl-3 pr-2 py-2 text-[12px] transition-colors hover:border-accent/50 hover:bg-surface-secondary"
                     title={att.path}
                   >
                     <File size={14} className="text-accent" />
@@ -643,7 +643,7 @@ export function ChatInput({
             )}
 
             {dictation?.recording && (
-              <div className="mx-5 mt-4 flex items-center gap-3 rounded-2xl bg-red-500/5 px-4 py-3 text-red-500">
+              <div className="mx-3 mt-3 flex items-center gap-3 rounded-lg border border-red-500/15 bg-red-500/5 px-3 py-2.5 text-red-500">
                 <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
                 <span className="text-xs font-bold">{chinese ? '正在聆听' : 'Listening'} · {recordingTime}</span>
                 <div className="ml-auto flex h-7 items-center gap-1" aria-label="Microphone input level">
@@ -657,7 +657,7 @@ export function ChatInput({
             )}
 
             {realtimeMode && (
-              <div className="mx-5 mt-4 rounded-2xl bg-accent/5 px-4 py-3 text-accent">
+              <div className="mx-3 mt-3 rounded-lg border border-accent/15 bg-accent/5 px-3 py-2.5 text-accent">
                 <div className="flex items-center gap-3">
                   <span className="h-2.5 w-2.5 rounded-full bg-accent animate-pulse" />
                   <span className="text-xs font-bold">
@@ -716,13 +716,13 @@ export function ChatInput({
                   onCompositionStart={handleCompositionStart}
                   onCompositionEnd={handleCompositionEnd}
                   placeholder={attachments.length > 0 ? t('chat.input.placeholderWithFiles') : (placeholder || t('chat.input.placeholder'))}
-                  className="w-full bg-transparent hover:bg-transparent focus:!ring-0 focus:!outline-none shadow-none border-none p-6 min-h-[60px] text-[15px] font-bold leading-relaxed custom-scrollbar text-text placeholder:text-text-quaternary/30 resize-none tracking-tight selection:bg-accent/20"
+                  className="w-full bg-transparent hover:bg-transparent focus:!ring-0 focus:!outline-none shadow-none border-none px-4 py-3.5 min-h-[52px] text-[14px] font-medium leading-relaxed custom-scrollbar text-text placeholder:text-text-quaternary/60 resize-none selection:bg-accent/20"
                   rows={1}
                 />
               </TextField>
             </div>
 
-              <div className="flex items-center p-4">
+              <div className="flex items-center p-2">
                 {isStreaming ? (
                   <Button
                     type="button"
@@ -730,7 +730,7 @@ export function ChatInput({
                     size="icon"
                     aria-label="Stop generating"
                     onClick={onAbort}
-                    className="w-11 h-11 rounded-xl shadow-xl shadow-red-500/30 animate-fade-in"
+                    className="w-9 h-9 rounded-lg animate-fade-in"
                   >
                     <Square size={16} fill="currentColor" />
                   </Button>
@@ -746,7 +746,7 @@ export function ChatInput({
                           title={dictation?.recording ? (chinese ? '停止并转写' : 'Stop and transcribe') : voiceReady ? (chinese ? '本地语音输入' : 'Local voice input') : (chinese ? '先配置语音输入' : 'Configure voice input first')}
                           isDisabled={dictationBusy || disabled || isStreaming || !!realtimeMode || realtimeBusy}
                           onClick={() => void toggleDictation()}
-                          className={`w-11 h-11 rounded-xl ${!voiceReady && !dictation?.recording ? 'opacity-50' : ''}`}
+                          className={`w-9 h-9 rounded-lg ${!voiceReady && !dictation?.recording ? 'opacity-45' : ''}`}
                         >
                           {dictationBusy ? <LoaderCircle size={17} className="animate-spin" /> : dictation?.recording ? <Square size={15} fill="currentColor" /> : <Mic size={18} />}
                         </Button>
@@ -764,7 +764,7 @@ export function ChatInput({
                           }
                           isDisabled={disabled || isStreaming || dictationBusy || !!dictation?.recording || realtimeBusy || conversation.active}
                           onClick={() => void toggleRealtimeDictation()}
-                          className={`w-11 h-11 rounded-xl ${!realtimeReady && realtimeMode !== 'dictation' ? 'opacity-50' : ''}`}
+                          className={`w-9 h-9 rounded-lg ${!realtimeReady && realtimeMode !== 'dictation' ? 'opacity-45' : ''}`}
                         >
                           {realtimeBusy && realtimeMode !== 'conversation' ? (
                             <LoaderCircle size={17} className="animate-spin" />
@@ -790,7 +790,7 @@ export function ChatInput({
                           }
                           isDisabled={disabled || !!dictation?.recording || dictationBusy || (isStreaming && !conversation.active) || (realtimeMode === 'dictation')}
                           onClick={() => void toggleConversation()}
-                          className={`w-11 h-11 rounded-xl ${!conversationReady && !conversation.active ? 'opacity-50' : ''}`}
+                          className={`w-9 h-9 rounded-lg ${!conversationReady && !conversation.active ? 'opacity-45' : ''}`}
                         >
                           {realtimeBusy && realtimeMode === 'conversation' ? (
                             <LoaderCircle size={17} className="animate-spin" />
@@ -808,10 +808,10 @@ export function ChatInput({
                       size="icon"
                       aria-label="Send message"
                       isDisabled={(!input.trim() && attachments.length === 0) || disabled || !!dictation?.recording || dictationBusy || !!realtimeMode || realtimeBusy}
-                      className={`w-11 h-11 rounded-xl shadow-xl transition-all duration-700 ${
+                      className={`w-9 h-9 rounded-lg transition-colors duration-150 ${
                         (input.trim() || attachments.length > 0) && !dictation?.recording && !dictationBusy && !realtimeMode && !realtimeBusy
-                          ? 'shadow-accent/50 scale-100 hover:scale-105 active:scale-95'
-                          : 'shadow-none scale-90 opacity-20 grayscale pointer-events-none'
+                          ? 'opacity-100'
+                          : 'opacity-30 pointer-events-none'
                       }`}
                     >
                       <Send
