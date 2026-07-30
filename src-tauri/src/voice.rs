@@ -65,13 +65,14 @@ pub async fn download_voice_asset(
     app: tauri::AppHandle,
     state: tauri::State<'_, Arc<VoiceRuntime>>,
     kind: String,
+    github_mirror: Option<String>,
 ) -> Result<VoiceRuntimeStatus, String> {
     let kind = VoiceAssetKind::parse(&kind)?;
     let runtime = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         runtime
             .assets
-            .install(kind, |progress: VoiceAssetProgress| {
+            .install(kind, github_mirror.as_deref(), |progress: VoiceAssetProgress| {
                 let _ = app.emit("voice-asset-progress", progress);
             })?;
         Ok::<VoiceRuntimeStatus, String>(status(&runtime))

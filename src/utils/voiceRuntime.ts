@@ -54,8 +54,8 @@ export interface RealtimeVoiceEvent {
 export const getVoiceRuntimeStatus = () =>
   invoke<VoiceRuntimeStatus>('get_voice_runtime_status')
 
-export const downloadVoiceAsset = (kind: VoiceAssetKind) =>
-  invoke<VoiceRuntimeStatus>('download_voice_asset', { kind })
+export const downloadVoiceAsset = (kind: VoiceAssetKind, githubMirror?: string) =>
+  invoke<VoiceRuntimeStatus>('download_voice_asset', { kind, githubMirror })
 
 export const cancelVoiceAssetDownload = () =>
   invoke<void>('cancel_voice_asset_download')

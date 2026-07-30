@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import i18n from '../../i18n'
+import { useAppStore } from '../../stores/appStore'
 import {
   cancelVoiceAssetDownload,
   deleteVoiceAsset,
@@ -79,6 +80,7 @@ const formatBytes = (bytes: number) => {
 
 export function VoiceRuntimeSettings() {
   const copy = i18n.resolvedLanguage?.startsWith('zh') ? text.zh : text.en
+  const githubMirror = useAppStore((state) => state.githubMirror)
   const [status, setStatus] = useState<VoiceRuntimeStatus | null>(null)
   const [progress, setProgress] = useState<VoiceAssetProgress | null>(null)
   const [busy, setBusy] = useState<VoiceAssetKind | null>(null)
@@ -123,7 +125,7 @@ export function VoiceRuntimeSettings() {
     setProgress(null)
     setError(null)
     try {
-      setStatus(await downloadVoiceAsset(kind))
+      setStatus(await downloadVoiceAsset(kind, githubMirror))
     } catch (reason) {
       setError(String(reason))
       await refresh().catch(() => undefined)

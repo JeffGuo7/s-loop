@@ -13,6 +13,8 @@ use bzip2::read::BzDecoder;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use crate::download;
+
 const STREAMING_ASR_DIR: &str = "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20";
 const TTS_DIR: &str = "kokoro-multi-lang-v1_0";
 const VAD_FILE: &str = "silero_vad.onnx";
@@ -21,6 +23,40 @@ const STREAMING_ASR_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/
 const TTS_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2";
 const VAD_URL: &str =
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
+
+const MODELSCOPE_ASR_REVISION: &str = "658a5257f1342768b148d8b51c87e52a4e012262";
+const MODELSCOPE_ASR_BASE: &str =
+    "https://www.modelscope.cn/models/budaoshou/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve";
+const MODELSCOPE_ASR_BYTES: u64 = 198_270_793;
+
+struct ModelScopeFile {
+    name: &'static str,
+    bytes: u64,
+    sha256: &'static str,
+}
+
+const MODELSCOPE_ASR_FILES: &[ModelScopeFile] = &[
+    ModelScopeFile {
+        name: "decoder-epoch-99-avg-1.int8.onnx",
+        bytes: 13_091_040,
+        sha256: "1a70c593d71e53f023f5f55b0b4cfff5055abb786ee3992e5f63dc2e273cc4fa",
+    },
+    ModelScopeFile {
+        name: "encoder-epoch-99-avg-1.int8.onnx",
+        bytes: 181_895_032,
+        sha256: "8fa764187a261844f859d7143ebaa563af5d10adfece4c18a8f414c88cba2a9b",
+    },
+    ModelScopeFile {
+        name: "joiner-epoch-99-avg-1.int8.onnx",
+        bytes: 3_228_404,
+        sha256: "1ed689c5ed19dbaa725d9d191bb4822b5f4855a39e1ffd28cbc1f340d25b2ee0",
+    },
+    ModelScopeFile {
+        name: "tokens.txt",
+        bytes: 56_317,
+        sha256: "a8e0e4ec53810e433789b54a5c0134a7eaa2ffca595a6334d54c00da858841d3",
+    },
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -66,8 +102,8 @@ impl VoiceAssetKind {
 
     fn sha256(self) -> Option<&'static str> {
         match self {
-            // This older release asset predates GitHub's published digest
-            // metadata. It is still checked for safe paths and required files.
+            // The fallback archive predates GitHub's published digest metadata.
+            // Its extracted contents are still checked for safe paths and required files.
             Self::StreamingAsr => None,
             Self::Tts => Some("c133d26353d776da730870dac7da07dbfc9a5e3bc80cc5e8e83ab6e823be7046"),
             Self::Vad => Some("9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"),
@@ -78,7 +114,7 @@ impl VoiceAssetKind {
         match self {
             Self::StreamingAsr => &[
                 "encoder-epoch-99-avg-1.int8.onnx",
-                "decoder-epoch-99-avg-1.onnx",
+                "decoder-epoch-99-avg-1.int8.onnx",
                 "joiner-epoch-99-avg-1.int8.onnx",
                 "tokens.txt",
             ],
@@ -189,6 +225,7 @@ impl VoiceAssets {
     pub fn install(
         &self,
         kind: VoiceAssetKind,
+        github_mirror: Option<&str>,
         mut on_progress: impl FnMut(VoiceAssetProgress),
     ) -> Result<(), String> {
         if self.is_installed(kind) {
@@ -206,7 +243,7 @@ impl VoiceAssets {
         }
         self.cancel_download.store(false, Ordering::SeqCst);
 
-        let result = self.install_inner(kind, &mut on_progress);
+        let result = self.install_inner(kind, github_mirror, &mut on_progress);
 
         if let Ok(mut downloading) = self.downloading.lock() {
             downloading.remove(&kind);
@@ -218,6 +255,7 @@ impl VoiceAssets {
     fn install_inner(
         &self,
         kind: VoiceAssetKind,
+        github_mirror: Option<&str>,
         on_progress: &mut impl FnMut(VoiceAssetProgress),
     ) -> Result<(), String> {
         fs::create_dir_all(&self.root)
@@ -225,28 +263,155 @@ impl VoiceAssets {
 
         let partial = self.root.join(format!("{}.download.part", kind.as_str()));
         let staging = self.root.join(format!(".installing-{}", kind.as_str()));
-        if partial.exists() {
-            fs::remove_file(&partial)
-                .map_err(|error| format!("Could not replace an incomplete download: {error}"))?;
-        }
-        if staging.exists() {
-            fs::remove_dir_all(&staging)
-                .map_err(|error| format!("Could not reset an incomplete installation: {error}"))?;
+        remove_path_if_exists(&partial)?;
+        remove_path_if_exists(&staging)?;
+
+        let mut failures = Vec::new();
+        if kind == VoiceAssetKind::StreamingAsr {
+            match self.install_modelscope_asr(&staging, on_progress) {
+                Ok(()) => return Ok(()),
+                Err(error) if is_canceled(&self.cancel_download) => return Err(error),
+                Err(error) => {
+                    failures.push(format!("ModelScope: {error}"));
+                    remove_path_if_exists(&staging)?;
+                }
+            }
         }
 
-        let download_result = download_file(
+        let mut sources = vec![("GitHub", kind.url().to_owned())];
+        if let Some(url) = github_mirror_url(github_mirror, kind.url()) {
+            if url != kind.url() {
+                sources.push(("configured GitHub mirror", url));
+            }
+        }
+
+        let agent = download::agent();
+        for (label, url) in sources {
+            remove_path_if_exists(&partial)?;
+            remove_path_if_exists(&staging)?;
+            match self.install_archive_or_file(
+                kind,
+                label,
+                &url,
+                &agent,
+                &partial,
+                &staging,
+                on_progress,
+            ) {
+                Ok(()) => return Ok(()),
+                Err(error) if is_canceled(&self.cancel_download) => return Err(error),
+                Err(error) => failures.push(format!("{label}: {error}")),
+            }
+        }
+
+        remove_path_if_exists(&partial)?;
+        remove_path_if_exists(&staging)?;
+        Err(format!(
+            "Could not download {} from any configured source. {}",
+            kind.display_name(),
+            failures.join(" | ")
+        ))
+    }
+
+    fn install_modelscope_asr(
+        &self,
+        staging: &Path,
+        on_progress: &mut impl FnMut(VoiceAssetProgress),
+    ) -> Result<(), String> {
+        fs::create_dir_all(staging)
+            .map_err(|error| format!("Could not prepare ModelScope installation: {error}"))?;
+        let direct_agent = download::direct_agent();
+        let proxy_agent = download::agent();
+        let mut completed = 0_u64;
+
+        for file in MODELSCOPE_ASR_FILES {
+            let url = format!(
+                "{MODELSCOPE_ASR_BASE}/{MODELSCOPE_ASR_REVISION}/{}",
+                file.name
+            );
+            let destination = staging.join(file.name);
+            let direct_result = download_file(
+                VoiceAssetKind::StreamingAsr,
+                "ModelScope direct",
+                &direct_agent,
+                &url,
+                &destination,
+                Some(file.sha256),
+                Some(file.bytes),
+                completed,
+                MODELSCOPE_ASR_BYTES,
+                &self.cancel_download,
+                on_progress,
+            );
+            if let Err(direct_error) = direct_result {
+                if is_canceled(&self.cancel_download) {
+                    return Err(direct_error);
+                }
+                remove_path_if_exists(&destination)?;
+                download_file(
+                    VoiceAssetKind::StreamingAsr,
+                    "ModelScope through system proxy",
+                    &proxy_agent,
+                    &url,
+                    &destination,
+                    Some(file.sha256),
+                    Some(file.bytes),
+                    completed,
+                    MODELSCOPE_ASR_BYTES,
+                    &self.cancel_download,
+                    on_progress,
+                )
+                .map_err(|proxy_error| {
+                    format!(
+                        "{} failed directly ({direct_error}) and through the system proxy ({proxy_error})",
+                        file.name
+                    )
+                })?;
+            }
+            completed += file.bytes;
+        }
+
+        on_progress(VoiceAssetProgress {
+            kind: VoiceAssetKind::StreamingAsr,
+            phase: "installing",
+            downloaded_bytes: completed,
+            total_bytes: MODELSCOPE_ASR_BYTES,
+        });
+        validate_asset(VoiceAssetKind::StreamingAsr, staging)?;
+        activate_directory(
+            staging,
+            &self.asset_path(VoiceAssetKind::StreamingAsr),
+            VoiceAssetKind::StreamingAsr,
+        )?;
+        report_ready(VoiceAssetKind::StreamingAsr, on_progress);
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn install_archive_or_file(
+        &self,
+        kind: VoiceAssetKind,
+        source_label: &str,
+        url: &str,
+        agent: &ureq::Agent,
+        partial: &Path,
+        staging: &Path,
+        on_progress: &mut impl FnMut(VoiceAssetProgress),
+    ) -> Result<(), String> {
+        download_file(
             kind,
-            kind.url(),
-            &partial,
+            source_label,
+            agent,
+            url,
+            partial,
+            kind.sha256(),
+            None,
+            0,
+            0,
             &self.cancel_download,
             on_progress,
-        );
-        if let Err(error) = download_result {
-            let _ = fs::remove_file(&partial);
-            return Err(error);
-        }
-        if self.cancel_download.load(Ordering::SeqCst) {
-            let _ = fs::remove_file(&partial);
+        )?;
+        if is_canceled(&self.cancel_download) {
             return Err("Voice model download canceled.".to_owned());
         }
 
@@ -259,41 +424,24 @@ impl VoiceAssets {
 
         match kind.archive_root() {
             Some(archive_root) => {
-                fs::create_dir_all(&staging)
+                fs::create_dir_all(staging)
                     .map_err(|error| format!("Could not prepare model extraction: {error}"))?;
-                extract_tar_bz2(&partial, &staging)?;
+                extract_tar_bz2(partial, staging)?;
                 let extracted = staging.join(archive_root);
                 validate_asset(kind, &extracted)?;
-                let target = self.asset_path(kind);
-                if target.exists() {
-                    fs::remove_dir_all(&target).map_err(|error| {
-                        format!("Could not replace the existing voice model: {error}")
-                    })?;
-                }
-                fs::rename(&extracted, &target)
-                    .map_err(|error| format!("Could not activate the voice model: {error}"))?;
-                let _ = fs::remove_dir_all(&staging);
+                activate_directory(&extracted, &self.asset_path(kind), kind)?;
+                remove_path_if_exists(staging)?;
             }
             None => {
                 let target = self.asset_path(kind);
-                if target.exists() {
-                    fs::remove_file(&target).map_err(|error| {
-                        format!("Could not replace the existing voice model: {error}")
-                    })?;
-                }
-                fs::rename(&partial, &target)
+                remove_path_if_exists(&target)?;
+                fs::rename(partial, &target)
                     .map_err(|error| format!("Could not activate the voice model: {error}"))?;
                 validate_asset(kind, &target)?;
             }
         }
-        let _ = fs::remove_file(&partial);
-
-        on_progress(VoiceAssetProgress {
-            kind,
-            phase: "ready",
-            downloaded_bytes: 0,
-            total_bytes: 0,
-        });
+        remove_path_if_exists(partial)?;
+        report_ready(kind, on_progress);
         Ok(())
     }
 
@@ -303,38 +451,45 @@ impl VoiceAssets {
 
     pub fn delete(&self, kind: VoiceAssetKind) -> Result<(), String> {
         self.cancel_download();
-        let target = self.asset_path(kind);
-        if target.is_dir() {
-            fs::remove_dir_all(&target)
-                .map_err(|error| format!("Could not delete {}: {error}", kind.display_name()))?;
-        } else if target.exists() {
-            fs::remove_file(&target)
-                .map_err(|error| format!("Could not delete {}: {error}", kind.display_name()))?;
-        }
-        Ok(())
+        remove_path_if_exists(&self.asset_path(kind)).map_err(|error| {
+            format!(
+                "Could not delete {}: {}",
+                kind.display_name(),
+                error.trim_start_matches("Could not remove an incomplete voice model: ")
+            )
+        })
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn download_file(
     kind: VoiceAssetKind,
+    source_label: &str,
+    agent: &ureq::Agent,
     url: &str,
     destination: &Path,
+    expected_sha256: Option<&str>,
+    expected_bytes: Option<u64>,
+    progress_offset: u64,
+    progress_total: u64,
     cancel: &AtomicBool,
     on_progress: &mut impl FnMut(VoiceAssetProgress),
 ) -> Result<(), String> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(std::time::Duration::from_secs(30))
-        .timeout_read(std::time::Duration::from_secs(60))
-        .try_proxy_from_env(true)
-        .build();
-    let response = agent
-        .get(url)
-        .call()
-        .map_err(|error| format!("Could not download {}: {error}", kind.display_name()))?;
-    let total_bytes = response
+    let response = agent.get(url).call().map_err(|error| {
+        format!(
+            "{source_label} could not start the {} download: {error}",
+            kind.display_name()
+        )
+    })?;
+    let response_bytes = response
         .header("Content-Length")
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(0);
+    let total_bytes = if progress_total > 0 {
+        progress_total
+    } else {
+        expected_bytes.unwrap_or(response_bytes)
+    };
     let mut input = response.into_reader();
     let mut output = fs::File::create(destination)
         .map_err(|error| format!("Could not save {}: {error}", kind.display_name()))?;
@@ -346,16 +501,19 @@ fn download_file(
     on_progress(VoiceAssetProgress {
         kind,
         phase: "downloading",
-        downloaded_bytes: 0,
+        downloaded_bytes: progress_offset,
         total_bytes,
     });
     loop {
-        if cancel.load(Ordering::SeqCst) {
+        if is_canceled(cancel) {
             return Err("Voice model download canceled.".to_owned());
         }
-        let count = input
-            .read(&mut buffer)
-            .map_err(|error| format!("Could not download {}: {error}", kind.display_name()))?;
+        let count = input.read(&mut buffer).map_err(|error| {
+            format!(
+                "{source_label} interrupted the {} download: {error}",
+                kind.display_name()
+            )
+        })?;
         if count == 0 {
             break;
         }
@@ -369,7 +527,7 @@ fn download_file(
             on_progress(VoiceAssetProgress {
                 kind,
                 phase: "downloading",
-                downloaded_bytes,
+                downloaded_bytes: progress_offset + downloaded_bytes,
                 total_bytes,
             });
         }
@@ -377,11 +535,20 @@ fn download_file(
     output
         .flush()
         .map_err(|error| format!("Could not finish saving {}: {error}", kind.display_name()))?;
-    if let Some(expected) = kind.sha256() {
+
+    if let Some(expected) = expected_bytes {
+        if downloaded_bytes != expected {
+            return Err(format!(
+                "{source_label} returned an incomplete {} file (expected {expected} bytes, received {downloaded_bytes}).",
+                kind.display_name()
+            ));
+        }
+    }
+    if let Some(expected) = expected_sha256 {
         let actual = format!("{:x}", hasher.finalize());
         if actual != expected {
             return Err(format!(
-                "The downloaded {} failed SHA-256 verification.",
+                "{source_label} returned a {} file that failed SHA-256 verification.",
                 kind.display_name()
             ));
         }
@@ -389,10 +556,62 @@ fn download_file(
     on_progress(VoiceAssetProgress {
         kind,
         phase: "downloading",
-        downloaded_bytes,
-        total_bytes: total_bytes.max(downloaded_bytes),
+        downloaded_bytes: progress_offset + downloaded_bytes,
+        total_bytes: total_bytes.max(progress_offset + downloaded_bytes),
     });
     Ok(())
+}
+
+fn report_ready(kind: VoiceAssetKind, on_progress: &mut impl FnMut(VoiceAssetProgress)) {
+    on_progress(VoiceAssetProgress {
+        kind,
+        phase: "ready",
+        downloaded_bytes: 0,
+        total_bytes: 0,
+    });
+}
+
+fn activate_directory(source: &Path, target: &Path, kind: VoiceAssetKind) -> Result<(), String> {
+    remove_path_if_exists(target).map_err(|error| {
+        format!(
+            "Could not replace the existing {}: {error}",
+            kind.display_name()
+        )
+    })?;
+    fs::rename(source, target)
+        .map_err(|error| format!("Could not activate the voice model: {error}"))
+}
+
+fn remove_path_if_exists(path: &Path) -> Result<(), String> {
+    if path.is_dir() {
+        fs::remove_dir_all(path)
+            .map_err(|error| format!("Could not remove an incomplete voice model: {error}"))?;
+    } else if path.exists() {
+        fs::remove_file(path)
+            .map_err(|error| format!("Could not remove an incomplete voice model: {error}"))?;
+    }
+    Ok(())
+}
+
+fn is_canceled(cancel: &AtomicBool) -> bool {
+    cancel.load(Ordering::SeqCst)
+}
+
+fn github_mirror_url(mirror: Option<&str>, original: &str) -> Option<String> {
+    let mirror = mirror?.trim();
+    if mirror.is_empty() {
+        return None;
+    }
+    if mirror.contains("{url}") {
+        return Some(mirror.replace("{url}", original));
+    }
+    let github_path = original
+        .strip_prefix("https://github.com/")
+        .unwrap_or(original);
+    if mirror.ends_with("/https://github.com/") {
+        return Some(format!("{mirror}{github_path}"));
+    }
+    Some(format!("{}/{}", mirror.trim_end_matches('/'), original))
 }
 
 fn extract_tar_bz2(archive_path: &Path, destination: &Path) -> Result<(), String> {
@@ -456,4 +675,36 @@ fn path_size(path: &Path) -> u64 {
         .flatten()
         .map(|entry| path_size(&entry.path()))
         .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::github_mirror_url;
+
+    const GITHUB: &str =
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
+
+    #[test]
+    fn expands_the_default_github_mirror_prefix() {
+        assert_eq!(
+            github_mirror_url(
+                Some("https://mirror.ghproxy.com/https://github.com/"),
+                GITHUB
+            )
+            .as_deref(),
+            Some(
+                "https://mirror.ghproxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+            )
+        );
+    }
+
+    #[test]
+    fn supports_a_url_placeholder() {
+        assert_eq!(
+            github_mirror_url(Some("https://mirror.example/?target={url}"), GITHUB).as_deref(),
+            Some(
+                "https://mirror.example/?target=https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+            )
+        );
+    }
 }

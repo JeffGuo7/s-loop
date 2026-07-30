@@ -24,6 +24,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
+mod download;
 mod playback;
 mod realtime;
 mod tts;
@@ -55,6 +56,7 @@ pub struct DictationStatus {
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DownloadProgress {
     pub downloaded_bytes: u64,
     pub total_bytes: u64,
@@ -151,10 +153,7 @@ impl Dictation {
                 .map_err(|error| format!("Could not create model directory: {error}"))?;
 
             let partial = self.model_path.with_extension("bin.part");
-            let agent = ureq::AgentBuilder::new()
-                .timeout_connect(std::time::Duration::from_secs(30))
-                .timeout_read(std::time::Duration::from_secs(30))
-                .build();
+            let agent = download::agent();
             let response = agent
                 .get(DEFAULT_MODEL_URL)
                 .call()
@@ -283,7 +282,11 @@ impl Dictation {
         if samples.len() < sample_rate as usize / 4 {
             return Ok(String::new());
         }
-        transcribe(&self.model_path, &resample_mono(&samples, sample_rate))
+        let samples = resample_mono(&samples, sample_rate);
+        let Some(samples) = prepare_audio_for_whisper(&samples) else {
+            return Ok(String::new());
+        };
+        transcribe(&self.model_path, &samples)
     }
 
     pub fn input_level(&self) -> f32 {
@@ -530,10 +533,35 @@ fn append_frames<T>(
     let Ok(mut output) = target.lock() else {
         return;
     };
-    output.reserve(data.len() / channels.max(1));
-    for frame in data.chunks(channels.max(1)) {
-        let sum: f32 = frame.iter().copied().map(&convert).sum();
-        output.push(sum / frame.len() as f32);
+    let channels = channels.max(1);
+    let mut channel_energy = vec![0.0_f64; channels];
+    let mut channel_samples = vec![0_usize; channels];
+    for frame in data.chunks(channels) {
+        for (channel, sample) in frame.iter().copied().enumerate() {
+            let sample = convert(sample);
+            channel_energy[channel] += (sample * sample) as f64;
+            channel_samples[channel] += 1;
+        }
+    }
+    let selected_channel = channel_energy
+        .iter()
+        .zip(&channel_samples)
+        .enumerate()
+        .max_by(
+            |(_, (left_energy, left_count)), (_, (right_energy, right_count))| {
+                let left = **left_energy / (**left_count).max(1) as f64;
+                let right = **right_energy / (**right_count).max(1) as f64;
+                left.total_cmp(&right)
+            },
+        )
+        .map(|(index, _)| index)
+        .unwrap_or(0);
+
+    output.reserve(data.len() / channels);
+    for frame in data.chunks(channels) {
+        if let Some(sample) = frame.get(selected_channel).copied() {
+            output.push(convert(sample));
+        }
     }
 }
 
@@ -558,6 +586,56 @@ fn resample_mono(input: &[f32], source_rate: u32) -> Vec<f32> {
         .collect()
 }
 
+fn prepare_audio_for_whisper(samples: &[f32]) -> Option<Vec<f32>> {
+    if samples.is_empty() {
+        return None;
+    }
+    let mean = samples.iter().copied().sum::<f32>() / samples.len() as f32;
+    let mut centered: Vec<f32> = samples
+        .iter()
+        .map(|sample| (sample - mean).clamp(-1.0, 1.0))
+        .collect();
+    let peak = centered
+        .iter()
+        .fold(0.0_f32, |current, sample| current.max(sample.abs()));
+    let rms =
+        (centered.iter().map(|sample| sample * sample).sum::<f32>() / centered.len() as f32).sqrt();
+
+    // Reject electrical noise and effectively silent recordings before Whisper can hallucinate
+    // placeholders such as "[BLANK_AUDIO]".
+    if peak < 0.003 || rms < 0.0005 {
+        return None;
+    }
+
+    // Quiet laptop microphones benefit from bounded normalization. The cap avoids turning a
+    // low-level noise floor into speech-like audio.
+    let gain = (0.35 / peak).clamp(1.0, 8.0);
+    if gain > 1.0 {
+        for sample in &mut centered {
+            *sample = (*sample * gain).clamp(-1.0, 1.0);
+        }
+    }
+    Some(centered)
+}
+
+fn clean_transcript(value: &str) -> String {
+    let trimmed = value.trim();
+    let normalized = trimmed.to_ascii_lowercase();
+    if matches!(
+        normalized.as_str(),
+        "[blank_audio]"
+            | "[blank audio]"
+            | "[no_speech]"
+            | "[no speech]"
+            | "[silence]"
+            | "<|nospeech|>"
+    ) {
+        String::new()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
 fn transcribe(model_path: &Path, samples: &[f32]) -> Result<String, String> {
     if !model_path.is_file() {
         return Err("The local voice model is not installed yet.".to_owned());
@@ -578,19 +656,27 @@ fn transcribe(model_path: &Path, samples: &[f32]) -> Result<String, String> {
     params.set_print_progress(false);
     params.set_print_special(false);
     params.set_print_realtime(false);
+    params.set_print_timestamps(false);
+    params.set_no_timestamps(true);
+    params.set_single_segment(true);
     params.set_suppress_blank(true);
+    params.set_suppress_nst(true);
+    params.set_debug_mode(false);
     state
         .full(params, samples)
         .map_err(|error| format!("Could not transcribe the recording: {error}"))?;
 
     let mut text = String::new();
     for segment in state.as_iter() {
+        if segment.no_speech_probability() >= 0.6 {
+            continue;
+        }
         let segment = segment
             .to_str()
             .map_err(|error| format!("Could not read the transcript: {error}"))?;
         text.push_str(segment);
     }
-    Ok(text.trim().to_owned())
+    Ok(clean_transcript(&text))
 }
 
 #[cfg(test)]
@@ -601,9 +687,10 @@ mod tests {
     };
 
     use super::{
-        resample_mono, write_verification_marker, Dictation, DEFAULT_MODEL_BYTES,
-        DEFAULT_MODEL_FILE,
+        append_frames, clean_transcript, prepare_audio_for_whisper, resample_mono,
+        write_verification_marker, Dictation, DEFAULT_MODEL_BYTES, DEFAULT_MODEL_FILE,
     };
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn resampling_preserves_a_16khz_stream() {
@@ -615,6 +702,48 @@ mod tests {
     fn resampling_converts_duration() {
         let input = vec![0.0; 48_000];
         assert_eq!(resample_mono(&input, 48_000).len(), 16_000);
+    }
+
+    #[test]
+    fn microphone_downmix_uses_the_channel_with_real_signal() {
+        let output = Arc::new(Mutex::new(Vec::new()));
+        append_frames(&output, &[0.0_f32, 0.5, 0.0, -0.5], 2, |sample| sample);
+        assert_eq!(*output.lock().unwrap(), vec![0.5, -0.5]);
+    }
+
+    #[test]
+    fn silent_audio_is_rejected_before_transcription() {
+        assert!(prepare_audio_for_whisper(&vec![0.0001; 16_000]).is_none());
+    }
+
+    #[test]
+    fn quiet_speech_is_normalized_without_clipping() {
+        let input: Vec<f32> = (0..16_000)
+            .map(|index| ((index as f32 / 20.0).sin()) * 0.02)
+            .collect();
+        let prepared = prepare_audio_for_whisper(&input).unwrap();
+        let peak = prepared
+            .iter()
+            .fold(0.0_f32, |current, sample| current.max(sample.abs()));
+        assert!(peak > 0.1 && peak <= 1.0);
+    }
+
+    #[test]
+    fn blank_audio_placeholder_is_not_returned_as_a_transcript() {
+        assert_eq!(clean_transcript(" [BLANK_AUDIO] "), "");
+        assert_eq!(clean_transcript("你好 S-Loop"), "你好 S-Loop");
+    }
+
+    #[test]
+    fn download_progress_is_serialized_for_the_frontend() {
+        let value = serde_json::to_value(super::DownloadProgress {
+            downloaded_bytes: 512,
+            total_bytes: 1_024,
+        })
+        .unwrap();
+        assert_eq!(value["downloadedBytes"], 512);
+        assert_eq!(value["totalBytes"], 1_024);
+        assert!(value.get("downloaded_bytes").is_none());
     }
 
     #[test]

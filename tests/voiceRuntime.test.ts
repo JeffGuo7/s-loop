@@ -24,7 +24,7 @@ describe('real-time voice command boundary', () => {
 
   it('maps model, speech, and streaming operations to Tauri', async () => {
     await getVoiceRuntimeStatus()
-    await downloadVoiceAsset('streaming-asr')
+    await downloadVoiceAsset('streaming-asr', 'https://mirror.example/')
     await cancelVoiceAssetDownload()
     await deleteVoiceAsset('vad')
     await speakText('hello', 1.1)
@@ -35,7 +35,13 @@ describe('real-time voice command boundary', () => {
 
     expect(vi.mocked(invoke).mock.calls).toEqual([
       ['get_voice_runtime_status'],
-      ['download_voice_asset', { kind: 'streaming-asr' }],
+      [
+        'download_voice_asset',
+        {
+          kind: 'streaming-asr',
+          githubMirror: 'https://mirror.example/',
+        },
+      ],
       ['cancel_voice_asset_download'],
       ['delete_voice_asset', { kind: 'vad' }],
       ['speak_text', { text: 'hello', speed: 1.1 }],

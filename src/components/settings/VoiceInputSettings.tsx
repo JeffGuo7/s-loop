@@ -143,10 +143,13 @@ export function VoiceInputSettings() {
       setBusy('transcribing')
       try {
         const result = await stopDictation()
-        setTranscript(result.trim() || text.empty)
-        const next = await markDictationTestPassed()
-        setStatus(next)
-        publishVoiceInputStatus(next)
+        const cleaned = result.trim()
+        setTranscript(cleaned || text.empty)
+        if (cleaned) {
+          const next = await markDictationTestPassed()
+          setStatus(next)
+          publishVoiceInputStatus(next)
+        }
       } catch (reason) {
         setError(String(reason))
         await refresh().catch(() => undefined)

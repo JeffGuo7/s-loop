@@ -16,3 +16,9 @@ sonora = "0.2.0"
 tar = "0.4"
 ureq = "2.12"
 whisper-rs = "0.16"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+
+[dev-dependencies]
+serde_json = "1"

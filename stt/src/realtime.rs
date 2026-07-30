@@ -529,7 +529,7 @@ fn create_recognizer(model_root: &std::path::Path) -> Result<OnlineRecognizer, S
     let path = |name: &str| model_root.join(name).to_string_lossy().into_owned();
     let mut config = OnlineRecognizerConfig::default();
     config.model_config.transducer.encoder = Some(path("encoder-epoch-99-avg-1.int8.onnx"));
-    config.model_config.transducer.decoder = Some(path("decoder-epoch-99-avg-1.onnx"));
+    config.model_config.transducer.decoder = Some(path("decoder-epoch-99-avg-1.int8.onnx"));
     config.model_config.transducer.joiner = Some(path("joiner-epoch-99-avg-1.int8.onnx"));
     config.model_config.tokens = Some(path("tokens.txt"));
     config.model_config.provider = Some("cpu".to_owned());
