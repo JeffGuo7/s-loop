@@ -48,19 +48,14 @@ jobs:
           path: stt/target/sherpa-onnx-prebuilt
           key: sherpa-onnx-1.13.4-windows-x64-static-mt
 
-      - name: Configure LLVM
-        shell: pwsh
-        run: |
-          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
-
-      - run: cargo test --manifest-path stt/Cargo.toml --lib
+      - run: node scripts/with-native-build-env.mjs cargo test --manifest-path stt/Cargo.toml --lib
         name: Test local speech engine
 
       - name: Create generated resource placeholder
         shell: pwsh
         run: New-Item -ItemType File -Path src-tauri/pi-server.zip -Force
 
-      - run: cargo check --manifest-path src-tauri/Cargo.toml
+      - run: node scripts/with-native-build-env.mjs cargo check --manifest-path src-tauri/Cargo.toml
         name: Check Tauri native layer
         env:
           SHERPA_ONNX_ARCHIVE_DIR: ${{ github.workspace }}\stt\target\sherpa-onnx-prebuilt

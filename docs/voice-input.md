@@ -81,6 +81,20 @@ The full-duplex processor additionally requires Rust 1.91 or newer.
 These are build-time requirements only. Installed S-Loop users do not need Node.js, Git, Python,
 LLVM, CMake, or Visual Studio for voice features.
 
+On Windows, install LLVM from the
+[official LLVM releases](https://github.com/llvm/llvm-project/releases) or with:
+
+```powershell
+choco install llvm -y
+```
+
+Use `npm run tauri:dev`, `npm run tauri:build`, `npm run native:check`, or
+`npm run native:test:speech` for native development. The shared launcher locates `libclang.dll`,
+the Clang resource headers, Visual Studio C++ headers, and the newest installed Windows SDK before
+starting Cargo. This avoids machine-specific `LIBCLANG_PATH` and `BINDGEN_EXTRA_CLANG_ARGS`
+configuration. Direct `cargo` commands remain possible from a Visual Studio Developer PowerShell
+whose LLVM and C/C++ include paths have already been configured.
+
 ## Full-duplex audio processing
 
 Conversation mode keeps microphone recognition active while synthesized speech is playing. The
