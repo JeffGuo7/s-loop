@@ -69,11 +69,12 @@ nul
 src-tauri/pi-server.zip
 
 # pi-server runtime state
+/audit/
 src-tauri/pi-server/platforms/*.json
 
 # pi-server extension packages (runtime installs)
-src-tauri/pi-server/extensions/node_modules/
-src-tauri/pi-server/extensions/package-lock.json
+src-tauri/pi-server/extensions/
+src-tauri/pi-server/extensions-manifest.json
 
 # pi-server bundled node binary
 src-tauri/pi-server/node.exe
