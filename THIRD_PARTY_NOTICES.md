@@ -20,3 +20,12 @@ Copyright (c) the sherpa-onnx contributors.
 Licensed under the Apache License 2.0. See <https://github.com/k2-fsa/sherpa-onnx>.
 
 Downloaded speech models remain under the licenses distributed inside their model archives.
+
+## Sonora / WebRTC Audio Processing
+
+Acoustic echo cancellation, noise suppression, high-pass filtering, and automatic gain control
+use Sonora's pure-Rust port of the WebRTC Audio Processing Module.
+
+Copyright (c) the Sonora and WebRTC contributors.
+
+Licensed under the BSD 3-Clause License. See <https://github.com/dignifiedquire/sonora>.

@@ -29,6 +29,7 @@ import {
   listenVoiceConversation,
   setVoiceConversation,
   setVoiceConversationState,
+  shouldInterruptVoicePlayback,
   type VoiceConversationSnapshot,
 } from '../../utils/voiceConversation'
 
@@ -82,6 +83,9 @@ export function ChatInput({
   const realtimeModeRef = useRef<'dictation' | 'conversation' | null>(null)
   const turnSubmittedRef = useRef(false)
   const isStreamingRef = useRef(isStreaming)
+  const realtimeLevelRef = useRef(0)
+  const playbackStartedAtRef = useRef(0)
+  const acceptVoiceTurnAfterRef = useRef(0)
 
   const removeAttachment = useCallback((index: number) => {
     setAttachments((prev) => {
@@ -259,16 +263,11 @@ export function ChatInput({
   }, [isStreaming])
 
   useEffect(() => {
-    if (
-      !conversation.active ||
-      conversation.state !== 'listening' ||
-      realtimeMode ||
-      realtimeBusy ||
-      isStreaming
-    ) {
+    if (!conversation.active || conversation.state !== 'listening') {
       return
     }
     turnSubmittedRef.current = false
+    if (realtimeMode || realtimeBusy || isStreaming) return
     realtimeModeRef.current = 'conversation'
     setRealtimeMode('conversation')
     setRealtimeBusy(true)
@@ -290,11 +289,34 @@ export function ChatInput({
 
     void listenRealtimeVoice((event) => {
       if (event.kind === 'level') {
-        setRealtimeLevel(event.level ?? 0)
+        const level = event.level ?? 0
+        realtimeLevelRef.current = level
+        setRealtimeLevel(level)
+        return
+      }
+      if (event.kind === 'speech-start') {
+        const current = getVoiceConversation()
+        if (shouldInterruptVoicePlayback(
+          realtimeModeRef.current,
+          current,
+          playbackStartedAtRef.current,
+          realtimeLevelRef.current,
+        )) {
+          turnSubmittedRef.current = false
+          acceptVoiceTurnAfterRef.current = 0
+          setVoiceConversationState('listening')
+          void stopSpeaking().catch((reason) => setDictationError(String(reason)))
+        }
         return
       }
       if (event.kind === 'partial') {
-        setRealtimePartial(event.text?.trim() ?? '')
+        const current = getVoiceConversation()
+        if (
+          realtimeModeRef.current !== 'conversation' ||
+          current.state === 'listening'
+        ) {
+          setRealtimePartial(event.text?.trim() ?? '')
+        }
         return
       }
       if (event.kind === 'final') {
@@ -308,13 +330,11 @@ export function ChatInput({
           currentConversation.active &&
           event.turnComplete &&
           !turnSubmittedRef.current &&
+          Date.now() >= acceptVoiceTurnAfterRef.current &&
           !isStreamingRef.current
         ) {
           turnSubmittedRef.current = true
-          realtimeModeRef.current = null
-          setRealtimeMode(null)
           setVoiceConversationState('thinking')
-          void cancelRealtimeVoice().then(setVoiceRuntime).catch(() => undefined)
           onSubmit(transcript)
           return
         }
@@ -359,6 +379,9 @@ export function ChatInput({
       const current = getVoiceConversation()
       if (!current.active) return
       if (event.state === 'loading' || event.state === 'speaking') {
+        if (current.state !== 'speaking') {
+          playbackStartedAtRef.current = Date.now()
+        }
         setVoiceConversationState('speaking')
         return
       }
@@ -368,18 +391,10 @@ export function ChatInput({
         return
       }
       if (event.state === 'idle' && current.state === 'speaking') {
-        setVoiceConversationState('starting')
+        playbackStartedAtRef.current = 0
+        acceptVoiceTurnAfterRef.current = Date.now() + 300
         turnSubmittedRef.current = false
-        realtimeModeRef.current = 'conversation'
-        setRealtimeMode('conversation')
-        setRealtimeBusy(true)
-        void startRealtimeVoice()
-          .then(setVoiceRuntime)
-          .catch((reason) => {
-            setRealtimeBusy(false)
-            setDictationError(String(reason))
-            setVoiceConversation(false, 'error', String(reason))
-          })
+        setVoiceConversationState('listening')
       }
     }).then((dispose) => {
       disposePlayback = dispose

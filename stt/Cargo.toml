@@ -3,16 +3,16 @@ name = "s-loop-speech"
 version = "0.1.0"
 description = "Local speech input, streaming recognition, and text-to-speech engine for S-Loop"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.91"
 license = "MIT"
 
 [dependencies]
 bzip2 = "0.4"
 cpal = "0.15.3"
-rodio = { version = "0.20.1", default-features = false }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
 sherpa-onnx = { version = "1.13.4", default-features = false, features = ["static"] }
+sonora = "0.2.0"
 tar = "0.4"
 ureq = "2.12"
 whisper-rs = "0.16"

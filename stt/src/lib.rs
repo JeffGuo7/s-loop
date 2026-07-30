@@ -24,10 +24,12 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
+mod playback;
 mod realtime;
 mod tts;
 mod voice_assets;
 
+pub use playback::PlaybackReference;
 pub use realtime::{RealtimeEventKind, RealtimeRecognizer, RealtimeState, RealtimeVoiceEvent};
 pub use tts::{SpeechPlaybackEvent, SpeechPlaybackState, SpeechSynthesizer};
 pub use voice_assets::{VoiceAssetKind, VoiceAssetProgress, VoiceAssetStatus, VoiceAssets};

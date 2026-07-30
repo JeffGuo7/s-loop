@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use s_loop_speech::{
-    RealtimeRecognizer, RealtimeVoiceEvent, SpeechPlaybackEvent, SpeechPlaybackState,
-    SpeechSynthesizer, VoiceAssetKind, VoiceAssetProgress, VoiceAssetStatus, VoiceAssets,
+    PlaybackReference, RealtimeRecognizer, RealtimeVoiceEvent, SpeechPlaybackEvent,
+    SpeechPlaybackState, SpeechSynthesizer, VoiceAssetKind, VoiceAssetProgress, VoiceAssetStatus,
+    VoiceAssets,
 };
 use serde::Serialize;
 use tauri::{Emitter, Manager};
@@ -16,9 +17,13 @@ pub struct VoiceRuntime {
 impl VoiceRuntime {
     fn new(model_dir: std::path::PathBuf) -> Self {
         let assets = Arc::new(VoiceAssets::new(model_dir));
+        let playback_reference = Arc::new(PlaybackReference::new());
         Self {
-            speech: Arc::new(SpeechSynthesizer::new(assets.clone())),
-            realtime: Arc::new(RealtimeRecognizer::new(assets.clone())),
+            speech: Arc::new(SpeechSynthesizer::new(
+                assets.clone(),
+                playback_reference.clone(),
+            )),
+            realtime: Arc::new(RealtimeRecognizer::new(assets.clone(), playback_reference)),
             assets,
         }
     }

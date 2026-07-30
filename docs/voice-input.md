@@ -76,14 +76,26 @@ activated. Interrupted downloads and installations never replace an active model
 `whisper-rs` compiles whisper.cpp during the Rust build. The sherpa-onnx Rust crate downloads the
 matching prebuilt static native library during its build. Windows build machines need Rust MSVC,
 Visual Studio C++ Build Tools, a Windows SDK, CMake, and LLVM/libclang.
+The full-duplex processor additionally requires Rust 1.91 or newer.
 
 These are build-time requirements only. Installed S-Loop users do not need Node.js, Git, Python,
 LLVM, CMake, or Visual Studio for voice features.
 
-## Current audio limitation
+## Full-duplex audio processing
 
-The first real-time conversation implementation pauses microphone recognition while synthesized
-speech is playing. This prevents the assistant from recognizing its own speaker output without
-requiring a fragile software echo suppressor. Users can click the active call button to interrupt
-playback and immediately resume listening. A future full-duplex mode should add a tested acoustic
-echo-cancellation layer before keeping microphone recognition active during playback.
+Conversation mode keeps microphone recognition active while synthesized speech is playing. The
+speaker callback publishes the PCM frames that were actually rendered, and the microphone path
+uses those frames as the reverse stream for a 16 kHz, 10 ms WebRTC AEC3 pipeline provided by
+Sonora. The processed path is:
+
+`microphone -> AEC3 -> high-pass filter -> noise suppression -> AGC2 -> Silero VAD + Sherpa ASR`
+
+When cleaned near-end speech persists for at least 250 ms, the VAD emits `speech-start`. During
+assistant playback, the UI waits for 350 ms of AEC warm-up and requires a cleaned input level of
+at least 0.025 before stopping TTS. Recognition remains active, so the user's interrupted turn can
+continue without reopening the microphone.
+
+AEC quality depends on the capture/render device pair, driver buffering, room acoustics, and
+speaker volume. Headsets naturally produce the best result. Built-in laptop speakers, USB audio,
+and Bluetooth devices should be included in release testing; Bluetooth profile changes and
+separate input/output sound cards can still reduce cancellation quality.

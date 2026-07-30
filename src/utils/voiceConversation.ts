@@ -80,6 +80,19 @@ export const speakVoiceConversationResponse = async (markdown: string) => {
   }
 }
 
+export const shouldInterruptVoicePlayback = (
+  mode: 'dictation' | 'conversation' | null,
+  conversation: VoiceConversationSnapshot,
+  playbackStartedAt: number,
+  cleanedInputLevel: number,
+  now = Date.now(),
+) =>
+  mode === 'conversation' &&
+  conversation.active &&
+  conversation.state === 'speaking' &&
+  now - playbackStartedAt >= 350 &&
+  cleanedInputLevel >= 0.025
+
 export function speechTextFromMarkdown(markdown: string): string {
   return markdown
     .replace(/```[\s\S]*?```/g, ' 代码块。 ')

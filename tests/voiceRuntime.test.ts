@@ -11,7 +11,10 @@ import {
   stopRealtimeVoice,
   stopSpeaking,
 } from '../src/utils/voiceRuntime'
-import { speechTextFromMarkdown } from '../src/utils/voiceConversation'
+import {
+  shouldInterruptVoicePlayback,
+  speechTextFromMarkdown,
+} from '../src/utils/voiceConversation'
 
 describe('real-time voice command boundary', () => {
   beforeEach(() => {
@@ -41,6 +44,23 @@ describe('real-time voice command boundary', () => {
       ['stop_realtime_voice'],
       ['cancel_realtime_voice'],
     ])
+  })
+
+  it('requires sustained cleaned speech before interrupting playback', () => {
+    const speaking = { active: true, state: 'speaking' as const }
+
+    expect(
+      shouldInterruptVoicePlayback('conversation', speaking, 1_000, 0.08, 1_500),
+    ).toBe(true)
+    expect(
+      shouldInterruptVoicePlayback('conversation', speaking, 1_000, 0.08, 1_200),
+    ).toBe(false)
+    expect(
+      shouldInterruptVoicePlayback('conversation', speaking, 1_000, 0.01, 1_500),
+    ).toBe(false)
+    expect(
+      shouldInterruptVoicePlayback('dictation', speaking, 1_000, 0.08, 1_500),
+    ).toBe(false)
   })
 
   it('turns assistant markdown into speakable text', () => {
