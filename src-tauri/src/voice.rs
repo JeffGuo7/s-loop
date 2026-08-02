@@ -70,11 +70,13 @@ pub async fn download_voice_asset(
     let kind = VoiceAssetKind::parse(&kind)?;
     let runtime = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        runtime
-            .assets
-            .install(kind, github_mirror.as_deref(), |progress: VoiceAssetProgress| {
+        runtime.assets.install(
+            kind,
+            github_mirror.as_deref(),
+            |progress: VoiceAssetProgress| {
                 let _ = app.emit("voice-asset-progress", progress);
-            })?;
+            },
+        )?;
         Ok::<VoiceRuntimeStatus, String>(status(&runtime))
     })
     .await
@@ -111,11 +113,14 @@ pub fn speak_text(
     state: tauri::State<Arc<VoiceRuntime>>,
     text: String,
     speed: Option<f32>,
+    speaker_id: Option<i32>,
 ) -> Result<u64, String> {
     let callback = Arc::new(move |event: SpeechPlaybackEvent| {
         let _ = app.emit("voice-playback", event);
     });
-    state.speech.speak(text, speed.unwrap_or(1.0), callback)
+    state
+        .speech
+        .speak(text, speed.unwrap_or(1.0), speaker_id, callback)
 }
 
 #[tauri::command]

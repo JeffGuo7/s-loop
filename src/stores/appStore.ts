@@ -5,6 +5,11 @@ import type { Session, ProviderConfig, Companion, ProviderInfo, KiloMessage, Mes
 import * as db from '../utils/database'
 import { enrichSession } from '../utils/sessionMeta'
 import { DEFAULT_COLOR_SCHEME } from '../themes'
+import {
+  DEFAULT_KOKORO_SPEAKER_ID,
+  normalizeKokoroSpeakerId,
+  type KokoroSpeakerId,
+} from '../config/kokoroVoices'
 
 interface AppState {
   // Sessions (cached from DB)
@@ -35,6 +40,7 @@ interface AppState {
   workspaceCollapsed: boolean
   workspaceDir: string | null
   fileTreeVersion: number
+  kokoroSpeakerId: KokoroSpeakerId
 
   // Skill mirror config
   githubMirror: string
@@ -88,6 +94,7 @@ interface AppState {
   toggleWorkspace: () => void
   setWorkspaceDir: (dir: string | null) => void
   incrementFileTreeVersion: () => void
+  setKokoroSpeakerId: (speakerId: KokoroSpeakerId) => void
 
   // Actions - Companion
   setCompanion: (companion: Companion | null) => void
@@ -127,6 +134,7 @@ export const useAppStore = create<AppState>()(
       workspaceCollapsed: false,
       workspaceDir: null,
       fileTreeVersion: 0,
+      kokoroSpeakerId: DEFAULT_KOKORO_SPEAKER_ID,
       githubMirror: 'https://mirror.ghproxy.com/https://github.com/',
       npmRegistryMirror: 'https://registry.npmmirror.com',
       companion: null,
@@ -505,6 +513,9 @@ export const useAppStore = create<AppState>()(
       toggleWorkspace: () => set((state) => ({ workspaceCollapsed: !state.workspaceCollapsed })),
       setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
       incrementFileTreeVersion: () => set((state) => ({ fileTreeVersion: state.fileTreeVersion + 1 })),
+      setKokoroSpeakerId: (speakerId) => set({
+        kokoroSpeakerId: normalizeKokoroSpeakerId(speakerId),
+      }),
 
       // ---- Companion actions ----
 
@@ -525,12 +536,14 @@ export const useAppStore = create<AppState>()(
         workspaceDir: state.workspaceDir,
         githubMirror: state.githubMirror,
         npmRegistryMirror: state.npmRegistryMirror,
+        kokoroSpeakerId: state.kokoroSpeakerId,
       }),
-      version: 5,
+      version: 6,
       migrate: (persistedState, version) => {
+        let nextState = persistedState as any
         if (version < 4) {
-          return {
-            ...(persistedState as any),
+          nextState = {
+            ...nextState,
             sessions: [],
             sessionMessages: {},
             streamingMessage: {},
@@ -538,12 +551,18 @@ export const useAppStore = create<AppState>()(
         }
         if (version < 5) {
           // Messages are loaded from SQLite; do not keep full chat history in localStorage.
-          return {
-            ...(persistedState as any),
+          nextState = {
+            ...nextState,
             sessionMessages: {},
           }
         }
-        return persistedState as any
+        if (version < 6) {
+          nextState = {
+            ...nextState,
+            kokoroSpeakerId: normalizeKokoroSpeakerId(nextState.kokoroSpeakerId),
+          }
+        }
+        return nextState
       },
     },
   ),

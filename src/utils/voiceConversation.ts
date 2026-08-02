@@ -1,4 +1,5 @@
 import { speakText, stopSpeaking } from './voiceRuntime'
+import { useAppStore } from '../stores/appStore'
 
 export type VoiceConversationState =
   | 'inactive'
@@ -72,7 +73,7 @@ export const speakVoiceConversationResponse = async (markdown: string) => {
   }
   setVoiceConversationState('speaking')
   try {
-    await speakText(text)
+    await speakText(text, 1, useAppStore.getState().kokoroSpeakerId)
     return true
   } catch (reason) {
     setVoiceConversation(false, 'error', String(reason))

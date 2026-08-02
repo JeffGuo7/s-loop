@@ -25,6 +25,59 @@ use crate::{
 
 const OUTPUT_DRAIN_GRACE: Duration = Duration::from_millis(120);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KokoroSpeaker {
+    Xiaobei,
+    Xiaoni,
+    Xiaoxiao,
+    Xiaoyi,
+    Yunjian,
+    Yunxi,
+    Yunxia,
+    Yunyang,
+}
+
+impl KokoroSpeaker {
+    const fn id(self) -> i32 {
+        match self {
+            Self::Xiaobei => 45,
+            Self::Xiaoni => 46,
+            Self::Xiaoxiao => 47,
+            Self::Xiaoyi => 48,
+            Self::Yunjian => 49,
+            Self::Yunxi => 50,
+            Self::Yunxia => 51,
+            Self::Yunyang => 52,
+        }
+    }
+}
+
+impl Default for KokoroSpeaker {
+    fn default() -> Self {
+        Self::Xiaoxiao
+    }
+}
+
+impl TryFrom<i32> for KokoroSpeaker {
+    type Error = String;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            45 => Ok(Self::Xiaobei),
+            46 => Ok(Self::Xiaoni),
+            47 => Ok(Self::Xiaoxiao),
+            48 => Ok(Self::Xiaoyi),
+            49 => Ok(Self::Yunjian),
+            50 => Ok(Self::Yunxi),
+            51 => Ok(Self::Yunxia),
+            52 => Ok(Self::Yunyang),
+            _ => Err(format!(
+                "Unsupported Kokoro Chinese speaker ID {value}. Choose a value from 45 to 52."
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SpeechPlaybackState {
@@ -74,6 +127,7 @@ impl SpeechSynthesizer {
         self: &Arc<Self>,
         text: String,
         speed: f32,
+        speaker_id: Option<i32>,
         on_event: Arc<dyn Fn(SpeechPlaybackEvent) + Send + Sync>,
     ) -> Result<u64, String> {
         let text = text.trim().to_owned();
@@ -83,6 +137,10 @@ impl SpeechSynthesizer {
         if !self.assets.is_installed(VoiceAssetKind::Tts) {
             return Err("Install the local text-to-speech model in Settings first.".to_owned());
         }
+        let speaker = speaker_id
+            .map(KokoroSpeaker::try_from)
+            .transpose()?
+            .unwrap_or_default();
 
         self.stop();
         let request_id = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
@@ -97,7 +155,9 @@ impl SpeechSynthesizer {
 
         let synthesizer = self.clone();
         thread::spawn(move || {
-            if let Err(error) = synthesizer.run_speech(request_id, &text, speed, on_event.clone()) {
+            if let Err(error) =
+                synthesizer.run_speech(request_id, &text, speed, speaker, on_event.clone())
+            {
                 if synthesizer.current_request.load(Ordering::SeqCst) == request_id {
                     let _ = synthesizer.stop();
                     on_event(SpeechPlaybackEvent {
@@ -117,6 +177,7 @@ impl SpeechSynthesizer {
         request_id: u64,
         text: &str,
         speed: f32,
+        speaker: KokoroSpeaker,
         on_event: Arc<dyn Fn(SpeechPlaybackEvent) + Send + Sync>,
     ) -> Result<(), String> {
         let engine = self.load_engine()?;
@@ -158,7 +219,7 @@ impl SpeechSynthesizer {
         });
 
         let config = GenerationConfig {
-            sid: 0,
+            sid: speaker.id(),
             speed: speed.clamp(0.7, 1.4),
             ..Default::default()
         };
@@ -468,7 +529,11 @@ mod tests {
     #[test]
     fn accepts_every_chinese_speaker_from_the_bundled_model() {
         let ids: Vec<i32> = (45..=52)
-            .map(|id| KokoroSpeaker::try_from(id).expect("Chinese speaker should be valid").id())
+            .map(|id| {
+                KokoroSpeaker::try_from(id)
+                    .expect("Chinese speaker should be valid")
+                    .id()
+            })
             .collect();
 
         assert_eq!(ids, vec![45, 46, 47, 48, 49, 50, 51, 52]);

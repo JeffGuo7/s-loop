@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
+  Check,
   Download,
   LoaderCircle,
   Radio,
@@ -10,6 +11,10 @@ import {
   X,
 } from 'lucide-react'
 import i18n from '../../i18n'
+import {
+  getKokoroVoice,
+  KOKORO_CHINESE_VOICES,
+} from '../../config/kokoroVoices'
 import { useAppStore } from '../../stores/appStore'
 import {
   cancelVoiceAssetDownload,
@@ -38,6 +43,10 @@ const text = {
     vadHint: 'Silero detects speech boundaries for continuous conversation.',
     tts: 'Text-to-speech',
     ttsHint: 'Kokoro speaks assistant responses locally in Chinese and English.',
+    voice: 'Chinese voice',
+    voiceHint: 'The selected voice is used for previews, read-aloud, and voice conversations.',
+    female: 'Female',
+    male: 'Male',
     download: 'Download',
     remove: 'Delete',
     cancel: 'Cancel',
@@ -59,6 +68,10 @@ const text = {
     vadHint: 'Silero 用于判断开始说话、结束说话和连续对话轮次。',
     tts: '文字转语音',
     ttsHint: 'Kokoro 在本地朗读助手的中文和英文回答。',
+    voice: '中文音色',
+    voiceHint: '选择后会统一用于试听、消息朗读和实时语音对话。',
+    female: '女声',
+    male: '男声',
     download: '下载',
     remove: '删除',
     cancel: '取消',
@@ -81,6 +94,9 @@ const formatBytes = (bytes: number) => {
 export function VoiceRuntimeSettings() {
   const copy = i18n.resolvedLanguage?.startsWith('zh') ? text.zh : text.en
   const githubMirror = useAppStore((state) => state.githubMirror)
+  const kokoroSpeakerId = useAppStore((state) => state.kokoroSpeakerId)
+  const setKokoroSpeakerId = useAppStore((state) => state.setKokoroSpeakerId)
+  const selectedVoice = getKokoroVoice(kokoroSpeakerId)
   const [status, setStatus] = useState<VoiceRuntimeStatus | null>(null)
   const [progress, setProgress] = useState<VoiceAssetProgress | null>(null)
   const [busy, setBusy] = useState<VoiceAssetKind | null>(null)
@@ -155,7 +171,7 @@ export function VoiceRuntimeSettings() {
         const sample = i18n.resolvedLanguage?.startsWith('zh')
           ? '你好，我是 S-Loop。本地语音播放已经准备好了。'
           : 'Hello, this is S-Loop. Local voice playback is ready.'
-        await speakText(sample)
+        await speakText(sample, 1, kokoroSpeakerId)
       }
     } catch (reason) {
       setError(String(reason))
@@ -218,6 +234,64 @@ export function VoiceRuntimeSettings() {
                     {hint}
                   </p>
 
+                  {asset?.installed && kind === 'tts' && (
+                    <fieldset className="mt-4 rounded-lg border border-border/80 bg-surface p-3">
+                      <legend className="sr-only">{copy.voice}</legend>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold text-text">
+                            {copy.voice}
+                          </div>
+                          <p className="mt-0.5 text-[11px] leading-4 text-text-tertiary">
+                            {copy.voiceHint}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-accent-subtle px-2 py-1 text-[10px] font-bold text-accent">
+                          Kokoro · {selectedVoice.id}
+                        </span>
+                      </div>
+                      <div
+                        className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"
+                        role="radiogroup"
+                        aria-label={copy.voice}
+                      >
+                        {KOKORO_CHINESE_VOICES.map((voice) => {
+                          const selected = voice.id === kokoroSpeakerId
+                          const gender = voice.gender === 'female' ? copy.female : copy.male
+                          return (
+                            <button
+                              key={voice.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              aria-label={`${voice.nameZh} · ${gender}`}
+                              onClick={() => setKokoroSpeakerId(voice.id)}
+                              className={`relative rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                                selected
+                                  ? 'border-accent bg-accent-subtle text-accent'
+                                  : 'border-border bg-surface-secondary/60 text-text hover:border-accent/45 hover:bg-surface-secondary'
+                              }`}
+                            >
+                              {selected && (
+                                <Check
+                                  size={12}
+                                  className="absolute right-2 top-2"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              <span className="block text-sm font-semibold">
+                                {voice.nameZh}
+                              </span>
+                              <span className="mt-0.5 block text-[10px] opacity-65">
+                                {gender} · ID {voice.id}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </fieldset>
+                  )}
+
                   {downloading && currentProgress && (
                     <div className="mt-3">
                       <div className="mb-1 flex justify-between text-[11px] text-text-tertiary">
@@ -277,7 +351,7 @@ export function VoiceRuntimeSettings() {
                           ? copy.installing
                           : playback?.state === 'speaking'
                             ? copy.stop
-                            : copy.test}
+                            : `${copy.test} · ${selectedVoice.nameZh}`}
                       </button>
                     )}
                     {asset?.installed && (

@@ -1,5 +1,9 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import {
+  DEFAULT_KOKORO_SPEAKER_ID,
+  type KokoroSpeakerId,
+} from '../config/kokoroVoices'
 
 export type VoiceAssetKind = 'streaming-asr' | 'vad' | 'tts'
 
@@ -63,8 +67,11 @@ export const cancelVoiceAssetDownload = () =>
 export const deleteVoiceAsset = (kind: VoiceAssetKind) =>
   invoke<VoiceRuntimeStatus>('delete_voice_asset', { kind })
 
-export const speakText = (text: string, speed = 1) =>
-  invoke<number>('speak_text', { text, speed })
+export const speakText = (
+  text: string,
+  speed = 1,
+  speakerId: KokoroSpeakerId = DEFAULT_KOKORO_SPEAKER_ID,
+) => invoke<number>('speak_text', { text, speed, speakerId })
 
 export const stopSpeaking = () =>
   invoke<void>('stop_speaking')
