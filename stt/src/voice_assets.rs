@@ -679,7 +679,7 @@ fn path_size(path: &Path) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::github_mirror_url;
+    use super::{github_mirror_url, VoiceAssetKind};
 
     const GITHUB: &str =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
@@ -706,5 +706,13 @@ mod tests {
                 "https://mirror.example/?target=https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
             )
         );
+    }
+
+    #[test]
+    fn kokoro_requires_the_chinese_text_normalization_rules() {
+        let files = VoiceAssetKind::Tts.required_files();
+        assert!(files.contains(&"date-zh.fst"));
+        assert!(files.contains(&"phone-zh.fst"));
+        assert!(files.contains(&"number-zh.fst"));
     }
 }

@@ -500,7 +500,8 @@ fn fill_output<T: Copy>(
 
 #[cfg(test)]
 mod tests {
-    use super::KokoroSpeaker;
+    use super::{chinese_rule_fsts, should_use_chinese_text_rules, KokoroSpeaker};
+    use std::path::Path;
 
     #[test]
     fn accepts_every_speaker_from_the_bundled_model() {
@@ -524,5 +525,31 @@ mod tests {
     #[test]
     fn defaults_to_xiaoxiao() {
         assert_eq!(KokoroSpeaker::default().id(), 47);
+    }
+
+    #[test]
+    fn enables_chinese_rules_for_chinese_and_mixed_text() {
+        assert!(should_use_chinese_text_rules("现在是2026年8月2日。"));
+        assert!(should_use_chinese_text_rules(
+            "S-Loop 已完成 80% of the task."
+        ));
+    }
+
+    #[test]
+    fn keeps_pure_english_numbers_on_the_english_path() {
+        assert!(!should_use_chinese_text_rules(
+            "S-Loop completed 80% of the task in 2026."
+        ));
+        assert!(!should_use_chinese_text_rules("Call 123456 now."));
+    }
+
+    #[test]
+    fn loads_date_phone_and_number_rules_in_specific_to_general_order() {
+        let root = Path::new("C:/models/kokoro");
+        let expected = ["date-zh.fst", "phone-zh.fst", "number-zh.fst"]
+            .map(|name| root.join(name).to_string_lossy().into_owned())
+            .join(",");
+
+        assert_eq!(chinese_rule_fsts(root), expected);
     }
 }
