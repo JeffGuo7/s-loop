@@ -6,6 +6,7 @@ import {
   describeModel,
   describeReasoningCapabilities,
   getSupportedThinkingLevels,
+  getConfiguredThinkingLevel,
   resolveCustomReasoningConfig,
   resolveThinkingLevel,
 } from '../reasoning-capabilities.mjs'
@@ -72,6 +73,19 @@ describe('reasoning capabilities', () => {
 
     assert.equal(applyThinkingLevel(agent, deepSeekModel, 'medium'), 'high')
     assert.equal(agent.state.thinkingLevel, 'high')
+  })
+
+  it('uses the current model preference across background runtimes', () => {
+    assert.equal(getConfiguredThinkingLevel({
+      modelID: 'deepseek-v4-pro',
+      providerConfig: {
+        reasoningEfforts: {
+          'deepseek-v4-flash': 'off',
+          'deepseek-v4-pro': 'max',
+        },
+      },
+    }), 'max')
+    assert.equal(getConfiguredThinkingLevel({ modelID: 'another-model' }), 'medium')
   })
 })
 
