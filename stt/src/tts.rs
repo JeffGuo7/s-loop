@@ -26,35 +26,17 @@ use crate::{
 const OUTPUT_DRAIN_GRACE: Duration = Duration::from_millis(120);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum KokoroSpeaker {
-    Xiaobei,
-    Xiaoni,
-    Xiaoxiao,
-    Xiaoyi,
-    Yunjian,
-    Yunxi,
-    Yunxia,
-    Yunyang,
-}
+struct KokoroSpeaker(i32);
 
 impl KokoroSpeaker {
     const fn id(self) -> i32 {
-        match self {
-            Self::Xiaobei => 45,
-            Self::Xiaoni => 46,
-            Self::Xiaoxiao => 47,
-            Self::Xiaoyi => 48,
-            Self::Yunjian => 49,
-            Self::Yunxi => 50,
-            Self::Yunxia => 51,
-            Self::Yunyang => 52,
-        }
+        self.0
     }
 }
 
 impl Default for KokoroSpeaker {
     fn default() -> Self {
-        Self::Xiaoxiao
+        Self(47)
     }
 }
 
@@ -62,18 +44,12 @@ impl TryFrom<i32> for KokoroSpeaker {
     type Error = String;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            45 => Ok(Self::Xiaobei),
-            46 => Ok(Self::Xiaoni),
-            47 => Ok(Self::Xiaoxiao),
-            48 => Ok(Self::Xiaoyi),
-            49 => Ok(Self::Yunjian),
-            50 => Ok(Self::Yunxi),
-            51 => Ok(Self::Yunxia),
-            52 => Ok(Self::Yunyang),
-            _ => Err(format!(
-                "Unsupported Kokoro Chinese speaker ID {value}. Choose a value from 45 to 52."
-            )),
+        if (0..=52).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(format!(
+                "Unsupported Kokoro speaker ID {value}. Choose a value from 0 to 52."
+            ))
         }
     }
 }

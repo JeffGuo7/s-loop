@@ -6,6 +6,11 @@ import {
   migrateAgentStoreState,
   migrateAgentWorkspaceRoots,
 } from '../utils/workspaceRoots'
+import {
+  createAgentProfile,
+  migrateAgentProfile,
+  migrateAgentProfileState,
+} from '../utils/agentPrompt'
 
 function generateId(): string {
   return `agent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
@@ -26,6 +31,8 @@ function createDefaultAgent(): Agent {
     description: '通用助手，理解上下文、调度技能、编排工具。',
     avatar: '🤖',
     instructions: 'You are a helpful assistant. Use available tools when needed.',
+    ...createAgentProfile('S-Loop', '通用助手，理解上下文、调度技能、编排工具。'),
+    rules: 'Use available tools when needed. Ask before destructive actions.',
     model: '',
     skills: [],
     mcpTools: [],
@@ -46,6 +53,7 @@ export const useAgentStore = create<AgentStore>()(
     (set, get) => ({
       agents: [initialDefaultAgent],
       activeAgentId: initialDefaultAgent.id,
+      userProfile: '',
 
       createAgent: (name, description) => {
         const agent: Agent = {
@@ -54,6 +62,7 @@ export const useAgentStore = create<AgentStore>()(
           description: description || '',
           avatar: pickAvatar(),
           instructions: '',
+          ...createAgentProfile(name, description),
           model: '',
           skills: [],
           mcpTools: [],
@@ -115,6 +124,8 @@ export const useAgentStore = create<AgentStore>()(
         }))
         return clone
       },
+
+      updateUserProfile: (userProfile) => set({ userProfile }),
 
       addSkillToAgent: (agentId, skillName) => {
         set((state) => ({
@@ -244,15 +255,21 @@ export const useAgentStore = create<AgentStore>()(
     }),
     {
       name: 'snotra-agents',
-      version: 1,
-      migrate: (persisted) => migrateAgentStoreState(persisted),
+      version: 2,
+      migrate: (persisted) =>
+        migrateAgentProfileState(migrateAgentStoreState(persisted)),
       partialize: (state) => ({
         agents: state.agents,
         activeAgentId: state.activeAgentId,
+        userProfile: state.userProfile,
       }),
       merge: (persisted, current) => {
         const merged = { ...current, ...(persisted as Partial<AgentStore>) }
-        merged.agents = merged.agents?.map((agent) => migrateAgentWorkspaceRoots(agent))
+        merged.agents = merged.agents?.map((agent) =>
+          migrateAgentProfile(
+            migrateAgentWorkspaceRoots(agent) as unknown as Record<string, unknown>,
+          ) as unknown as Agent,
+        )
         // Guarantee the default agent always exists and stays first
         const hasDefault = merged.agents?.some((a) => a.id === DEFAULT_AGENT_ID)
         if (!merged.agents || merged.agents.length === 0) {

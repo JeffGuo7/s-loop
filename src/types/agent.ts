@@ -27,6 +27,7 @@ export interface SlashCommand {
 
 export type WorkspaceAccess = 'read' | 'read-write'
 export type WorkspaceRootSource = 'workspace' | 'user-grant' | 'task'
+export type AgentConversationMode = 'work' | 'natural' | 'companion'
 
 export interface WorkspaceRoot {
   id: string
@@ -42,6 +43,11 @@ export interface Agent {
   description: string
   avatar: string
   instructions: string
+  identity: string
+  soul: string
+  rules: string
+  memory: string
+  conversationMode: AgentConversationMode
   model: string
   skills: string[]
   mcpTools: AgentMCPTool[]
@@ -57,12 +63,14 @@ export interface Agent {
 export interface AgentStore {
   agents: Agent[]
   activeAgentId: string | null
+  userProfile: string
 
   createAgent: (name: string, description: string) => Agent
   updateAgent: (id: string, updates: Partial<Agent>) => void
   deleteAgent: (id: string) => void
   setActiveAgent: (id: string) => void
   duplicateAgent: (id: string) => Agent
+  updateUserProfile: (profile: string) => void
 
   addSkillToAgent: (agentId: string, skillName: string) => void
   removeSkillFromAgent: (agentId: string, skillName: string) => void

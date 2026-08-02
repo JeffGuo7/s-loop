@@ -531,6 +531,15 @@ const en = {
       optionalCreate: 'Optional during creation. Leave it empty if you want to move faster.',
       agentScoped: 'These settings belong only to the current agent.',
       instructionsPlaceholder: 'Add extra instructions or style rules for this agent',
+      identityPlaceholder: 'IDENTITY.md: who this agent is and its role (must remain transparent that it is AI)',
+      soulPlaceholder: 'SOUL.md: warmth, values, humor, initiative, and boundaries',
+      rulesPlaceholder: 'RULES.md: operating rules, tool requirements, and prohibitions',
+      memoryPlaceholder: 'MEMORY.md: only information you reviewed and want remembered',
+      userPlaceholder: 'USER.md (shared): name, preferences, disliked phrasing, and communication habits',
+      modeLabel: 'Conversation mode',
+      modeWork: 'Work mode',
+      modeNatural: 'Natural mode (recommended)',
+      modeCompanion: 'Companion mode',
       modelPlaceholder: 'Optional model override, for example deepseek-chat',
     },
     confirm: {
@@ -554,6 +563,7 @@ const en = {
       remoteInstalled: 'Remote install and mount completed: {{name}}',
       knowledgeComingSoon: 'Knowledge base mounting will be connected next. This entry is reserved for now.',
       memoryComingSoon: 'Memory mounting will be connected next. This entry is reserved for now.',
+      memoryReviewReady: 'Opened reviewed memory. Only information you confirm here enters long-term memory.',
     },
     presets: {
       title: 'Agent Presets',

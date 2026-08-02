@@ -20,6 +20,7 @@ import { initDatabase } from './utils/database'
 import { getAllSessions, createSession as dbCreateSession, saveMessage as dbSaveMessage } from './utils/database'
 import { setServerConnection, syncRuntimeConfig } from './utils/piClient'
 import { buildAgentRuntimeConfig } from './utils/agentRuntime'
+import { syncAgentProfileFiles } from './utils/agentProfileFiles'
 import { getActiveTokens } from './themes'
 
 export type Page = 'chat' | 'tasks' | 'platforms' | 'pet' | 'goal' | 'extensions'
@@ -28,9 +29,10 @@ const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const APP_STORAGE_KEY = 'snotra-storage'
 
 function App() {
-  const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, workspaceDir } = useAppStore()
+  const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, workspaceDir, kokoroSpeakerId } = useAppStore()
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
   const agents = useAgentStore((s) => s.agents)
+  const userProfile = useAgentStore((s) => s.userProfile)
   const skills = useSkillStore((s) => s.skills)
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const [showSettings, setShowSettings] = useState(false)
@@ -147,6 +149,20 @@ function App() {
       console.warn('[app] failed to sync runtime config:', err)
     })
   }, [activeProvider, providerConfigs, workspaceDir, activeAgentId, agents, skills])
+
+  useEffect(() => {
+    if (!inTauri) return
+    const timer = window.setTimeout(() => {
+      syncAgentProfileFiles(
+        agents,
+        userProfile,
+        kokoroSpeakerId,
+      ).catch((err) => {
+        console.warn('[app] failed to sync agent profile files:', err)
+      })
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [agents, userProfile, kokoroSpeakerId])
 
   useEffect(() => {
     useMCPStore.getState().refreshAllServers().catch(() => {})

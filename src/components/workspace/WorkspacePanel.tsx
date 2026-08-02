@@ -47,6 +47,8 @@ export function WorkspacePanel() {
   const setActiveAgent = useAgentStore((s) => s.setActiveAgent)
   const createAgent = useAgentStore((s) => s.createAgent)
   const updateAgent = useAgentStore((s) => s.updateAgent)
+  const userProfile = useAgentStore((s) => s.userProfile)
+  const updateUserProfile = useAgentStore((s) => s.updateUserProfile)
   const deleteAgent = useAgentStore((s) => s.deleteAgent)
   const addSkillToAgent = useAgentStore((s) => s.addSkillToAgent)
   const removeSkillFromAgent = useAgentStore((s) => s.removeSkillFromAgent)
@@ -170,7 +172,8 @@ export function WorkspacePanel() {
       return
     }
     if (kind === 'memory') {
-      setFeedback(t('agentStudio.feedback.memoryComingSoon'))
+      setShowDetailAdvanced(true)
+      setFeedback(t('agentStudio.feedback.memoryReviewReady'))
       return
     }
     setFeedback(t('agentStudio.feedback.remoteComingSoon'))
@@ -256,7 +259,7 @@ export function WorkspacePanel() {
     const description = newAgentDescription.trim()
     const created = createAgent(name, description)
     updateAgent(created.id, {
-      instructions: newAgentInstructions.trim(),
+      rules: newAgentInstructions.trim(),
       model: newAgentModel.trim(),
       permissionMode: newAgentPermissionMode,
     })
@@ -584,9 +587,47 @@ export function WorkspacePanel() {
                       {showDetailAdvanced && (
                         <div className="mt-4 space-y-3">
                           <textarea
-                            value={activeAgent.instructions}
-                            onChange={(e) => updateAgent(activeAgent.id, { instructions: e.target.value })}
-                            placeholder={t('agentStudio.advanced.instructionsPlaceholder')}
+                            value={activeAgent.identity}
+                            onChange={(e) => updateAgent(activeAgent.id, { identity: e.target.value })}
+                            placeholder={t('agentStudio.advanced.identityPlaceholder')}
+                            rows={4}
+                            className="w-full resize-none rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] text-text-secondary outline-none transition-all focus:border-accent/30"
+                          />
+                          <textarea
+                            value={activeAgent.soul}
+                            onChange={(e) => updateAgent(activeAgent.id, { soul: e.target.value })}
+                            placeholder={t('agentStudio.advanced.soulPlaceholder')}
+                            rows={5}
+                            className="w-full resize-none rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] text-text-secondary outline-none transition-all focus:border-accent/30"
+                          />
+                          <textarea
+                            value={activeAgent.rules}
+                            onChange={(e) => updateAgent(activeAgent.id, { rules: e.target.value })}
+                            placeholder={t('agentStudio.advanced.rulesPlaceholder')}
+                            rows={4}
+                            className="w-full resize-none rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] text-text-secondary outline-none transition-all focus:border-accent/30"
+                          />
+                          <textarea
+                            value={activeAgent.memory}
+                            onChange={(e) => updateAgent(activeAgent.id, { memory: e.target.value })}
+                            placeholder={t('agentStudio.advanced.memoryPlaceholder')}
+                            rows={4}
+                            className="w-full resize-none rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] text-text-secondary outline-none transition-all focus:border-accent/30"
+                          />
+                          <select
+                            value={activeAgent.conversationMode}
+                            onChange={(e) => updateAgent(activeAgent.id, { conversationMode: e.target.value as 'work' | 'natural' | 'companion' })}
+                            aria-label={t('agentStudio.advanced.modeLabel')}
+                            className="w-full rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] font-semibold text-text outline-none transition-all focus:border-accent/30"
+                          >
+                            <option value="work">{t('agentStudio.advanced.modeWork')}</option>
+                            <option value="natural">{t('agentStudio.advanced.modeNatural')}</option>
+                            <option value="companion">{t('agentStudio.advanced.modeCompanion')}</option>
+                          </select>
+                          <textarea
+                            value={userProfile}
+                            onChange={(e) => updateUserProfile(e.target.value)}
+                            placeholder={t('agentStudio.advanced.userPlaceholder')}
                             rows={4}
                             className="w-full resize-none rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] text-text-secondary outline-none transition-all focus:border-accent/30"
                           />

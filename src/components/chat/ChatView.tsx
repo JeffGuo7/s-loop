@@ -20,6 +20,7 @@ import {
 } from '../../utils/voiceConversation'
 import type { KiloMessage } from '../../types'
 import { motion, AnimatePresence } from 'framer-motion'
+import { assembleAgentSystemPrompt } from '../../utils/agentPrompt'
 
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
@@ -276,8 +277,6 @@ export function ChatView() {
         })
         .filter(Boolean) as Pi.McpToolDef[]
 
-      if (activeAgent?.instructions) blocks.unshift(`## System Instructions\n${activeAgent.instructions}`)
-
       if (blocks.length > 0) {
         const header = activeAgent ? `[Agent: ${activeAgent.name}]` : '[Global Context]'
         enrichedContent = `${header}\n---\n${blocks.join('\n\n')}\n---\n\n${content}`
@@ -292,9 +291,15 @@ export function ChatView() {
       usePetStore.getState().onThinking()
 
       const providerInfo = providerList.find((p) => p.id === activeProvider)
+      const agentSystemPrompt = activeAgent
+        ? assembleAgentSystemPrompt(activeAgent, {
+            userProfile: agentStore.userProfile,
+            voice: getVoiceConversation().active,
+          })
+        : undefined
 
       const result = await Pi.prompt(pid!, enrichedContent, {
-        systemPrompt: activeAgent?.instructions || undefined,
+        systemPrompt: agentSystemPrompt,
         providerID: effectiveModel?.providerID,
         modelID: effectiveModel?.modelID,
         thinkingLevel: 'medium',

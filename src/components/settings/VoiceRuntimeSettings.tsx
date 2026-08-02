@@ -12,8 +12,10 @@ import {
 } from 'lucide-react'
 import i18n from '../../i18n'
 import {
+  getKokoroVoiceLabel,
   getKokoroVoice,
-  KOKORO_CHINESE_VOICES,
+  KOKORO_VOICES,
+  type KokoroVoiceGender,
 } from '../../config/kokoroVoices'
 import { useAppStore } from '../../stores/appStore'
 import {
@@ -43,8 +45,16 @@ const text = {
     vadHint: 'Silero detects speech boundaries for continuous conversation.',
     tts: 'Text-to-speech',
     ttsHint: 'Kokoro speaks assistant responses locally in Chinese and English.',
-    voice: 'Chinese voice',
-    voiceHint: 'The selected voice is used for previews, read-aloud, and voice conversations.',
+    voice: 'Voice library',
+    voiceHint: '53 bundled identities. Chinese is recommended; other voices may add an accent when reading Chinese.',
+    recommended: 'Recommended Chinese',
+    american: 'American',
+    british: 'British',
+    other: 'Other accents',
+    allVoices: 'All 53 · 全部 53',
+    allGenders: 'All voices',
+    searchVoice: 'Search name or ID',
+    experimental: 'Experimental for Chinese',
     female: 'Female',
     male: 'Male',
     download: 'Download',
@@ -68,8 +78,16 @@ const text = {
     vadHint: 'Silero 用于判断开始说话、结束说话和连续对话轮次。',
     tts: '文字转语音',
     ttsHint: 'Kokoro 在本地朗读助手的中文和英文回答。',
-    voice: '中文音色',
-    voiceHint: '选择后会统一用于试听、消息朗读和实时语音对话。',
+    voice: '音色库',
+    voiceHint: '内置 53 个声线身份。中文音色效果最稳定，其他声线朗读中文时可能带口音。',
+    recommended: '推荐中文',
+    american: '美式',
+    british: '英式',
+    other: '其他口音',
+    allVoices: '全部 53 · All 53',
+    allGenders: '全部声线',
+    searchVoice: '搜索名称或 ID',
+    experimental: '中文实验效果',
     female: '女声',
     male: '男声',
     download: '下载',
@@ -91,12 +109,32 @@ const formatBytes = (bytes: number) => {
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
 }
 
+const REGION_LABELS = {
+  en: {
+    american: 'American', british: 'British', spanish: 'Spanish', french: 'French',
+    hindi: 'Hindi', italian: 'Italian', japanese: 'Japanese', portuguese: 'Portuguese', chinese: 'Chinese',
+  },
+  zh: {
+    american: '美式', british: '英式', spanish: '西班牙', french: '法国',
+    hindi: '印度', italian: '意大利', japanese: '日本', portuguese: '葡萄牙', chinese: '中文',
+  },
+} as const
+
 export function VoiceRuntimeSettings() {
-  const copy = i18n.resolvedLanguage?.startsWith('zh') ? text.zh : text.en
+  const chinese = i18n.resolvedLanguage?.startsWith('zh') ?? false
+  const copy = chinese ? text.zh : text.en
   const githubMirror = useAppStore((state) => state.githubMirror)
   const kokoroSpeakerId = useAppStore((state) => state.kokoroSpeakerId)
   const setKokoroSpeakerId = useAppStore((state) => state.setKokoroSpeakerId)
   const selectedVoice = getKokoroVoice(kokoroSpeakerId)
+  const [voiceTab, setVoiceTab] = useState<'recommended' | 'american' | 'british' | 'other' | 'all'>(() => {
+    if (selectedVoice.region === 'chinese') return 'recommended'
+    if (selectedVoice.region === 'american') return 'american'
+    if (selectedVoice.region === 'british') return 'british'
+    return 'other'
+  })
+  const [voiceGender, setVoiceGender] = useState<'all' | KokoroVoiceGender>('all')
+  const [voiceQuery, setVoiceQuery] = useState('')
   const [status, setStatus] = useState<VoiceRuntimeStatus | null>(null)
   const [progress, setProgress] = useState<VoiceAssetProgress | null>(null)
   const [busy, setBusy] = useState<VoiceAssetKind | null>(null)
@@ -136,6 +174,22 @@ export function VoiceRuntimeSettings() {
     )
   }, [progress])
 
+  const visibleVoices = useMemo(() => {
+    const query = voiceQuery.trim().toLowerCase()
+    return KOKORO_VOICES.filter((voice) => {
+      const inTab =
+        voiceTab === 'all' ||
+        (voiceTab === 'recommended' && voice.region === 'chinese') ||
+        (voiceTab === 'american' && voice.region === 'american') ||
+        (voiceTab === 'british' && voice.region === 'british') ||
+        (voiceTab === 'other' && !['chinese', 'american', 'british'].includes(voice.region))
+      const matchesGender = voiceGender === 'all' || voice.gender === voiceGender
+      const label = getKokoroVoiceLabel(voice, chinese).toLowerCase()
+      const matchesQuery = !query || label.includes(query) || voice.modelName.includes(query) || String(voice.id) === query
+      return inTab && matchesGender && matchesQuery
+    })
+  }, [chinese, voiceGender, voiceQuery, voiceTab])
+
   const install = async (kind: VoiceAssetKind) => {
     setBusy(kind)
     setProgress(null)
@@ -168,7 +222,7 @@ export function VoiceRuntimeSettings() {
       if (playback?.state === 'loading' || playback?.state === 'speaking') {
         await stopSpeaking()
       } else {
-        const sample = i18n.resolvedLanguage?.startsWith('zh')
+        const sample = selectedVoice.textLanguage === 'zh'
           ? '你好，我是 S-Loop。本地语音播放已经准备好了。'
           : 'Hello, this is S-Loop. Local voice playback is ready.'
         await speakText(sample, 1, kokoroSpeakerId)
@@ -250,21 +304,65 @@ export function VoiceRuntimeSettings() {
                           Kokoro · {selectedVoice.id}
                         </span>
                       </div>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {([
+                          ['recommended', copy.recommended],
+                          ['american', copy.american],
+                          ['british', copy.british],
+                          ['other', copy.other],
+                          ['all', copy.allVoices],
+                        ] as const).map(([tab, label]) => (
+                          <button
+                            key={tab}
+                            type="button"
+                            onClick={() => setVoiceTab(tab)}
+                            className={`rounded-full px-2.5 py-1.5 text-[10px] font-bold transition-colors ${
+                              voiceTab === tab
+                                ? 'bg-accent text-accent-foreground'
+                                : 'bg-surface-secondary text-text-secondary hover:text-text'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <input
+                          type="search"
+                          value={voiceQuery}
+                          onChange={(event) => setVoiceQuery(event.target.value)}
+                          placeholder={copy.searchVoice}
+                          aria-label={copy.searchVoice}
+                          className="min-w-36 flex-1 rounded-lg border border-border bg-surface-secondary/60 px-3 py-2 text-xs text-text outline-none focus:border-accent"
+                        />
+                        <select
+                          value={voiceGender}
+                          onChange={(event) => setVoiceGender(event.target.value as 'all' | KokoroVoiceGender)}
+                          aria-label={copy.allGenders}
+                          className="rounded-lg border border-border bg-surface-secondary/60 px-2 py-2 text-xs text-text outline-none focus:border-accent"
+                        >
+                          <option value="all">{copy.allGenders}</option>
+                          <option value="female">{copy.female}</option>
+                          <option value="male">{copy.male}</option>
+                        </select>
+                      </div>
                       <div
-                        className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"
+                        className="mt-3 grid max-h-72 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-4"
                         role="radiogroup"
                         aria-label={copy.voice}
                       >
-                        {KOKORO_CHINESE_VOICES.map((voice) => {
+                        {visibleVoices.map((voice) => {
                           const selected = voice.id === kokoroSpeakerId
                           const gender = voice.gender === 'female' ? copy.female : copy.male
+                          const voiceLabel = getKokoroVoiceLabel(voice, chinese)
+                          const region = REGION_LABELS[chinese ? 'zh' : 'en'][voice.region]
                           return (
                             <button
                               key={voice.id}
                               type="button"
                               role="radio"
                               aria-checked={selected}
-                              aria-label={`${voice.nameZh} · ${gender}`}
+                              aria-label={`${voiceLabel} · ${region} · ${gender}`}
                               onClick={() => setKokoroSpeakerId(voice.id)}
                               className={`relative rounded-lg border px-3 py-2.5 text-left transition-colors ${
                                 selected
@@ -280,11 +378,16 @@ export function VoiceRuntimeSettings() {
                                 />
                               )}
                               <span className="block text-sm font-semibold">
-                                {voice.nameZh}
+                                {voiceLabel}
                               </span>
                               <span className="mt-0.5 block text-[10px] opacity-65">
-                                {gender} · ID {voice.id}
+                                {region} · {gender} · ID {voice.id}
                               </span>
+                              {voice.region !== 'chinese' && (
+                                <span className="mt-1 block text-[9px] opacity-50">
+                                  {copy.experimental}
+                                </span>
+                              )}
                             </button>
                           )
                         })}
@@ -351,7 +454,7 @@ export function VoiceRuntimeSettings() {
                           ? copy.installing
                           : playback?.state === 'speaking'
                             ? copy.stop
-                            : `${copy.test} · ${selectedVoice.nameZh}`}
+                            : `${copy.test} · ${getKokoroVoiceLabel(selectedVoice, chinese)}`}
                       </button>
                     )}
                     {asset?.installed && (

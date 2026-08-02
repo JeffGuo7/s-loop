@@ -157,9 +157,9 @@ export function AgentAssemblyPanel() {
               <div className="flex-1 border-t border-border-light/30" />
             </div>
             <textarea
-              value={agent.instructions}
-              onChange={(e) => updateAgent(agent.id, { instructions: e.target.value })}
-              placeholder="System prompt / instructions for this agent..."
+              value={agent.rules}
+              onChange={(e) => updateAgent(agent.id, { rules: e.target.value })}
+              placeholder="Rules for this agent..."
               rows={3}
               className="w-full px-2.5 py-1.5 rounded-lg bg-surface-secondary/40 border border-border-light/30 text-[10px] font-medium text-text placeholder:text-text-quaternary/30 outline-none focus:border-accent/30 transition-all resize-none"
             />

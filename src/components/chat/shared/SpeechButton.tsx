@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { LoaderCircle, Square, Volume2 } from 'lucide-react'
 import { useAppStore } from '../../../stores/appStore'
 import { openVoiceInputSettings } from '../../../utils/voiceInput'
+import { toSpeakableText } from '../../../utils/voiceConversation'
 import {
   getVoiceRuntimeStatus,
   listenSpeechPlayback,
@@ -53,7 +54,9 @@ export function SpeechButton({ text, label }: SpeechButtonProps) {
       setRequestId(null)
       return
     }
-    const nextRequest = await speakText(text, 1, kokoroSpeakerId)
+    const speakableText = toSpeakableText(text)
+    if (!speakableText) return
+    const nextRequest = await speakText(speakableText, 1, kokoroSpeakerId)
     setRequestId(nextRequest)
   }
 

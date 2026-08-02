@@ -1,6 +1,7 @@
 import { useAgentStore } from '../stores/agentStore'
 import { useSkillStore } from '../stores/skillStore'
 import type { WorkspaceRoot } from '../types/agent'
+import { assembleAgentSystemPrompt } from './agentPrompt'
 
 /**
  * Runtime config derived from the active agent, synced to the backend so
@@ -48,7 +49,9 @@ export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
   }
 
   return {
-    agentSystemPrompt: activeAgent?.instructions || undefined,
+    agentSystemPrompt: activeAgent
+      ? assembleAgentSystemPrompt(activeAgent, { userProfile: agentStore.userProfile })
+      : undefined,
     agentSkillsBlock: skillsBlock || undefined,
     agentModel: activeAgent?.model || undefined,
     permissionMode: activeAgent?.permissionMode,

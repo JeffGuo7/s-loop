@@ -1,3 +1,4 @@
+mod agent_profiles;
 mod commands;
 mod credential_store;
 mod dictation;
@@ -571,6 +572,7 @@ pub fn run() {
             stop_server,
             server_status,
             runtime_diagnostics,
+            agent_profiles::save_agent_profile_files,
             commands::list_directory,
             commands::read_text_file,
             commands::read_file_base64,

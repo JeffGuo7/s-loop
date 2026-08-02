@@ -94,10 +94,12 @@ export const shouldInterruptVoicePlayback = (
   now - playbackStartedAt >= 350 &&
   cleanedInputLevel >= 0.025
 
-export function speechTextFromMarkdown(markdown: string): string {
+const EMOJI_SEQUENCE = /(?:[#*0-9]\uFE0F?\u20E3|\p{Regional_Indicator}{2}|(?:\p{Emoji_Presentation}|\p{Extended_Pictographic})(?:\uFE0F|\p{Emoji_Modifier})?(?:\u200D(?:\p{Emoji_Presentation}|\p{Extended_Pictographic})(?:\uFE0F|\p{Emoji_Modifier})?)*)/gu
+
+export function toSpeakableText(markdown: string): string {
   return markdown
     .replace(/```[\s\S]*?```/g, ' 代码块。 ')
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/<https?:\/\/[^>]+>/g, '')
@@ -106,7 +108,11 @@ export function speechTextFromMarkdown(markdown: string): string {
     .replace(/^\s*[-*+]\s+/gm, '')
     .replace(/^\s*\d+[.)]\s+/gm, '')
     .replace(/[*_~>|]/g, '')
+    .replace(EMOJI_SEQUENCE, '')
+    .replace(/[\u200D\uFE0E\uFE0F\u{E0020}-\u{E007F}]/gu, '')
     .replace(/\n{2,}/g, '。')
     .replace(/\s+/g, ' ')
     .trim()
 }
+
+export const speechTextFromMarkdown = toSpeakableText

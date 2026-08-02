@@ -531,6 +531,15 @@ const zh = {
       optionalCreate: '新建时可选填写，不填也可以先创建。',
       agentScoped: '这部分只属于当前智能体，互不影响。',
       instructionsPlaceholder: '补充这套智能体的额外指令或风格要求',
+      identityPlaceholder: 'IDENTITY.md：它是谁、叫什么、扮演什么角色（必须明确是 AI）',
+      soulPlaceholder: 'SOUL.md：交流温度、价值观、幽默感、主动程度与边界',
+      rulesPlaceholder: 'RULES.md：工作规则、工具使用要求和禁止事项',
+      memoryPlaceholder: 'MEMORY.md：只填写你确认需要长期记住的信息',
+      userPlaceholder: 'USER.md（所有智能体共享）：称呼、偏好、讨厌的表达和交流习惯',
+      modeLabel: '对话模式',
+      modeWork: '工作模式',
+      modeNatural: '自然模式（推荐）',
+      modeCompanion: '陪伴模式',
       modelPlaceholder: '可选覆盖模型，例如 deepseek-chat',
     },
     confirm: {
@@ -554,6 +563,7 @@ const zh = {
       remoteInstalled: '已完成远程安装并挂载：{{name}}',
       knowledgeComingSoon: '知识库挂载下一步接入，这里先保留入口。',
       memoryComingSoon: '记忆模块挂载下一步接入，这里先保留入口。',
+      memoryReviewReady: '已展开人工审核记忆区；只有你确认填写的内容才会进入长期记忆。',
     },
     presets: {
       title: '智能体预设',
