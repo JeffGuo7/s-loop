@@ -40,6 +40,7 @@ describe('ReasoningLevelSelector', () => {
     )
 
     const trigger = await screen.findByRole('button', { name: /reasoning: high/i })
+    expect(trigger.querySelector('.lucide-gauge')).toBeInTheDocument()
     fireEvent.click(trigger)
 
     expect(screen.getByRole('button', { name: /reasoning level: off/i })).toBeInTheDocument()
