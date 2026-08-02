@@ -53,7 +53,9 @@ fn should_use_chinese_text_rules(text: &str, speaker: KokoroSpeaker) -> bool {
         return true;
     }
     let has_digit = text.chars().any(|character| character.is_ascii_digit());
-    let has_latin = text.chars().any(|character| character.is_ascii_alphabetic());
+    let has_latin = text
+        .chars()
+        .any(|character| character.is_ascii_alphabetic());
     speaker.prefers_chinese() && has_digit && !has_latin
 }
 
