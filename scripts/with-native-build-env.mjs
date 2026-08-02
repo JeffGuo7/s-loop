@@ -33,6 +33,73 @@ function newestDirectory(parent, requiredChildren = []) {
     )[0];
 }
 
+function withTrailingSeparator(value) {
+  return value.endsWith(path.sep) ? value : `${value}${path.sep}`;
+}
+
+function findMsvcupEnvironment() {
+  const candidates = [
+    process.env.MSVCUP_TOOLCHAIN_ROOT,
+    process.env.LOCALAPPDATA &&
+      path.join(process.env.LOCALAPPDATA, "msvcup", "toolchain"),
+  ]
+    .map(existingDirectory)
+    .filter(Boolean);
+
+  for (const root of candidates) {
+    const msvcDirectory = newestDirectory(
+      path.join(root, "VC", "Tools", "MSVC"),
+      [
+        "include",
+        path.join("lib", "x64"),
+        path.join("bin", "Hostx64", "x64"),
+      ],
+    );
+    const sdkRoot = path.join(root, "Windows Kits", "10");
+    const sdkIncludeDirectory = newestDirectory(
+      path.join(sdkRoot, "Include"),
+      ["ucrt", "shared", "um"],
+    );
+    if (!msvcDirectory || !sdkIncludeDirectory) {
+      continue;
+    }
+
+    const sdkVersion = path.basename(sdkIncludeDirectory);
+    const sdkLibDirectory = path.join(sdkRoot, "Lib", sdkVersion);
+    const sdkBinDirectory = path.join(sdkRoot, "bin", sdkVersion, "x64");
+    if (
+      !existsSync(path.join(sdkLibDirectory, "ucrt", "x64")) ||
+      !existsSync(path.join(sdkLibDirectory, "um", "x64")) ||
+      !existsSync(sdkBinDirectory)
+    ) {
+      continue;
+    }
+
+    return {
+      root,
+      msvcDirectory,
+      sdkRoot,
+      sdkVersion,
+      sdkIncludeDirectory,
+      sdkLibDirectory,
+      sdkBinDirectory,
+    };
+  }
+
+  return undefined;
+}
+
+function findExecutable(name, extraDirectories = []) {
+  const pathDirectories = (process.env.Path ?? process.env.PATH ?? "")
+    .split(path.delimiter)
+    .filter(Boolean);
+  return [...extraDirectories, ...pathDirectories]
+    .map(existingDirectory)
+    .filter(Boolean)
+    .map((directory) => path.join(directory, name))
+    .find(existsSync);
+}
+
 function findLibclangDirectory() {
   const configured = process.env.LIBCLANG_PATH;
   const configuredDirectory =
@@ -79,7 +146,11 @@ function findClangResourceDirectory(libclangDirectory) {
   return newestDirectory(clangRoot, ["include"]);
 }
 
-function findMsvcIncludeDirectory() {
+function findMsvcIncludeDirectory(msvcupEnvironment) {
+  if (msvcupEnvironment) {
+    return path.join(msvcupEnvironment.msvcDirectory, "include");
+  }
+
   const configured = existingDirectory(process.env.VCToolsInstallDir);
   if (configured && existsSync(path.join(configured, "include"))) {
     return path.join(configured, "include");
@@ -142,7 +213,13 @@ function findMsvcIncludeDirectory() {
   return undefined;
 }
 
-function findWindowsSdkIncludeDirectories() {
+function findWindowsSdkIncludeDirectories(msvcupEnvironment) {
+  if (msvcupEnvironment) {
+    return ["ucrt", "shared", "um", "winrt", "cppwinrt"]
+      .map((name) => path.join(msvcupEnvironment.sdkIncludeDirectory, name))
+      .filter(existsSync);
+  }
+
   const programFilesX86 =
     process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
   const sdkRoots = [
@@ -189,8 +266,10 @@ function windowsNativeEnvironment() {
   }
 
   const resourceDirectory = findClangResourceDirectory(libclangDirectory);
-  const msvcIncludeDirectory = findMsvcIncludeDirectory();
-  const sdkIncludeDirectories = findWindowsSdkIncludeDirectories();
+  const msvcupEnvironment = findMsvcupEnvironment();
+  const msvcIncludeDirectory = findMsvcIncludeDirectory(msvcupEnvironment);
+  const sdkIncludeDirectories =
+    findWindowsSdkIncludeDirectories(msvcupEnvironment);
   if (!resourceDirectory || !msvcIncludeDirectory || sdkIncludeDirectories.length === 0) {
     throw new Error(
       [
@@ -216,13 +295,89 @@ function windowsNativeEnvironment() {
     `[native-env] Windows SDK: ${path.dirname(sdkIncludeDirectories[0])}`,
   );
 
-  return {
+  const environment = {
     ...process.env,
     LIBCLANG_PATH: libclangDirectory,
     BINDGEN_EXTRA_CLANG_ARGS: existingArguments
       ? `${existingArguments} ${bindgenArguments}`
       : bindgenArguments,
   };
+
+  if (msvcupEnvironment) {
+    const ninja = findExecutable("ninja.exe", [
+      path.join(
+        process.env.ProgramData ?? "C:\\ProgramData",
+        "chocolatey",
+        "bin",
+      ),
+    ]);
+    if (!ninja) {
+      throw new Error(
+        [
+          "A standalone msvcup toolchain was found, but Ninja is missing.",
+          "Install it with `choco install ninja -y`, then retry.",
+        ].join("\n"),
+      );
+    }
+
+    const msvcBinDirectory = path.join(
+      msvcupEnvironment.msvcDirectory,
+      "bin",
+      "Hostx64",
+      "x64",
+    );
+    const msvcLibDirectory = path.join(
+      msvcupEnvironment.msvcDirectory,
+      "lib",
+      "x64",
+    );
+    const existingPath = process.env.Path ?? process.env.PATH ?? "";
+    const existingInclude = process.env.INCLUDE?.trim();
+    const existingLib = process.env.LIB?.trim();
+
+    environment.Path = [
+      msvcBinDirectory,
+      msvcupEnvironment.sdkBinDirectory,
+      path.dirname(ninja),
+      existingPath,
+    ]
+      .filter(Boolean)
+      .join(path.delimiter);
+    environment.INCLUDE = [
+      msvcIncludeDirectory,
+      ...sdkIncludeDirectories,
+      existingInclude,
+    ]
+      .filter(Boolean)
+      .join(path.delimiter);
+    environment.LIB = [
+      msvcLibDirectory,
+      path.join(msvcupEnvironment.sdkLibDirectory, "ucrt", "x64"),
+      path.join(msvcupEnvironment.sdkLibDirectory, "um", "x64"),
+      existingLib,
+    ]
+      .filter(Boolean)
+      .join(path.delimiter);
+    environment.VCINSTALLDIR = withTrailingSeparator(
+      path.join(msvcupEnvironment.root, "VC"),
+    );
+    environment.VCToolsInstallDir = withTrailingSeparator(
+      msvcupEnvironment.msvcDirectory,
+    );
+    environment.VisualStudioVersion = "17.0";
+    environment.WindowsSdkDir = withTrailingSeparator(
+      msvcupEnvironment.sdkRoot,
+    );
+    environment.WindowsSDKVersion = `${msvcupEnvironment.sdkVersion}${path.sep}`;
+    environment.CMAKE_GENERATOR = process.env.CMAKE_GENERATOR || "Ninja";
+
+    console.log(
+      `[native-env] standalone MSVC: ${msvcupEnvironment.msvcDirectory}`,
+    );
+    console.log(`[native-env] CMake generator: ${environment.CMAKE_GENERATOR}`);
+  }
+
+  return environment;
 }
 
 function resolveCommand(command, args) {
