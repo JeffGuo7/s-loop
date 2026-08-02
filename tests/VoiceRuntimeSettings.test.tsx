@@ -61,4 +61,22 @@ describe('VoiceRuntimeSettings Kokoro voice selection', () => {
       )
     })
   })
+
+  it('opens the complete catalog and selects an American voice', async () => {
+    render(<VoiceRuntimeSettings />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /全部 53/ }))
+    expect(await screen.findAllByRole('radio')).toHaveLength(53)
+
+    fireEvent.click(screen.getByRole('radio', { name: /Alloy/ }))
+    expect(useAppStore.getState().kokoroSpeakerId).toBe(0)
+
+    fireEvent.click(screen.getByRole('button', { name: /Alloy/ }))
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        'speak_text',
+        expect.objectContaining({ speakerId: 0 }),
+      )
+    })
+  })
 })
