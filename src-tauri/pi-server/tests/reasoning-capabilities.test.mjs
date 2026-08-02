@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  applyThinkingLevel,
+  describeModel,
   describeReasoningCapabilities,
   getSupportedThinkingLevels,
   resolveCustomReasoningConfig,
@@ -51,6 +53,25 @@ describe('reasoning capabilities', () => {
     const model = { reasoning: false }
     assert.deepEqual(getSupportedThinkingLevels(model), ['off'])
     assert.equal(resolveThinkingLevel(model, 'high'), 'off')
+  })
+
+  it('describes model identity together with reasoning capabilities', () => {
+    assert.deepEqual(describeModel({ ...deepSeekModel, name: 'DeepSeek V4 Pro' }), {
+      id: 'deepseek-v4-pro',
+      name: 'DeepSeek V4 Pro',
+      reasoning: true,
+      supportedThinkingLevels: ['off', 'high', 'max'],
+      recommendedThinkingLevel: 'high',
+    })
+  })
+
+  it('updates an existing agent with the effective requested level', () => {
+    const agent = { state: { thinkingLevel: 'high' } }
+    assert.equal(applyThinkingLevel(agent, deepSeekModel, 'max'), 'max')
+    assert.equal(agent.state.thinkingLevel, 'max')
+
+    assert.equal(applyThinkingLevel(agent, deepSeekModel, 'medium'), 'high')
+    assert.equal(agent.state.thinkingLevel, 'high')
   })
 })
 
