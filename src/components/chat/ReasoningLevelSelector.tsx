@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { BrainCircuit, Check, ChevronUp } from 'lucide-react'
+import { Check, ChevronUp, Gauge } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores'
 import type { ReasoningLevel } from '../../types'
@@ -118,7 +118,7 @@ export function ReasoningLevelSelector({
         title={capabilities?.reasoning ? t('chat.reasoning.change') : t('chat.reasoning.unsupported')}
         className="flex items-center gap-1 rounded-full border border-transparent px-2 py-0.5 font-bold uppercase tracking-[0.15em] text-accent transition-colors hover:border-accent/20 hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <BrainCircuit size={12} />
+        <Gauge size={12} strokeWidth={2.4} />
         {capabilities ? t(`chat.reasoning.levels.${selected}`) : '...'}
         {canChange && <ChevronUp size={10} strokeWidth={3} className={`transition-transform ${isOpen ? '' : 'rotate-180'}`} />}
       </button>
