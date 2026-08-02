@@ -223,8 +223,8 @@ export function VoiceRuntimeSettings() {
         await stopSpeaking()
       } else {
         const sample = selectedVoice.textLanguage === 'zh'
-          ? '你好，我是 S-Loop。本地语音播放已经准备好了。'
-          : 'Hello, this is S-Loop. Local voice playback is ready.'
+          ? '你好，我是 S-Loop。数字 123 应该读作一百二十三。'
+          : 'Hello, this is S-Loop. The number 123 is ready for playback.'
         await speakText(sample, 1, kokoroSpeakerId)
       }
     } catch (reason) {
