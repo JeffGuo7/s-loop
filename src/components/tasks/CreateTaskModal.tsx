@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useTaskStore, useAppStore } from '../../stores';
-import { X, Repeat, Sun, CalendarDays, Clock, Send } from 'lucide-react';
+import { useTaskStore, useAppStore, useAgentStore, useSkillStore } from '../../stores';
+import { X, Repeat, Sun, CalendarDays, Clock, Send, Bot, Sparkles, Link2 } from 'lucide-react';
 import { MagicButton } from '../ui';
 import { parseSchedule } from '../../types/task';
 import { PLATFORM_PRESETS } from '../../types/platform';
 import type { TaskDelivery } from '../../types/task';
+import { buildAgentRuntimeSnapshot } from '../../utils/agentRuntime';
 
 interface CreateTaskModalProps {
   onClose: () => void;
@@ -63,11 +64,23 @@ function buildSchedule(mode: ScheduleMode, state: {
 
 export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
   const { t } = useTranslation();
-  const { createTask } = useTaskStore();
+  const { createTask, tasks } = useTaskStore();
   const { providerConfigs, activeProvider, workspaceDir } = useAppStore();
+  const { agents, activeAgentId, userProfile } = useAgentStore();
+  const skillCatalog = useSkillStore((state) => state.skills);
+  const availableSkills = skillCatalog.filter((skill) => skill.enabled);
+  const initialAgentId = activeAgentId || agents[0]?.id || '';
+  const initialAgent = agents.find((agent) => agent.id === initialAgentId) || null;
 
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState(initialAgentId);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(
+    initialAgent
+      ? initialAgent.skills.filter((name) => availableSkills.some((skill) => skill.name === name))
+      : availableSkills.map((skill) => skill.name),
+  );
+  const [contextFrom, setContextFrom] = useState<string[]>([]);
   const [sMode, setSMode] = useState<ScheduleMode>('interval');
   const [intervalNum, setIntervalNum] = useState(30);
   const [intervalUnit, setIntervalUnit] = useState('m');
@@ -78,6 +91,8 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
   const [deliver, setDeliver] = useState<TaskDelivery>('silent');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) || null;
+  const selectedModel = selectedAgent?.model || providerConfigs[activeProvider]?.model || '';
 
   const deliveryOptions: Array<{ id: TaskDelivery; label: string }> = [
     { id: 'silent', label: t('tasks.deliverSilent') },
@@ -92,7 +107,19 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
     setSaving(true);
     try {
       const schedule = parseSchedule(scheduleValue.trim());
-      await createTask({ name: name.trim(), prompt: prompt.trim(), schedule, provider: activeProvider, model: providerConfigs[activeProvider]?.model || '', workspaceDir: workspaceDir || undefined, deliver, enabled: true });
+      await createTask({
+        name: name.trim(),
+        prompt: prompt.trim(),
+        schedule,
+        skills: selectedSkills,
+        contextFrom: contextFrom.length > 0 ? contextFrom : undefined,
+        agentRuntime: buildAgentRuntimeSnapshot(selectedAgent, availableSkills, userProfile, selectedSkills),
+        provider: activeProvider,
+        model: selectedModel,
+        workspaceDir: workspaceDir || undefined,
+        deliver,
+        enabled: true,
+      });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -101,6 +128,26 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
 
   const toggleDay = (d: number) => {
     setWeeklyDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
+  };
+
+  const selectAgent = (agentId: string) => {
+    setSelectedAgentId(agentId);
+    const agent = agents.find((candidate) => candidate.id === agentId);
+    setSelectedSkills(agent
+      ? agent.skills.filter((name) => availableSkills.some((skill) => skill.name === name))
+      : availableSkills.map((skill) => skill.name));
+  };
+
+  const toggleSkill = (skillName: string) => {
+    setSelectedSkills((current) => current.includes(skillName)
+      ? current.filter((name) => name !== skillName)
+      : [...current, skillName]);
+  };
+
+  const toggleContext = (taskId: string) => {
+    setContextFrom((current) => current.includes(taskId)
+      ? current.filter((id) => id !== taskId)
+      : [...current, taskId]);
   };
 
   return createPortal(
@@ -131,6 +178,78 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
               placeholder={t('createTask.promptPlaceholder')} rows={3}
               className="w-full px-4 py-2.5 rounded-xl bg-surface-secondary/50 border border-border-light focus:border-accent/40 outline-none text-[13px] font-medium leading-relaxed resize-none placeholder:text-text-quaternary transition-colors" />
+          </div>
+
+          {/* Stable agent runtime */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-text-tertiary uppercase tracking-wide mb-1.5">
+                <Bot size={11} className="inline mr-1.5 -mt-0.5" />
+                {t('createTask.agentLabel')}
+              </label>
+              <select
+                value={selectedAgentId}
+                onChange={(event) => selectAgent(event.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-surface-secondary/50 border border-border-light focus:border-accent/40 outline-none text-[13px] font-medium text-text cursor-pointer"
+              >
+                {agents.length === 0 && <option value="">{t('createTask.defaultAgent')}</option>}
+                {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+              </select>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-text-quaternary">{t('createTask.agentSnapshotHint')}</p>
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-surface-secondary/60 px-2.5 py-1 text-[10px] text-text-tertiary">
+                <span>{t('createTask.inferenceModel')}:</span>
+                <code className="font-mono text-text-secondary">{activeProvider} / {selectedModel || 'default'}</code>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-text-tertiary uppercase tracking-wide mb-2">
+                <Sparkles size={11} className="inline mr-1.5 -mt-0.5" />
+                {t('createTask.skillsLabel')}
+              </label>
+              {availableSkills.length === 0 ? (
+                <p className="text-[11px] text-text-quaternary">{t('createTask.noSkills')}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {availableSkills.map((skill) => (
+                    <button
+                      key={skill.name}
+                      type="button"
+                      onClick={() => toggleSkill(skill.name)}
+                      className={`px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${selectedSkills.includes(skill.name)
+                        ? 'bg-accent/10 border-accent/30 text-accent'
+                        : 'bg-surface-secondary/40 border-border-light text-text-tertiary hover:text-text'}`}
+                    >
+                      {skill.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {tasks.length > 0 && (
+              <div>
+                <label className="block text-[11px] font-semibold text-text-tertiary uppercase tracking-wide mb-2">
+                  <Link2 size={11} className="inline mr-1.5 -mt-0.5" />
+                  {t('createTask.contextLabel')}
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {tasks.map((task) => (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => toggleContext(task.id)}
+                      className={`px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${contextFrom.includes(task.id)
+                        ? 'bg-accent/10 border-accent/30 text-accent'
+                        : 'bg-surface-secondary/40 border-border-light text-text-tertiary hover:text-text'}`}
+                    >
+                      {task.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[10px] text-text-quaternary">{t('createTask.contextHint')}</p>
+              </div>
+            )}
           </div>
 
           {/* Schedule builder */}

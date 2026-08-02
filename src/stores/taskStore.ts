@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { getBaseUrl } from '../utils/piClient'
 import { sendPlatformMessage } from '../utils/platformClient'
-import type { ScheduledTask, TaskDelivery, TaskSchedule } from '../types/task'
+import type { ScheduledTask, TaskAgentRuntime, TaskDelivery, TaskSchedule } from '../types/task'
 import type { PlatformId } from '../types/platform'
 import type { KiloMessage } from '../types'
 
@@ -22,6 +22,7 @@ export interface CreateTaskInput {
   prompt: string
   schedule: TaskSchedule
   skills?: string[]
+  agentRuntime?: TaskAgentRuntime
   contextFrom?: string[]
   model?: string
   provider?: string

@@ -1,7 +1,8 @@
 import { useAgentStore } from '../stores/agentStore'
 import { useSkillStore } from '../stores/skillStore'
-import type { AgentMCPTool, WorkspaceRoot } from '../types/agent'
+import type { Agent, AgentMCPTool, WorkspaceRoot } from '../types/agent'
 import type { SkillInfo } from '../types/skill'
+import type { TaskAgentRuntime } from '../types/task'
 import { assembleAgentSystemPrompt } from './agentPrompt'
 
 /**
@@ -10,10 +11,9 @@ import { assembleAgentSystemPrompt } from './agentPrompt'
  * tasks) can honor the same agent instructions, skills, and permissions
  * that the chat UI applies per message.
  *
- * MCP tools are intentionally excluded — MCP tool calls proxy through the
- * frontend's live SSE stream, which isn't present for a platform message
- * that arrives while no chat is open. Skills are plain prompt text, so they
- * work headlessly.
+ * Remote MCP selections are included as an authority boundary. The sidecar
+ * can execute connected remote MCP tools headlessly, but only inside the
+ * mounted server/tool scope captured here.
  */
 export interface AgentRuntimeConfig {
   agentSystemPrompt?: string
@@ -47,6 +47,36 @@ export function assembleAgentRuntimePrompt(
   return sections.length > 0 ? sections.join('\n\n') : undefined
 }
 
+export function buildAgentRuntimeSnapshot(
+  agent: Agent | null,
+  availableSkills: SkillInfo[],
+  userProfile: string,
+  selectedSkillNames?: string[],
+): TaskAgentRuntime {
+  const skillNames = selectedSkillNames ?? (agent
+    ? agent.skills
+    : availableSkills.filter((skill) => skill.enabled).map((skill) => skill.name))
+  const enabledSkills = skillNames
+    .map((name) => availableSkills.find((skill) => skill.name === name))
+    .filter((skill): skill is SkillInfo => Boolean(skill?.enabled))
+
+  return {
+    agentId: agent?.id,
+    agentName: agent?.name || 'Default Assistant',
+    agentSystemPrompt: agent
+      ? assembleAgentSystemPrompt(agent, { userProfile })
+      : undefined,
+    agentSkillsBlock: formatAgentSkillsBlock(enabledSkills),
+    agentModel: agent?.model || undefined,
+    permissionMode: agent?.permissionMode,
+    permissionRules: agent?.permissionRules ? { ...agent.permissionRules } : undefined,
+    workspaceRoots: agent?.workspaceRoots.map((root) => ({ ...root })) || [],
+    agentMcpServers: agent ? [...agent.mcpServers] : [],
+    agentMcpTools: agent ? agent.mcpTools.map((tool) => ({ ...tool })) : [],
+    capturedAt: Date.now(),
+  }
+}
+
 export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
   const agentStore = useAgentStore.getState()
   const activeAgent = agentStore.activeAgentId
@@ -54,24 +84,20 @@ export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
     : null
 
   const skillStore = useSkillStore.getState()
-  const enabledSkills = activeAgent
-    ? activeAgent.skills
-        .map((n) => skillStore.skills.find((s) => s.name === n))
-        .filter((s): s is NonNullable<typeof s> => s !== undefined && s.enabled)
-    : skillStore.skills.filter((s) => s.enabled)
-
-  const skillsBlock = formatAgentSkillsBlock(enabledSkills)
+  const snapshot = buildAgentRuntimeSnapshot(
+    activeAgent || null,
+    skillStore.skills,
+    agentStore.userProfile,
+  )
 
   return {
-    agentSystemPrompt: activeAgent
-      ? assembleAgentSystemPrompt(activeAgent, { userProfile: agentStore.userProfile })
-      : undefined,
-    agentSkillsBlock: skillsBlock,
-    agentModel: activeAgent?.model || undefined,
-    permissionMode: activeAgent?.permissionMode,
-    permissionRules: activeAgent?.permissionRules,
-    workspaceRoots: activeAgent?.workspaceRoots || [],
-    agentMcpServers: activeAgent ? [...activeAgent.mcpServers] : undefined,
-    agentMcpTools: activeAgent ? activeAgent.mcpTools.map((tool) => ({ ...tool })) : undefined,
+    agentSystemPrompt: snapshot.agentSystemPrompt,
+    agentSkillsBlock: snapshot.agentSkillsBlock,
+    agentModel: snapshot.agentModel,
+    permissionMode: snapshot.permissionMode,
+    permissionRules: snapshot.permissionRules,
+    workspaceRoots: snapshot.workspaceRoots,
+    agentMcpServers: activeAgent ? snapshot.agentMcpServers : undefined,
+    agentMcpTools: activeAgent ? snapshot.agentMcpTools : undefined,
   }
 }

@@ -95,6 +95,47 @@ function _saveTasks(tasks) {
   writeFileSync(_tasksFile, JSON.stringify({ tasks, updatedAt: new Date().toISOString() }, null, 2))
 }
 
+function _sanitizeTaskAgentRuntime(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+
+  return {
+    agentId: typeof value.agentId === 'string' ? value.agentId : undefined,
+    agentName: typeof value.agentName === 'string' && value.agentName.trim()
+      ? value.agentName.trim()
+      : 'Default Assistant',
+    agentSystemPrompt: typeof value.agentSystemPrompt === 'string' ? value.agentSystemPrompt : undefined,
+    agentSkillsBlock: typeof value.agentSkillsBlock === 'string' ? value.agentSkillsBlock : undefined,
+    agentModel: typeof value.agentModel === 'string' ? value.agentModel : undefined,
+    permissionMode: ['ask', 'allow', 'deny'].includes(value.permissionMode)
+      ? value.permissionMode
+      : undefined,
+    permissionRules: value.permissionRules && typeof value.permissionRules === 'object' && !Array.isArray(value.permissionRules)
+      ? Object.fromEntries(Object.entries(value.permissionRules)
+          .filter(([, action]) => ['ask', 'allow', 'deny'].includes(action)))
+      : undefined,
+    workspaceRoots: Array.isArray(value.workspaceRoots)
+      ? value.workspaceRoots
+          .filter(root => root && typeof root.path === 'string')
+          .map(root => ({
+            id: typeof root.id === 'string' ? root.id : randomUUID(),
+            path: root.path,
+            access: root.access === 'read' ? 'read' : 'read-write',
+            primary: Boolean(root.primary),
+            source: ['workspace', 'user-grant', 'task'].includes(root.source) ? root.source : 'task',
+          }))
+      : [],
+    agentMcpServers: Array.isArray(value.agentMcpServers)
+      ? value.agentMcpServers.filter(name => typeof name === 'string')
+      : undefined,
+    agentMcpTools: Array.isArray(value.agentMcpTools)
+      ? value.agentMcpTools
+          .filter(tool => tool && typeof tool.serverName === 'string' && typeof tool.toolName === 'string')
+          .map(tool => ({ serverName: tool.serverName, toolName: tool.toolName }))
+      : undefined,
+    capturedAt: Number.isFinite(value.capturedAt) ? value.capturedAt : Date.now(),
+  }
+}
+
 export function loadTasks() {
   return _loadTasksRaw()
 }
@@ -116,6 +157,7 @@ export function createTask(taskData) {
     prompt: taskData.prompt || '',
     schedule,
     skills: taskData.skills || [],
+    agentRuntime: _sanitizeTaskAgentRuntime(taskData.agentRuntime),
     contextFrom: taskData.contextFrom || undefined,
     model: taskData.model || undefined,
     provider: taskData.provider || undefined,
@@ -147,6 +189,9 @@ export function updateTask(taskId, updates) {
   const idx = tasks.findIndex(t => t.id === taskId)
   if (idx === -1) return null
   const { apiKey: _discardedApiKey, ...safeUpdates } = updates || {}
+  if (Object.hasOwn(safeUpdates, 'agentRuntime')) {
+    safeUpdates.agentRuntime = _sanitizeTaskAgentRuntime(safeUpdates.agentRuntime)
+  }
   tasks[idx] = { ...tasks[idx], ...safeUpdates }
   delete tasks[idx].apiKey
   _saveTasks(tasks)
@@ -330,6 +375,30 @@ export function getTaskOutputs(taskId) {
  * The caller must provide the pi-agent-core's Agent class and apiKey resolver,
  * since the scheduler doesn't own those dependencies.
  */
+export function buildTaskExecutionOptions(activeTask, deps, { runId, sessionId } = {}) {
+  const runtimeSnapshot = activeTask.agentRuntime
+  const providerID = activeTask.provider || deps.defaultProvider
+  const modelID = activeTask.model || runtimeSnapshot?.agentModel || deps.defaultModel
+  const runtimeConfig = deps.runtimeConfig || {}
+
+  return {
+    ...runtimeConfig,
+    ...(runtimeSnapshot || {}),
+    systemPrompt: undefined,
+    providerID,
+    modelID,
+    thinkingLevel: 'off',
+    apiKey: runtimeConfig.providerApiKeys?.[providerID]
+      || runtimeConfig.apiKey
+      || deps.apiKey,
+    workspaceDir: activeTask.workspaceDir || deps.projectDir,
+    taskId: activeTask.id,
+    runId,
+    resumeApprovalId: deps.resumeApprovalId,
+    sessionId,
+  }
+}
+
 export async function runTask(task, deps) {
   const { apiKey } = deps
   const startTime = Date.now()
@@ -372,7 +441,7 @@ export async function runTask(task, deps) {
     let fullPrompt = activeTask.prompt
 
     // Load skills — scan SKILL.md files from project
-    if (activeTask.skills && activeTask.skills.length > 0 && deps.projectDir) {
+    if (!activeTask.agentRuntime?.agentSkillsBlock && activeTask.skills && activeTask.skills.length > 0 && deps.projectDir) {
       const skillBlocks = []
       for (const skillName of activeTask.skills) {
         const skillDir = join(deps.projectDir, 'skills', skillName)
@@ -391,15 +460,19 @@ export async function runTask(task, deps) {
     if (activeTask.contextFrom && activeTask.contextFrom.length > 0) {
       const contextBlocks = []
       for (const srcId of activeTask.contextFrom) {
+        const sourceTask = getTask(srcId)
+        const sourceLabel = sourceTask?.name || srcId
         const srcDir = join(_outputDir, srcId)
         if (existsSync(srcDir)) {
           const files = readdirSync(srcDir).sort()
           if (files.length > 0) {
             const latest = files[files.length - 1]
             const content = readFileSync(join(srcDir, latest), 'utf-8').slice(0, 4000)
-            contextBlocks.push(`## Output from task ${srcId}\n${content}`)
+            contextBlocks.push(`## Latest output from task: ${sourceLabel}\n${content}`)
+            continue
           }
         }
+        contextBlocks.push(`## Latest output from task: ${sourceLabel}\nNo prior output is available.`)
       }
       if (contextBlocks.length > 0) {
         fullPrompt = contextBlocks.join('\n\n') + '\n---\n\n' + fullPrompt
@@ -413,20 +486,10 @@ export async function runTask(task, deps) {
     // Create session and run
     const sessionId = `cron_${task.id}_${Date.now()}`
     // Reuse the pi-server's Agent if this is a scheduled task
-    const options = {
-      ...(deps.runtimeConfig || {}),
-      systemPrompt: undefined,
-      providerID: activeTask.provider || deps.defaultProvider,
-      modelID: activeTask.model || deps.defaultModel,
-      thinkingLevel: 'off',
-      apiKey: deps.runtimeConfig?.providerApiKeys?.[activeTask.provider]
-        || deps.runtimeConfig?.apiKey
-        || apiKey,
-      workspaceDir: activeTask.workspaceDir || deps.projectDir,
-      taskId: activeTask.id,
+    const options = buildTaskExecutionOptions(activeTask, { ...deps, apiKey }, {
       runId,
-      resumeApprovalId: deps.resumeApprovalId,
-    }
+      sessionId: deps.makeSession ? sessionId : undefined,
+    })
     if (deps.makeSession) {
       // If running inside pi-server, create a session
       options.sessionId = sessionId

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '../../stores';
-import { Plus, Trash2, Play, Pause, Zap, Search, Calendar, Eye } from 'lucide-react';
+import { Plus, Trash2, Play, Pause, Zap, Search, Calendar, Eye, Bot } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { MagicButton } from '../ui';
 import { TaskDetailModal } from './TaskDetailModal';
@@ -119,6 +119,11 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                       <div className={statusDot(task.lastStatus)} />
                       <div className="flex-1 min-w-0 flex items-center gap-2">
                         <span className="text-[13px] font-semibold text-text truncate">{task.name}</span>
+                        {task.agentRuntime?.agentName && (
+                          <span className="shrink-0 inline-flex items-center gap-1 text-[10px] text-accent bg-accent/10 px-2 py-0.5 rounded-md font-medium">
+                            <Bot size={9} />{task.agentRuntime.agentName}
+                          </span>
+                        )}
                         <span className="shrink-0 text-[10px] text-text-tertiary bg-surface-secondary/70 px-2 py-0.5 rounded-md font-medium">
                           {task.schedule.display}
                         </span>

@@ -1,4 +1,5 @@
 import type { PlatformId } from './platform'
+import type { AgentMCPTool, PermissionAction, PermissionRule, WorkspaceRoot } from './agent'
 
 export type ScheduleKind = 'once' | 'interval' | 'cron'
 export type TaskDelivery = 'chat' | 'silent' | PlatformId
@@ -30,6 +31,25 @@ export interface RepeatConfig {
   completed: number
 }
 
+/**
+ * Immutable, secret-free agent configuration captured when a task is created.
+ * Scheduled runs use this snapshot instead of whichever agent happens to be
+ * active later in the desktop UI.
+ */
+export interface TaskAgentRuntime {
+  agentId?: string
+  agentName: string
+  agentSystemPrompt?: string
+  agentSkillsBlock?: string
+  agentModel?: string
+  permissionMode?: PermissionAction
+  permissionRules?: PermissionRule
+  workspaceRoots?: WorkspaceRoot[]
+  agentMcpServers?: string[]
+  agentMcpTools?: AgentMCPTool[]
+  capturedAt: number
+}
+
 export interface ScheduledTask {
   id: string
   name: string
@@ -38,6 +58,8 @@ export interface ScheduledTask {
 
   /** Skill names to load before execution */
   skills: string[]
+  /** Stable agent/Soul/permission/MCP snapshot for background execution */
+  agentRuntime?: TaskAgentRuntime
   /** Task IDs whose latest output is injected as context */
   contextFrom?: string[]
   /** Per-task model/provider overrides */

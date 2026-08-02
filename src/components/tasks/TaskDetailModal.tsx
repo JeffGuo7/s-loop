@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { X, Copy, Check, Clock, FileText } from 'lucide-react';
+import { X, Copy, Check, Clock, FileText, Bot, Sparkles, Link2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTaskStore } from '../../stores';
@@ -58,6 +58,21 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
                 }`}>
                   {t(`tasks.${task.lastStatus || 'pending'}`)}
                 </span>
+                {task.agentRuntime?.agentName && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent bg-accent/10 px-2 py-0.5 rounded-md">
+                    <Bot size={10} />{task.agentRuntime.agentName}
+                  </span>
+                )}
+                {task.skills.length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-text-tertiary">
+                    <Sparkles size={10} />{task.skills.length}
+                  </span>
+                )}
+                {(task.contextFrom?.length || 0) > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-text-tertiary">
+                    <Link2 size={10} />{task.contextFrom?.length}
+                  </span>
+                )}
               </div>
             </div>
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-secondary text-text-tertiary hover:text-text transition-colors shrink-0">
