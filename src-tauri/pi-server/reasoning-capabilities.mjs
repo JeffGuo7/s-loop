@@ -38,6 +38,20 @@ export function describeReasoningCapabilities(model) {
   }
 }
 
+export function describeModel(model) {
+  return {
+    id: model.id,
+    name: model.name || model.id,
+    ...describeReasoningCapabilities(model),
+  }
+}
+
+export function applyThinkingLevel(agent, model, requested = 'medium') {
+  const effective = resolveThinkingLevel(model, requested)
+  if (agent?.state) agent.state.thinkingLevel = effective
+  return effective
+}
+
 function inferThinkingFormat(providerID, baseUrl) {
   const target = `${providerID} ${baseUrl}`.toLowerCase()
   if (target.includes('openrouter')) return 'openrouter'

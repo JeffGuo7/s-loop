@@ -413,7 +413,14 @@ export function SettingsModal({ onClose, initialTab = 'provider' }: SettingsModa
                                   if (!expandedProvider) return
                                   const cfg = localConfigs[expandedProvider]
                                   const list = await import('../../utils/piClient').then(m =>
-                                    m.fetchModels(expandedProvider, cfg?.apiKey, cfg?.baseUrl, provider?.api))
+                                    m.fetchModels(
+                                      expandedProvider,
+                                      cfg?.apiKey,
+                                      cfg?.baseUrl,
+                                      provider?.api,
+                                      cfg?.reasoningSupport,
+                                      cfg?.thinkingFormat,
+                                    ))
                                   if (list.length > 0) {
                                     setProviderModels(prev => ({ ...prev, [expandedProvider]: list.map(m => m.id) }))
                                   }
@@ -534,6 +541,42 @@ export function SettingsModal({ onClose, initialTab = 'provider' }: SettingsModa
                               Supports Vision (Image Input)
                             </span>
                           </div>
+
+                          {provider.isCustom && (
+                            <div className="grid grid-cols-2 gap-4 border-t border-border pt-6">
+                              <div className="space-y-2">
+                                <label className="ml-2 text-[11px] font-black uppercase tracking-[0.2em] text-text-tertiary opacity-60">
+                                  {t('settings.provider.reasoningSupport')}
+                                </label>
+                                <select
+                                  value={cfg.reasoningSupport || 'auto'}
+                                  onChange={(event) => handleConfigChange(expandedProvider, 'reasoningSupport', event.target.value)}
+                                  className="control-field w-full px-4 py-3 text-[13px]"
+                                >
+                                  <option value="auto">{t('settings.provider.reasoningAuto')}</option>
+                                  <option value="enabled">{t('settings.provider.reasoningEnabled')}</option>
+                                  <option value="disabled">{t('settings.provider.reasoningDisabled')}</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="ml-2 text-[11px] font-black uppercase tracking-[0.2em] text-text-tertiary opacity-60">
+                                  {t('settings.provider.thinkingFormat')}
+                                </label>
+                                <select
+                                  value={cfg.thinkingFormat || 'auto'}
+                                  onChange={(event) => handleConfigChange(expandedProvider, 'thinkingFormat', event.target.value)}
+                                  className="control-field w-full px-4 py-3 text-[13px]"
+                                >
+                                  {['auto', 'openai', 'openrouter', 'deepseek', 'qwen', 'together', 'zai'].map((format) => (
+                                    <option key={format} value={format}>{format}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <p className="col-span-2 px-2 text-[11px] leading-relaxed text-text-tertiary">
+                                {t('settings.provider.reasoningCompatibilityHint')}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ) : null}

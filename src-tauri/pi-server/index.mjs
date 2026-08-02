@@ -67,6 +67,13 @@ import {
 import { guardSidecarRequest } from './http-security.mjs'
 import { buildToolSecurityIndex } from './tool-security.mjs'
 import {
+  applyThinkingLevel,
+  describeModel,
+  describeReasoningCapabilities,
+  resolveCustomReasoningConfig,
+  resolveThinkingLevel,
+} from './reasoning-capabilities.mjs'
+import {
   completeApproval,
   consumeApprovedApproval,
   createApprovalRequest,
@@ -120,6 +127,7 @@ const runtimeConfig = {
 function createCustomModel(providerID, modelID, providerConfig = {}) {
   const api = providerConfig.api || 'openai-completions'
   const baseUrl = providerConfig.baseUrl || ''
+  const reasoningConfig = resolveCustomReasoningConfig(providerID, modelID, providerConfig)
   // Custom models can declare vision support via providerConfig.supportsVision
   const supportsVision = providerConfig.supportsVision === true
   return {
@@ -128,12 +136,14 @@ function createCustomModel(providerID, modelID, providerConfig = {}) {
     api,
     provider: providerID,
     baseUrl,
-    reasoning: false,
+    reasoning: reasoningConfig.reasoning,
+    thinkingLevelMap: reasoningConfig.thinkingLevelMap,
     input: supportsVision ? ['text', 'image'] : ['text'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
     contextLength: 128000,
     maxTokens: 4096,
+    ...(reasoningConfig.compat ? { compat: reasoningConfig.compat } : {}),
   }
 }
 
@@ -2190,13 +2200,20 @@ createServer((req, res) => {
       const provider = url.searchParams.get('provider') || 'anthropic'
       const apiKey = url.searchParams.get('apiKey') || ''
       const baseUrl = url.searchParams.get('baseUrl') || ''
+      const providerConfig = {
+        api: url.searchParams.get('api') || undefined,
+        baseUrl,
+        reasoningSupport: url.searchParams.get('reasoningSupport') || 'auto',
+        thinkingFormat: url.searchParams.get('thinkingFormat') || 'auto',
+      }
       let list = []
       try {
-        const builtIn = getModels(provider).map(m => ({ id: m.id, name: m.name }))
+        const builtIn = getModels(provider).map(describeModel)
         if (builtIn.length > 0) {
           list = builtIn
         } else if (baseUrl) {
-          list = await fetchOpenAiCompatibleModels(baseUrl, apiKey)
+          const remoteModels = await fetchOpenAiCompatibleModels(baseUrl, apiKey)
+          list = remoteModels.map(({ id }) => describeModel(createCustomModel(provider, id, providerConfig)))
         }
       } catch { }
       res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -2206,6 +2223,24 @@ createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify([]))
     })
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/model-capabilities') {
+    const provider = url.searchParams.get('provider') || 'anthropic'
+    const modelID = url.searchParams.get('model') || ''
+    const providerConfig = {
+      api: url.searchParams.get('api') || undefined,
+      baseUrl: url.searchParams.get('baseUrl') || '',
+      reasoningSupport: url.searchParams.get('reasoningSupport') || 'auto',
+      thinkingFormat: url.searchParams.get('thinkingFormat') || 'auto',
+    }
+    const model = resolveModel(provider, modelID, providerConfig)
+    const capabilities = model
+      ? describeReasoningCapabilities(model)
+      : describeReasoningCapabilities({ reasoning: false })
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(capabilities))
     return
   }
 
@@ -2364,7 +2399,7 @@ createServer((req, res) => {
             systemPrompt: fullPrompt,
             model,
             tools,
-            thinkingLevel: model.reasoning && thinkingLevel !== 'off' ? (thinkingLevel || 'medium') : 'off',
+            thinkingLevel: resolveThinkingLevel(model, thinkingLevel || 'medium'),
             messages: initialMessages,
           },
           sessionId,
@@ -2472,7 +2507,10 @@ createServer((req, res) => {
       } else {
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
-        if (model) wrapper.agent.state.model = model
+        if (model) {
+          wrapper.agent.state.model = model
+          applyThinkingLevel(wrapper.agent, model, thinkingLevel || 'medium')
+        }
         const baseTools = getTools(workspaceDir || process.cwd(), webSearchConfig)
         const mcpToolDefs = Array.isArray(mcpTools)
           ? mcpTools.map((t) => createMcpToolDefinition(t, wrapper, sessionId))

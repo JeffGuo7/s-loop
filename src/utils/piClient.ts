@@ -105,17 +105,63 @@ interface StreamState {
 
 const _streams = new Map<string, StreamState>()
 
-export async function fetchModels(provider: string, apiKey?: string, baseUrl?: string, api?: string): Promise<Array<{ id: string; name: string }>> {
+export interface ModelInfo {
+  id: string
+  name: string
+  reasoning: boolean
+  supportedThinkingLevels: import('../types').ReasoningLevel[]
+  recommendedThinkingLevel: import('../types').ReasoningLevel
+}
+
+export async function fetchModels(
+  provider: string,
+  apiKey?: string,
+  baseUrl?: string,
+  api?: string,
+  reasoningSupport?: string,
+  thinkingFormat?: string,
+): Promise<ModelInfo[]> {
   try {
     let url = `${_base}/models?provider=${encodeURIComponent(provider)}`
     if (apiKey) url += `&apiKey=${encodeURIComponent(apiKey)}`
     if (baseUrl) url += `&baseUrl=${encodeURIComponent(baseUrl)}`
     if (api) url += `&api=${encodeURIComponent(api)}`
+    if (reasoningSupport) url += `&reasoningSupport=${encodeURIComponent(reasoningSupport)}`
+    if (thinkingFormat) url += `&thinkingFormat=${encodeURIComponent(thinkingFormat)}`
     const res = await fetch(url)
     if (!res.ok) return []
     return await res.json()
   } catch {
     return []
+  }
+}
+
+export async function fetchModelCapabilities(
+  provider: string,
+  modelID: string,
+  config?: {
+    api?: string
+    baseUrl?: string
+    reasoningSupport?: string
+    thinkingFormat?: string
+  },
+): Promise<import('./reasoning').ModelReasoningCapabilities> {
+  const params = new URLSearchParams({ provider, model: modelID })
+  if (config?.api) params.set('api', config.api)
+  if (config?.baseUrl) params.set('baseUrl', config.baseUrl)
+  if (config?.reasoningSupport) params.set('reasoningSupport', config.reasoningSupport)
+  if (config?.thinkingFormat) params.set('thinkingFormat', config.thinkingFormat)
+
+  try {
+    const res = await fetch(`${_base}/model-capabilities?${params}`)
+    if (!res.ok) throw new Error(`Model capability request failed: ${res.status}`)
+    return await res.json()
+  } catch {
+    return {
+      reasoning: false,
+      supportedThinkingLevels: ['off'],
+      recommendedThinkingLevel: 'off',
+    }
   }
 }
 
@@ -203,7 +249,13 @@ export async function prompt(
     permissionMode?: PermissionAction
     permissionRules?: PermissionRule
     providerAPI?: string
-    providerConfig?: { api?: string; baseUrl?: string; supportsVision?: boolean }
+    providerConfig?: {
+      api?: string
+      baseUrl?: string
+      supportsVision?: boolean
+      reasoningSupport?: string
+      thinkingFormat?: string
+    }
     images?: ImageData[]
   },
 ): Promise<PromptResult> {

@@ -10,6 +10,7 @@ import { Cpu, Paperclip, FolderTree, MessagesSquare, ShieldCheck, ShieldAlert, S
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ModelSwitcher } from './ModelSwitcher'
+import { ReasoningLevelSelector } from './ReasoningLevelSelector'
 import { FilePreviewPanel } from '../preview'
 import { SLoopMark } from '../ui'
 import * as Pi from '../../utils/piClient'
@@ -285,6 +286,7 @@ export function ChatView() {
       const effectiveModel = activeAgent?.model
         ? { providerID: activeProvider!, modelID: activeAgent.model }
         : model
+      const reasoningLevel = providerConfig?.reasoningEfforts?.[effectiveModel?.modelID || ''] || 'medium'
 
       startStreaming(sid, 'pending-' + Date.now())
 
@@ -302,7 +304,7 @@ export function ChatView() {
         systemPrompt: agentSystemPrompt,
         providerID: effectiveModel?.providerID,
         modelID: effectiveModel?.modelID,
-        thinkingLevel: 'medium',
+        thinkingLevel: reasoningLevel,
         apiKey: providerConfig?.apiKey,
         workspaceDir: workspaceDir ?? undefined,
         workspaceRoots: activeAgent?.workspaceRoots || [],
@@ -315,6 +317,8 @@ export function ChatView() {
           ...(providerInfo?.api ? { api: providerInfo.api } : {}),
           baseUrl: providerConfig?.baseUrl || '',
           supportsVision: providerConfig?.supportsVision === true,
+          reasoningSupport: providerConfig?.reasoningSupport || 'auto',
+          thinkingFormat: providerConfig?.thinkingFormat || 'auto',
         },
         images,  // pass image data to pi-server
       })
@@ -685,6 +689,14 @@ export function ChatView() {
                   currentModel={providerConfigs[activeProvider]?.model || ''}
                   providerApi={providerList.find(p => p.id === activeProvider)?.api}
                   apiKey={providerConfigs[activeProvider]?.apiKey}
+                  baseUrl={providerConfigs[activeProvider]?.baseUrl}
+                />
+                <ReasoningLevelSelector
+                  providerId={activeProvider!}
+                  modelId={useAgentStore.getState().activeAgentId
+                    ? useAgentStore.getState().agents.find(a => a.id === useAgentStore.getState().activeAgentId)?.model || providerConfigs[activeProvider]?.model || ''
+                    : providerConfigs[activeProvider]?.model || ''}
+                  providerApi={providerList.find(p => p.id === activeProvider)?.api}
                   baseUrl={providerConfigs[activeProvider]?.baseUrl}
                 />
                 <span className="opacity-15 w-px h-4 bg-current mx-1" />
