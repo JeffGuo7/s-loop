@@ -10,6 +10,7 @@ const EXPLORER_TOOLS = new Set(['read', 'grep', 'find', 'ls'])
 
 export const MAX_DELEGATION_DEPTH = 2
 export const MAX_SUBAGENT_TURNS = 20
+export const MAX_SUBAGENT_TOKENS = 100_000
 
 function normalizeMode(value) {
   return Object.hasOwn(MODE_RANK, value) ? value : 'ask'
@@ -94,6 +95,12 @@ export function deriveSubagentAuthority(def, parentConfig = {}, allTools = []) {
     Number(parentConfig.maxSubagentTurns) || MAX_SUBAGENT_TURNS,
   )
   const maxTurns = Math.min(requestedTurns, parentTurns, MAX_SUBAGENT_TURNS)
+  const requestedTokens = Math.max(1_000, Number(def?.maxTokens) || 50_000)
+  const parentTokens = Math.max(
+    1_000,
+    Number(parentConfig.maxSubagentTokens) || MAX_SUBAGENT_TOKENS,
+  )
+  const maxTokens = Math.min(requestedTokens, parentTokens, MAX_SUBAGENT_TOKENS)
 
   const config = {
     ...parentConfig,
@@ -117,6 +124,7 @@ export function deriveSubagentAuthority(def, parentConfig = {}, allTools = []) {
     allowedTools,
     config,
     maxTurns,
+    maxTokens,
     profile: isExplorer ? 'explorer' : 'custom',
   }
 }

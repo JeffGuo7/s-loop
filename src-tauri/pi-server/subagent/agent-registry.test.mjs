@@ -27,6 +27,7 @@ tools:
   - find
 thinkingLevel: off
 maxTurns: 5
+maxTokens: 12000
 permissionMode: allow
 ---
 
@@ -46,6 +47,7 @@ You are a test agent. Do test things.`
       assert.deepEqual(def.tools, ['read', 'grep', 'find'])
       assert.equal(def.thinkingLevel, 'off')
       assert.equal(def.maxTurns, 5)
+      assert.equal(def.maxTokens, 12000)
       assert.equal(def.permissionMode, 'allow')
       assert.ok(def.systemPrompt.includes('# Test Agent'), 'body should be in systemPrompt')
     } finally {

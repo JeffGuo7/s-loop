@@ -16,9 +16,14 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { loadAgentDefinition, formatAgentList } from './agent-registry.mjs'
 import { evaluateToolCall } from '../execution-policy.mjs'
 import { buildToolSecurityIndex } from '../tool-security.mjs'
-import { createToolAuditTracker } from '../audit-store.mjs'
+import { appendAuditEvent, createToolAuditTracker } from '../audit-store.mjs'
 import { deriveSubagentAuthority } from './authority.mjs'
 import { resolveThinkingLevel } from '../reasoning-capabilities.mjs'
+import {
+  beginSubagentRun,
+  completeSubagentRun,
+  updateSubagentRun,
+} from './run-store.mjs'
 
 const MAX_CONCURRENCY = 4
 const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
@@ -53,13 +58,69 @@ export async function runSubagent({
   onToolCallFinished,
   auditContext,
 }) {
+  const tracking = beginSubagentRun({
+    agent: agentName,
+    task,
+    parent: auditContext?.actor || parentConfig.agentId || 'unknown',
+    budget: {
+      maxTurns: Number(parentConfig.maxSubagentTurns) || 20,
+      maxTokens: Number(parentConfig.maxSubagentTokens) || 100_000,
+      timeoutMs: MAX_SUBAGENT_TIMEOUT,
+    },
+  })
+  let effectiveBudget = {
+    maxTurns: Number(parentConfig.maxSubagentTurns) || 20,
+    maxTokens: Number(parentConfig.maxSubagentTokens) || 100_000,
+    timeoutMs: MAX_SUBAGENT_TIMEOUT,
+  }
+  const startedAt = Date.now()
+  const finalize = (result) => {
+    const enriched = {
+      ...result,
+      runId: tracking.runId,
+      durationMs: Date.now() - startedAt,
+      budget: { ...effectiveBudget },
+    }
+    completeSubagentRun(tracking.runId, enriched)
+    appendAuditEvent('subagent.finished', {
+      surface: auditContext?.surface || 'subagent',
+      surfaceId: auditContext?.surfaceId || tracking.runId,
+      runId: tracking.runId,
+      actor: `subagent:${agentName}`,
+      outcome: enriched.exitCode === 0 ? 'completed' : 'failed',
+      details: {
+        parentRunId: auditContext?.runId,
+        stopReason: enriched.stopReason,
+        durationMs: enriched.durationMs,
+        usage: enriched.usage,
+        budget: enriched.budget,
+        errorMessage: enriched.errorMessage,
+      },
+    })
+    onUpdate?.({ type: 'run_end', agentName, runId: tracking.runId, result: enriched })
+    return enriched
+  }
+  appendAuditEvent('subagent.started', {
+    surface: auditContext?.surface || 'subagent',
+    surfaceId: auditContext?.surfaceId || tracking.runId,
+    runId: tracking.runId,
+    actor: `subagent:${agentName}`,
+    outcome: 'running',
+    details: {
+      parentRunId: auditContext?.runId,
+      parent: auditContext?.actor || parentConfig.agentId,
+      budget: effectiveBudget,
+    },
+  })
+  onUpdate?.({ type: 'run_start', agentName, runId: tracking.runId, budget: effectiveBudget })
+
   // 1. Look up agent definition
   const def = loadAgentDefinition(agentName, projectDir)
   if (!def) {
     const { discoverAgents } = await import('./agent-registry.mjs')
     const { agents } = discoverAgents(projectDir)
     const available = formatAgentList(agents)
-    return {
+    return finalize({
       agent: agentName,
       task,
       exitCode: 1,
@@ -67,7 +128,7 @@ export async function runSubagent({
       finalOutput: '',
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
       errorMessage: `Unknown sub-agent: "${agentName}". Available: ${available}`,
-    }
+    })
   }
 
   // 2. Resolve model
@@ -103,7 +164,7 @@ export async function runSubagent({
   try {
     authority = deriveSubagentAuthority(def, parentConfig, allTools)
   } catch (error) {
-    return {
+    return finalize({
       agent: agentName,
       task,
       exitCode: 1,
@@ -112,8 +173,14 @@ export async function runSubagent({
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
       stopReason: 'denied',
       errorMessage: error?.message || String(error),
-    }
+    })
   }
+  effectiveBudget = {
+    maxTurns: authority.maxTurns,
+    maxTokens: authority.maxTokens,
+    timeoutMs: MAX_SUBAGENT_TIMEOUT,
+  }
+  updateSubagentRun(tracking.runId, { budget: effectiveBudget })
   const allowedTools = authority.allowedTools
   const effectiveConfig = {
     ...authority.config,
@@ -168,15 +235,31 @@ export async function runSubagent({
   // 5. Subscribe to events for streaming
   let completedTurns = 0
   let turnLimitReached = false
+  let tokenLimitReached = false
+  const liveUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 }
   agent.subscribe((event) => {
       if (event.type === 'message_end' && event.message?.role === 'assistant') {
         completedTurns += 1
+        liveUsage.turns = completedTurns
+        liveUsage.input += event.message.usage?.input || 0
+        liveUsage.output += event.message.usage?.output || 0
+        liveUsage.cacheRead += event.message.usage?.cacheRead || 0
+        liveUsage.cacheWrite += event.message.usage?.cacheWrite || 0
+        liveUsage.cost += event.message.usage?.cost?.total || 0
+        updateSubagentRun(tracking.runId, { usage: liveUsage })
         if (
           completedTurns >= authority.maxTurns
           && ['toolUse', 'tool_use'].includes(event.message?.stopReason)
         ) {
           turnLimitReached = true
-          try { agent.abort() } catch {}
+          tracking.abort('turn-limit')
+        }
+        if (
+          liveUsage.input + liveUsage.output >= authority.maxTokens
+          && ['toolUse', 'tool_use'].includes(event.message?.stopReason)
+        ) {
+          tokenLimitReached = true
+          tracking.abort('token-limit')
         }
       }
       if (onUpdate) {
@@ -208,37 +291,41 @@ export async function runSubagent({
 
   // 6. Execute with timeout and abortion support
   let aborted = false
+  let abortReason = ''
   let timeoutId
   const cleanup = () => {
     if (timeoutId) clearTimeout(timeoutId)
   }
 
+  const onTrackedAbort = () => {
+    aborted = true
+    abortReason = String(tracking.signal.reason || 'cancelled')
+    try { agent.abort() } catch {}
+    cleanup()
+  }
+  tracking.signal.addEventListener('abort', onTrackedAbort, { once: true })
+
   if (signal) {
-    const onAbort = () => {
-      aborted = true
-      try { agent.abort() } catch {}
-      cleanup()
-    }
+    const onParentAbort = () => tracking.abort('parent-aborted')
     if (signal.aborted) {
-      onAbort()
-      return {
+      onParentAbort()
+      return finalize({
         agent: agentName,
         task,
         exitCode: 1,
         messages: [],
         finalOutput: '',
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
-        stopReason: 'aborted',
+        stopReason: 'cancelled',
         errorMessage: 'Sub-agent was aborted before starting',
-      }
+      })
     }
-    signal.addEventListener('abort', onAbort, { once: true })
+    signal.addEventListener('abort', onParentAbort, { once: true })
   }
 
   try {
     // Run with turn limit via prepareNextTurn hook-like tracking
     // pi's Agent doesn't have a built-in maxTurns, so we track manually
-    const startTime = Date.now()
     const results = {
       agent: agentName,
       task,
@@ -252,28 +339,51 @@ export async function runSubagent({
     const promptPromise = agent.prompt(task)
 
     timeoutId = setTimeout(() => {
-      aborted = true
-      try { agent.abort() } catch {}
+      tracking.abort('timeout')
     }, MAX_SUBAGENT_TIMEOUT)
 
     await promptPromise
     cleanup()
 
     if (aborted) {
-      return {
+      const stopReason = abortReason === 'timeout'
+        ? 'timeout'
+        : abortReason === 'turn-limit'
+          ? 'turn-limit'
+          : abortReason === 'token-limit'
+            ? 'token-limit'
+            : 'cancelled'
+      return finalize({
         ...results,
         exitCode: 1,
-        stopReason: 'timeout',
-        errorMessage: `Sub-agent timed out after ${MAX_SUBAGENT_TIMEOUT / 1000}s`,
-      }
+        stopReason,
+        usage: { ...liveUsage },
+        errorMessage: stopReason === 'timeout'
+          ? `Sub-agent timed out after ${MAX_SUBAGENT_TIMEOUT / 1000}s`
+          : stopReason === 'turn-limit'
+            ? `Sub-agent reached its ${authority.maxTurns}-turn authority budget`
+            : stopReason === 'token-limit'
+              ? `Sub-agent reached its ${authority.maxTokens}-token authority budget`
+              : 'Sub-agent was cancelled',
+      })
     }
     if (turnLimitReached) {
-      return {
+      return finalize({
         ...results,
         exitCode: 1,
         stopReason: 'turn-limit',
+        usage: { ...liveUsage },
         errorMessage: `Sub-agent reached its ${authority.maxTurns}-turn authority budget`,
-      }
+      })
+    }
+    if (tokenLimitReached || liveUsage.input + liveUsage.output > authority.maxTokens) {
+      return finalize({
+        ...results,
+        exitCode: 1,
+        stopReason: 'token-limit',
+        usage: { ...liveUsage },
+        errorMessage: `Sub-agent reached its ${authority.maxTokens}-token authority budget`,
+      })
     }
 
     // 7. Collect results
@@ -310,19 +420,29 @@ export async function runSubagent({
       results.finalOutput = `Error: ${results.errorMessage}`
     }
 
-    return results
+    return finalize(results)
   } catch (err) {
     cleanup()
-    return {
+    const wasCancelled = aborted
+    const stopReason = wasCancelled
+      ? abortReason === 'timeout'
+        ? 'timeout'
+        : abortReason === 'turn-limit'
+          ? 'turn-limit'
+          : abortReason === 'token-limit'
+            ? 'token-limit'
+            : 'cancelled'
+      : 'error'
+    return finalize({
       agent: agentName,
       task,
       exitCode: 1,
       messages: [],
       finalOutput: '',
-      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
-      stopReason: 'error',
-      errorMessage: err.message || String(err),
-    }
+      usage: { ...liveUsage },
+      stopReason,
+      errorMessage: wasCancelled ? `Sub-agent stopped: ${stopReason}` : err.message || String(err),
+    })
   }
 }
 

@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Bot, Plus, Trash2, Save, X } from 'lucide-react'
-import { fetchSubagents, saveSubagent, deleteSubagent, type SubagentInfo } from '../../utils/piClient'
+import { Bot, Plus, Trash2, Save, X, RefreshCw, Square } from 'lucide-react'
+import {
+  cancelSubagentRun,
+  deleteSubagent,
+  fetchSubagentRuns,
+  fetchSubagents,
+  saveSubagent,
+  type SubagentInfo,
+  type SubagentRunInfo,
+} from '../../utils/piClient'
 import { Card } from '../ui'
 
 const BUILTIN_TOOLS = [
@@ -22,6 +30,7 @@ interface SubagentEditorProps {
 
 export function SubagentEditor({ projectDir }: SubagentEditorProps) {
   const [agents, setAgents] = useState<SubagentInfo[]>([])
+  const [runs, setRuns] = useState<SubagentRunInfo[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -34,6 +43,7 @@ export function SubagentEditor({ projectDir }: SubagentEditorProps) {
   const [formTools, setFormTools] = useState<string[]>([])
   const [formThinkingLevel, setFormThinkingLevel] = useState('off')
   const [formMaxTurns, setFormMaxTurns] = useState(10)
+  const [formMaxTokens, setFormMaxTokens] = useState(50_000)
   const [formPermissionMode, setFormPermissionMode] = useState('allow')
   const [formSystemPrompt, setFormSystemPrompt] = useState('')
   const [formSource, setFormSource] = useState<'builtin' | 'user'>('user')
@@ -47,6 +57,16 @@ export function SubagentEditor({ projectDir }: SubagentEditorProps) {
     loadAgents()
   }, [loadAgents])
 
+  const loadRuns = useCallback(async () => {
+    setRuns(await fetchSubagentRuns(12))
+  }, [])
+
+  useEffect(() => {
+    void loadRuns()
+    const interval = window.setInterval(() => void loadRuns(), 3000)
+    return () => window.clearInterval(interval)
+  }, [loadRuns])
+
   const resetForm = () => {
     setFormName('')
     setFormDescription('')
@@ -54,6 +74,7 @@ export function SubagentEditor({ projectDir }: SubagentEditorProps) {
     setFormTools([])
     setFormThinkingLevel('off')
     setFormMaxTurns(10)
+    setFormMaxTokens(50_000)
     setFormPermissionMode('allow')
     setFormSystemPrompt('')
     setFormSource('user')
@@ -82,6 +103,7 @@ export function SubagentEditor({ projectDir }: SubagentEditorProps) {
         tools: formTools,
         thinkingLevel: formThinkingLevel,
         maxTurns: formMaxTurns,
+        maxTokens: formMaxTokens,
         permissionMode: formPermissionMode,
         systemPrompt: formSystemPrompt.trim(),
         projectDir,
@@ -126,6 +148,53 @@ export function SubagentEditor({ projectDir }: SubagentEditorProps) {
         >
           <Plus size={14} />
         </button>
+      </div>
+
+      {/* Recent run control plane */}
+      <div className="rounded-xl border border-border-light bg-surface-secondary/25 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[9px] font-black uppercase tracking-wider text-text-tertiary">Recent runs</span>
+          <button type="button" onClick={() => void loadRuns()} className="rounded-md p-1 text-text-quaternary hover:bg-surface-secondary hover:text-accent" title="Refresh runs">
+            <RefreshCw size={10} />
+          </button>
+        </div>
+        {runs.length === 0 ? (
+          <p className="py-3 text-center text-[9px] text-text-quaternary">No sub-agent runs yet.</p>
+        ) : (
+          <div className="mt-1.5 space-y-1">
+            {runs.slice(0, 6).map((run) => {
+              const tokens = run.usage.input + run.usage.output
+              const active = run.status === 'running' || run.status === 'cancelling'
+              return (
+                <div key={run.runId} className="flex items-start gap-2 rounded-lg bg-surface px-2 py-1.5">
+                  <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-accent animate-pulse' : run.status === 'completed' ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-[10px] font-bold text-text-secondary">{run.agent}</span>
+                      <span className="text-[8px] uppercase text-text-quaternary">{run.status}</span>
+                    </div>
+                    <p className="truncate text-[9px] text-text-quaternary">{run.task}</p>
+                    <p className="mt-0.5 text-[8px] font-mono text-text-quaternary">
+                      {run.usage.turns}/{run.budget.maxTurns} turns · {tokens.toLocaleString()}/{run.budget.maxTokens.toLocaleString()} tokens
+                      {run.durationMs !== undefined && ` · ${(run.durationMs / 1000).toFixed(1)}s`}
+                    </p>
+                    {run.errorMessage && <p className="mt-0.5 truncate text-[8px] text-red-500">{run.stopReason}: {run.errorMessage}</p>}
+                  </div>
+                  {active && (
+                    <button
+                      type="button"
+                      onClick={async () => { await cancelSubagentRun(run.runId); await loadRuns() }}
+                      className="rounded-md p-1 text-red-500 hover:bg-red-500/10"
+                      title="Cancel run"
+                    >
+                      <Square size={9} fill="currentColor" />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Agent list */}
@@ -224,7 +293,7 @@ export function SubagentEditor({ projectDir }: SubagentEditorProps) {
           </div>
 
           {/* Settings row */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[9px] font-bold uppercase tracking-wider text-text-tertiary">Thinking</label>
               <select
@@ -246,6 +315,18 @@ export function SubagentEditor({ projectDir }: SubagentEditorProps) {
                 onChange={(e) => setFormMaxTurns(parseInt(e.target.value, 10) || 10)}
                 min={1}
                 max={50}
+                className="w-full mt-0.5 px-2 py-1 text-xs rounded-md bg-surface border border-black/[0.06] dark:border-white/[0.06] focus:outline-none focus:ring-1 focus:ring-accent text-text"
+              />
+            </div>
+            <div>
+              <label className="text-[9px] font-bold uppercase tracking-wider text-text-tertiary">Token Budget</label>
+              <input
+                type="number"
+                value={formMaxTokens}
+                onChange={(e) => setFormMaxTokens(parseInt(e.target.value, 10) || 50_000)}
+                min={1000}
+                max={100000}
+                step={1000}
                 className="w-full mt-0.5 px-2 py-1 text-xs rounded-md bg-surface border border-black/[0.06] dark:border-white/[0.06] focus:outline-none focus:ring-1 focus:ring-accent text-text"
               />
             </div>

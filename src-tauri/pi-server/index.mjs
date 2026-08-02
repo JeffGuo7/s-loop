@@ -52,6 +52,7 @@ import {
 import { withRetry } from './retry.js'
 import { discoverAgents, formatAgentList, loadAgentDefinition } from './subagent/agent-registry.mjs'
 import { runSubagent, runParallel, runChain } from './subagent/index.mjs'
+import { cancelSubagentRun, listSubagentRuns } from './subagent/run-store.mjs'
 import { initGoalPersistence, loadGoals, getGoal, createGoal, updateGoal, deleteGoal, saveGoalRunOutput } from './goal-loop/persistence.mjs'
 import { runGoalLoop } from './goal-loop/index.mjs'
 import { createGoalApprovalCoordinator } from './goal-loop/approval.mjs'
@@ -371,11 +372,15 @@ function createDelegateTaskTool({ runtimeConfig, resolveModel, getTools, project
           },
         ],
         details: {
+          runId: result.runId,
           agent: result.agent,
           exitCode: result.exitCode,
           usage: result.usage,
+          budget: result.budget,
+          durationMs: result.durationMs,
           model: result.model,
           stopReason: result.stopReason,
+          errorMessage: result.errorMessage,
         },
         isError,
       }
@@ -537,6 +542,7 @@ function getSubagentList(projectDir) {
     tools: a.tools,
     source: a.source,
     maxTurns: a.maxTurns,
+    maxTokens: a.maxTokens,
     thinkingLevel: a.thinkingLevel,
     permissionMode: a.permissionMode,
     systemPromptPreview: a.systemPrompt.slice(0, 200),
@@ -2235,6 +2241,21 @@ createServer((req, res) => {
     return
   }
 
+  if (req.method === 'GET' && url.pathname === '/subagents/runs') {
+    const limit = Number(url.searchParams.get('limit')) || 50
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(listSubagentRuns(limit)))
+    return
+  }
+
+  const subagentCancelMatch = url.pathname.match(/^\/subagents\/runs\/([^/]+)\/cancel$/)
+  if (req.method === 'POST' && subagentCancelMatch) {
+    const cancelled = cancelSubagentRun(decodeURIComponent(subagentCancelMatch[1]))
+    res.writeHead(cancelled ? 200 : 409, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: cancelled }))
+    return
+  }
+
   // POST /subagents/:name — create or update a user sub-agent .md file
   const subagentSaveMatch = url.pathname.match(/^\/subagents\/([^/]+)$/)
   if (req.method === 'POST' && subagentSaveMatch) {
@@ -2257,6 +2278,7 @@ createServer((req, res) => {
           ...(data.tools || []).map((t) => `  - ${t}`),
           data.thinkingLevel ? `thinkingLevel: ${data.thinkingLevel}` : '',
           data.maxTurns ? `maxTurns: ${data.maxTurns}` : '',
+          data.maxTokens ? `maxTokens: ${data.maxTokens}` : '',
           data.permissionMode ? `permissionMode: ${data.permissionMode}` : '',
           '---',
         ].filter((l) => l !== '').join('\n')

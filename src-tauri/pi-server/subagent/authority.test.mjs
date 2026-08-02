@@ -24,12 +24,14 @@ test('child mode and rules can only reduce parent authority', () => {
       ['write', {}],
     ]),
     maxSubagentTurns: 8,
+    maxSubagentTokens: 12_000,
   }, tools)
 
   assert.equal(authority.config.permissionMode, 'ask')
   assert.equal(authority.config.permissionRules.write, 'ask')
   assert.deepEqual(authority.allowedTools.map((tool) => tool.name), ['read', 'write'])
   assert.equal(authority.maxTurns, 8)
+  assert.equal(authority.maxTokens, 12_000)
 })
 
 test('empty tool requests grant no tools and parent tool set is an upper bound', () => {

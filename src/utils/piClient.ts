@@ -466,6 +466,7 @@ export interface SubagentInfo {
   tools: string[]
   source: 'builtin' | 'user'
   maxTurns: number
+  maxTokens: number
   thinkingLevel: string
   permissionMode: string
   systemPromptPreview: string
@@ -491,6 +492,7 @@ export async function saveSubagent(
     tools?: string[]
     thinkingLevel?: string
     maxTurns?: number
+    maxTokens?: number
     permissionMode?: string
     systemPrompt?: string
     projectDir?: string
@@ -565,6 +567,39 @@ export interface GoalStep {
     usage: { input: number; output: number; cost: number; turns: number }
     stopReason?: string
     errorMessage?: string
+  }
+}
+
+export interface SubagentRunInfo {
+  runId: string
+  agent: string
+  task: string
+  parent: string
+  status: 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled'
+  stopReason?: string
+  errorMessage?: string
+  startedAt: number
+  finishedAt?: number
+  durationMs?: number
+  budget: { maxTurns: number; maxTokens: number; timeoutMs: number }
+  usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number; turns: number }
+}
+
+export async function fetchSubagentRuns(limit = 20): Promise<SubagentRunInfo[]> {
+  try {
+    const res = await fetch(`${_base}/subagents/runs?limit=${limit}`)
+    return res.ok ? await res.json() : []
+  } catch {
+    return []
+  }
+}
+
+export async function cancelSubagentRun(runId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${_base}/subagents/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' })
+    return res.ok
+  } catch {
+    return false
   }
 }
 

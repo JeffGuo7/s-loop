@@ -16,7 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /**
  * Minimal YAML frontmatter parser — handles the subset we need:
- * name, description, model, tools (list), thinkingLevel, maxTurns, permissionMode
+ * name, description, model, tools (list), thinkingLevel, maxTurns, maxTokens, permissionMode
  */
 function parseFrontmatter(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/)
@@ -88,6 +88,7 @@ function parseAgentMarkdown(filePath) {
     tools: Array.isArray(frontmatter.tools) ? frontmatter.tools : [],
     thinkingLevel: frontmatter.thinkingLevel || 'off',
     maxTurns: parseInt(frontmatter.maxTurns, 10) || 10,
+    maxTokens: parseInt(frontmatter.maxTokens, 10) || 50_000,
     permissionMode: ['allow', 'ask', 'deny'].includes(frontmatter.permissionMode)
       ? frontmatter.permissionMode
       : 'ask',
