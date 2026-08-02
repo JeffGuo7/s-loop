@@ -460,3 +460,29 @@ fn fill_output<T: Copy>(
     drop(queued);
     playback_reference.publish(sample_rate, &played);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::KokoroSpeaker;
+
+    #[test]
+    fn accepts_every_chinese_speaker_from_the_bundled_model() {
+        let ids: Vec<i32> = (45..=52)
+            .map(|id| KokoroSpeaker::try_from(id).expect("Chinese speaker should be valid").id())
+            .collect();
+
+        assert_eq!(ids, vec![45, 46, 47, 48, 49, 50, 51, 52]);
+    }
+
+    #[test]
+    fn rejects_non_chinese_or_unknown_speakers() {
+        assert!(KokoroSpeaker::try_from(0).is_err());
+        assert!(KokoroSpeaker::try_from(44).is_err());
+        assert!(KokoroSpeaker::try_from(53).is_err());
+    }
+
+    #[test]
+    fn defaults_to_xiaoxiao() {
+        assert_eq!(KokoroSpeaker::default().id(), 47);
+    }
+}
