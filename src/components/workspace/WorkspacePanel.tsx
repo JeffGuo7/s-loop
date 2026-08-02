@@ -10,6 +10,7 @@ import { useAgentStore, useAppStore } from '../../stores'
 import { useMCPStore } from '../../stores/mcpStore'
 import { useSkillStore } from '../../stores/skillStore'
 import { SubagentEditor } from '../skills/SubagentEditor'
+import { AgentMemoryManager } from './AgentMemoryManager'
 
 export function WorkspacePanel() {
   const { t } = useTranslation()
@@ -607,13 +608,7 @@ export function WorkspacePanel() {
                             rows={4}
                             className="w-full resize-none rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] text-text-secondary outline-none transition-all focus:border-accent/30"
                           />
-                          <textarea
-                            value={activeAgent.memory}
-                            onChange={(e) => updateAgent(activeAgent.id, { memory: e.target.value })}
-                            placeholder={t('agentStudio.advanced.memoryPlaceholder')}
-                            rows={4}
-                            className="w-full resize-none rounded-2xl border border-border-light bg-surface-secondary/55 px-3 py-3 text-[12px] text-text-secondary outline-none transition-all focus:border-accent/30"
-                          />
+                          <AgentMemoryManager agent={activeAgent} workspaceDir={workspaceDir ?? undefined} />
                           <select
                             value={activeAgent.conversationMode}
                             onChange={(e) => updateAgent(activeAgent.id, { conversationMode: e.target.value as 'work' | 'natural' | 'companion' })}

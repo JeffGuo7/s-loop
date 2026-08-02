@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { AgentConversationMode } from '../types/agent'
+import type { AgentConversationMode, AgentMemoryEntry } from '../types/agent'
 import type { KokoroSpeakerId } from '../config/kokoroVoices'
 
 export interface PersistedAgentProfile {
@@ -10,6 +10,7 @@ export interface PersistedAgentProfile {
   soul: string
   rules: string
   memory: string
+  memories?: AgentMemoryEntry[]
   conversationMode: AgentConversationMode
 }
 
@@ -26,7 +27,12 @@ export async function syncAgentProfileFiles(
           identity: agent.identity,
           soul: agent.soul,
           rules: agent.rules,
-          memory: agent.memory,
+          memory: [
+            agent.memory.trim(),
+            ...(agent.memories || [])
+              .filter((memory) => memory.status === 'approved' && memory.scope === 'agent')
+              .map((memory) => `- ${memory.content}`),
+          ].filter(Boolean).join('\n'),
           userProfile,
           speakerId,
           conversationMode: agent.conversationMode,

@@ -1,4 +1,5 @@
 import { useAgentStore } from '../stores/agentStore'
+import { useAppStore } from '../stores/appStore'
 import { useSkillStore } from '../stores/skillStore'
 import type { Agent, AgentMCPTool, WorkspaceRoot } from '../types/agent'
 import type { SkillInfo } from '../types/skill'
@@ -52,6 +53,7 @@ export function buildAgentRuntimeSnapshot(
   availableSkills: SkillInfo[],
   userProfile: string,
   selectedSkillNames?: string[],
+  workspaceDir?: string,
 ): TaskAgentRuntime {
   const skillNames = selectedSkillNames ?? (agent
     ? agent.skills
@@ -64,7 +66,7 @@ export function buildAgentRuntimeSnapshot(
     agentId: agent?.id,
     agentName: agent?.name || 'Default Assistant',
     agentSystemPrompt: agent
-      ? assembleAgentSystemPrompt(agent, { userProfile })
+      ? assembleAgentSystemPrompt(agent, { userProfile, workspaceDir })
       : undefined,
     agentSkillsBlock: formatAgentSkillsBlock(enabledSkills),
     agentModel: agent?.model || undefined,
@@ -88,6 +90,8 @@ export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
     activeAgent || null,
     skillStore.skills,
     agentStore.userProfile,
+    undefined,
+    useAppStore.getState().workspaceDir || undefined,
   )
 
   return {

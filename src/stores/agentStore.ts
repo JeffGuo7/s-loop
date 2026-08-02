@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Agent, AgentStore } from '../types/agent'
+import type { Agent, AgentMemoryEntry, AgentStore } from '../types/agent'
 import {
   createWorkspaceRoot,
   migrateAgentStoreState,
@@ -14,6 +14,10 @@ import {
 
 function generateId(): string {
   return `agent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+}
+
+function generateMemoryId(): string {
+  return `memory_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 }
 
 const DEFAULT_AVATARS = ['🤖', '🧠', '⚡', '🦾', '🎯', '🔮', '💡', '🚀']
@@ -115,6 +119,7 @@ export const useAgentStore = create<AgentStore>()(
           id: generateId(),
           name: `${source.name} (copy)`,
           workspaceRoots: source.workspaceRoots.map((root) => ({ ...root })),
+          memories: source.memories.map((memory) => ({ ...memory })),
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }
@@ -126,6 +131,53 @@ export const useAgentStore = create<AgentStore>()(
       },
 
       updateUserProfile: (userProfile) => set({ userProfile }),
+
+      addMemoryCandidate: (agentId, content, scope, workspacePath, source = 'manual') => {
+        const normalizedContent = content.trim()
+        if (!normalizedContent) return null
+        if (scope === 'workspace' && !workspacePath?.trim()) return null
+        const memory: AgentMemoryEntry = {
+          id: generateMemoryId(),
+          content: normalizedContent,
+          scope,
+          workspacePath: scope === 'workspace' ? workspacePath?.trim() : undefined,
+          status: 'candidate',
+          source,
+          createdAt: Date.now(),
+        }
+        set((state) => ({
+          agents: state.agents.map((agent) => agent.id === agentId
+            ? { ...agent, memories: [...agent.memories, memory], updatedAt: Date.now() }
+            : agent),
+        }))
+        return memory
+      },
+
+      reviewMemory: (agentId, memoryId, status) => {
+        set((state) => ({
+          agents: state.agents.map((agent) => agent.id === agentId
+            ? {
+                ...agent,
+                memories: agent.memories.map((memory) => memory.id === memoryId
+                  ? { ...memory, status, reviewedAt: Date.now() }
+                  : memory),
+                updatedAt: Date.now(),
+              }
+            : agent),
+        }))
+      },
+
+      removeMemory: (agentId, memoryId) => {
+        set((state) => ({
+          agents: state.agents.map((agent) => agent.id === agentId
+            ? {
+                ...agent,
+                memories: agent.memories.filter((memory) => memory.id !== memoryId),
+                updatedAt: Date.now(),
+              }
+            : agent),
+        }))
+      },
 
       addSkillToAgent: (agentId, skillName) => {
         set((state) => ({
@@ -255,7 +307,7 @@ export const useAgentStore = create<AgentStore>()(
     }),
     {
       name: 'snotra-agents',
-      version: 2,
+      version: 3,
       migrate: (persisted) =>
         migrateAgentProfileState(migrateAgentStoreState(persisted)),
       partialize: (state) => ({

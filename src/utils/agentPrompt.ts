@@ -1,10 +1,11 @@
-import type { Agent, AgentConversationMode } from '../types/agent'
+import type { Agent, AgentConversationMode, AgentMemoryEntry } from '../types/agent'
 
 export interface AgentProfileFields {
   identity: string
   soul: string
   rules: string
   memory: string
+  memories: AgentMemoryEntry[]
   conversationMode: AgentConversationMode
 }
 
@@ -22,6 +23,7 @@ export function createAgentProfile(name: string, description = ''): AgentProfile
     soul: DEFAULT_SOUL,
     rules: '',
     memory: '',
+    memories: [],
     conversationMode: 'natural',
   }
 }
@@ -38,6 +40,29 @@ export function migrateAgentProfile<T extends Record<string, unknown>>(
     agent.conversationMode === 'companion'
       ? agent.conversationMode
       : defaults.conversationMode
+  const memories = Array.isArray(agent.memories)
+    ? agent.memories.flatMap((value) => {
+        if (!value || typeof value !== 'object') return []
+        const memory = value as Partial<AgentMemoryEntry>
+        if (typeof memory.id !== 'string' || typeof memory.content !== 'string' || !memory.content.trim()) return []
+        const status = memory.status === 'approved' || memory.status === 'rejected'
+          ? memory.status
+          : 'candidate'
+        const scope = memory.scope === 'workspace' ? 'workspace' : 'agent'
+        return [{
+          id: memory.id,
+          content: memory.content.trim(),
+          scope,
+          workspacePath: scope === 'workspace' && typeof memory.workspacePath === 'string'
+            ? memory.workspacePath
+            : undefined,
+          status,
+          source: memory.source === 'conversation' ? 'conversation' : 'manual',
+          createdAt: Number.isFinite(memory.createdAt) ? Number(memory.createdAt) : Date.now(),
+          reviewedAt: Number.isFinite(memory.reviewedAt) ? Number(memory.reviewedAt) : undefined,
+        } satisfies AgentMemoryEntry]
+      })
+    : defaults.memories
 
   return {
     ...agent,
@@ -51,6 +76,7 @@ export function migrateAgentProfile<T extends Record<string, unknown>>(
         ? agent.instructions
         : defaults.rules,
     memory: typeof agent.memory === 'string' ? agent.memory : defaults.memory,
+    memories,
     conversationMode,
   }
 }
@@ -78,12 +104,29 @@ const MODE_PROMPTS: Record<AgentConversationMode, string> = {
 
 type PromptAgent = Pick<
   Agent,
-  'name' | 'description' | 'identity' | 'soul' | 'rules' | 'memory' | 'conversationMode'
+  'name' | 'description' | 'identity' | 'soul' | 'rules' | 'memory' | 'memories' | 'conversationMode'
 >
+
+function normalizeScopePath(value?: string): string {
+  return (value || '').trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+}
+
+export function selectReviewedMemories(
+  agent: Pick<Agent, 'memories'>,
+  workspaceDir?: string,
+): AgentMemoryEntry[] {
+  const activeWorkspace = normalizeScopePath(workspaceDir)
+  return (agent.memories || []).filter((memory) => {
+    if (memory.status !== 'approved') return false
+    if (memory.scope === 'agent') return true
+    const memoryWorkspace = normalizeScopePath(memory.workspacePath)
+    return Boolean(activeWorkspace && memoryWorkspace && activeWorkspace === memoryWorkspace)
+  })
+}
 
 export function assembleAgentSystemPrompt(
   agent: PromptAgent,
-  options: { userProfile?: string; voice?: boolean } = {},
+  options: { userProfile?: string; voice?: boolean; workspaceDir?: string } = {},
 ): string {
   const profile = migrateAgentProfile(agent as unknown as Record<string, unknown>)
   const sections = [
@@ -94,7 +137,11 @@ export function assembleAgentSystemPrompt(
   sections.push(`## Identity\n${profile.identity.trim()}`)
   sections.push(`## Soul\n${profile.soul.trim()}`)
   if (options.userProfile?.trim()) sections.push(`## User\n${options.userProfile.trim()}`)
-  if (profile.memory.trim()) sections.push(`## Reviewed Memory\n${profile.memory.trim()}`)
+  const reviewedMemory = [
+    profile.memory.trim(),
+    ...selectReviewedMemories(profile, options.workspaceDir).map((memory) => `- ${memory.content}`),
+  ].filter(Boolean)
+  if (reviewedMemory.length > 0) sections.push(`## Reviewed Memory\n${reviewedMemory.join('\n')}`)
   sections.push(`## Conversation Mode\n${MODE_PROMPTS[profile.conversationMode]}`)
 
   if (options.voice) {

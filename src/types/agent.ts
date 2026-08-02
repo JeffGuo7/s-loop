@@ -28,6 +28,19 @@ export interface SlashCommand {
 export type WorkspaceAccess = 'read' | 'read-write'
 export type WorkspaceRootSource = 'workspace' | 'user-grant' | 'task'
 export type AgentConversationMode = 'work' | 'natural' | 'companion'
+export type AgentMemoryScope = 'agent' | 'workspace'
+export type AgentMemoryStatus = 'candidate' | 'approved' | 'rejected'
+
+export interface AgentMemoryEntry {
+  id: string
+  content: string
+  scope: AgentMemoryScope
+  workspacePath?: string
+  status: AgentMemoryStatus
+  source: 'manual' | 'conversation'
+  createdAt: number
+  reviewedAt?: number
+}
 
 export interface WorkspaceRoot {
   id: string
@@ -47,6 +60,7 @@ export interface Agent {
   soul: string
   rules: string
   memory: string
+  memories: AgentMemoryEntry[]
   conversationMode: AgentConversationMode
   model: string
   skills: string[]
@@ -71,6 +85,15 @@ export interface AgentStore {
   setActiveAgent: (id: string) => void
   duplicateAgent: (id: string) => Agent
   updateUserProfile: (profile: string) => void
+  addMemoryCandidate: (
+    agentId: string,
+    content: string,
+    scope: AgentMemoryScope,
+    workspacePath?: string,
+    source?: AgentMemoryEntry['source'],
+  ) => AgentMemoryEntry | null
+  reviewMemory: (agentId: string, memoryId: string, status: Exclude<AgentMemoryStatus, 'candidate'>) => void
+  removeMemory: (agentId: string, memoryId: string) => void
 
   addSkillToAgent: (agentId: string, skillName: string) => void
   removeSkillFromAgent: (agentId: string, skillName: string) => void

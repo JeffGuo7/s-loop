@@ -296,9 +296,10 @@ export function ChatView() {
       const agentSystemPrompt = assembleAgentRuntimePrompt(
         activeAgent
           ? assembleAgentSystemPrompt(activeAgent, {
-              userProfile: agentStore.userProfile,
-              voice: getVoiceConversation().active,
-            })
+            userProfile: agentStore.userProfile,
+            voice: getVoiceConversation().active,
+            workspaceDir: workspaceDir ?? undefined,
+          })
           : undefined,
         agentSkillsBlock,
       )
