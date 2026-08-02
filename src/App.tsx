@@ -29,7 +29,7 @@ const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const APP_STORAGE_KEY = 'snotra-storage'
 
 function App() {
-  const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, workspaceDir, kokoroSpeakerId } = useAppStore()
+  const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, providerList, workspaceDir, kokoroSpeakerId } = useAppStore()
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
   const agents = useAgentStore((s) => s.agents)
   const userProfile = useAgentStore((s) => s.userProfile)
@@ -140,15 +140,21 @@ function App() {
       modelID: config.model,
       apiKey: config.apiKey,
       workspaceDir: workspaceDir ?? undefined,
+      thinkingLevel: config.reasoningEfforts?.[config.model] || 'medium',
       providerConfig: {
+        api: providerList.find((provider) => provider.id === activeProvider)?.api,
+        baseUrl: config.baseUrl,
         supportsVision: config.supportsVision === true,
+        reasoningEfforts: config.reasoningEfforts,
+        reasoningSupport: config.reasoningSupport || 'auto',
+        thinkingFormat: config.thinkingFormat || 'auto',
       },
       webSearchConfig: useWebSearchStore.getState().getActiveConfig() as unknown as Record<string, unknown>,
       ...buildAgentRuntimeConfig(),
     }).catch((err) => {
       console.warn('[app] failed to sync runtime config:', err)
     })
-  }, [activeProvider, providerConfigs, workspaceDir, activeAgentId, agents, skills])
+  }, [activeProvider, providerConfigs, providerList, workspaceDir, activeAgentId, agents, skills])
 
   useEffect(() => {
     if (!inTauri) return

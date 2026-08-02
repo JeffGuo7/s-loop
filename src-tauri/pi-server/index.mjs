@@ -1376,6 +1376,7 @@ createServer((req, res) => {
       runtimeConfig.modelID = data.modelID || runtimeConfig.modelID
       runtimeConfig.apiKey = data.apiKey ?? runtimeConfig.apiKey
       runtimeConfig.workspaceDir = data.workspaceDir || undefined
+      runtimeConfig.thinkingLevel = data.thinkingLevel || runtimeConfig.thinkingLevel
       if (data.providerConfig) runtimeConfig.providerConfig = data.providerConfig
       if (data.webSearchConfig) runtimeConfig.webSearchConfig = data.webSearchConfig
       // Active-agent config for autonomous flows (platform replies, cron)
@@ -2385,9 +2386,9 @@ createServer((req, res) => {
           ? mcpTools.map((t) => createMcpToolDefinition(t, wrapper, sessionId))
           : []
         const tools = [...baseTools, ...mcpToolDefs,
-          createDelegateTaskTool({ runtimeConfig: { ...runtimeConfig, apiKey }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
-          createDelegateParallelTool({ runtimeConfig: { ...runtimeConfig, apiKey }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
-          createDelegateChainTool({ runtimeConfig: { ...runtimeConfig, apiKey }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
+          createDelegateTaskTool({ runtimeConfig: { ...runtimeConfig, providerID: provider, modelID: modelId, apiKey, thinkingLevel, providerConfig: effectiveProviderConfig }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
+          createDelegateParallelTool({ runtimeConfig: { ...runtimeConfig, providerID: provider, modelID: modelId, apiKey, thinkingLevel, providerConfig: effectiveProviderConfig }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
+          createDelegateChainTool({ runtimeConfig: { ...runtimeConfig, providerID: provider, modelID: modelId, apiKey, thinkingLevel, providerConfig: effectiveProviderConfig }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
         ]
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt

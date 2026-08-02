@@ -21,6 +21,11 @@ import { createSessionRepo, findSession } from './session-store.mjs'
 import { getAdapter } from './platforms/registry.mjs'
 import { authorizeInbound } from './platforms/access-control.mjs'
 import { recordPlatformInbound, recordPlatformOutbound } from './telegram-chat-sync.mjs'
+import {
+  getConfiguredThinkingLevel,
+  resolveCustomReasoningConfig,
+  resolveThinkingLevel,
+} from './reasoning-capabilities.mjs'
 
 // ─── Session tracking ─────────────────────────────────────
 // Map: platformId:conversationId → piSessionId
@@ -89,14 +94,18 @@ export async function autoReply(msg, platform, runtimeConfig) {
     const providerConfig = runtimeConfig.providerConfig || {}
     let model = getModel(providerID, modelID)
     if (!model) {
+      const reasoningConfig = resolveCustomReasoningConfig(providerID, modelID, providerConfig)
       model = {
         id: modelID, name: modelID,
         api: providerConfig.api || 'openai-completions',
         provider: providerID,
         baseUrl: providerConfig.baseUrl || '',
-        reasoning: false, input: ['text'],
+        reasoning: reasoningConfig.reasoning,
+        thinkingLevelMap: reasoningConfig.thinkingLevelMap,
+        input: ['text'],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 128000, contextLength: 128000, maxTokens: 4096,
+        ...(reasoningConfig.compat ? { compat: reasoningConfig.compat } : {}),
       }
     }
 
@@ -119,7 +128,7 @@ export async function autoReply(msg, platform, runtimeConfig) {
         systemPrompt: buildPlatformSystemPrompt(msg, platform, skills),
         model,
         tools,
-        thinkingLevel: model.reasoning ? 'medium' : 'off',
+        thinkingLevel: resolveThinkingLevel(model, getConfiguredThinkingLevel(runtimeConfig, modelID)),
       },
       sessionId,
       getApiKey: async () => runtimeConfig.apiKey || '',

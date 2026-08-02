@@ -18,6 +18,7 @@ import { evaluateToolCall } from '../execution-policy.mjs'
 import { buildToolSecurityIndex } from '../tool-security.mjs'
 import { createToolAuditTracker } from '../audit-store.mjs'
 import { deriveSubagentAuthority } from './authority.mjs'
+import { resolveThinkingLevel } from '../reasoning-capabilities.mjs'
 
 const MAX_CONCURRENCY = 4
 const MAX_SUBAGENT_TIMEOUT = 300_000  // 5 minutes
@@ -134,7 +135,7 @@ export async function runSubagent({
       systemPrompt: def.systemPrompt,
       model,
       tools: allowedTools,
-      thinkingLevel: def.thinkingLevel === 'off' || !model.reasoning ? 'off' : def.thinkingLevel,
+      thinkingLevel: resolveThinkingLevel(model, def.thinkingLevel || 'off'),
     },
     sessionId,
     getApiKey: async () => apiKey,

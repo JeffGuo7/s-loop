@@ -10,6 +10,7 @@ import { createRunSubagentTool } from './tools.mjs'
 import { evaluateToolCall } from '../execution-policy.mjs'
 import { buildToolSecurityIndex } from '../tool-security.mjs'
 import { createToolAuditTracker } from '../audit-store.mjs'
+import { getConfiguredThinkingLevel, resolveThinkingLevel } from '../reasoning-capabilities.mjs'
 
 const MAX_GOAL_TIMEOUT = 300_000  // 5 minutes
 
@@ -127,7 +128,7 @@ export async function runGoalLoop({
       systemPrompt,
       model,
       tools,
-      thinkingLevel: model.reasoning ? 'medium' : 'off',
+      thinkingLevel: resolveThinkingLevel(model, getConfiguredThinkingLevel(runtimeConfig, modelID)),
     },
     sessionId,
     getApiKey: async () => apiKey,

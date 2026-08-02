@@ -195,7 +195,15 @@ export async function syncRuntimeConfig(config: {
   apiKey?: string
   workspaceDir?: string
   workspaceRoots?: WorkspaceRoot[]
-  providerConfig?: { api?: string; baseUrl?: string; supportsVision?: boolean }
+  thinkingLevel?: string
+  providerConfig?: {
+    api?: string
+    baseUrl?: string
+    supportsVision?: boolean
+    reasoningEfforts?: Record<string, import('../types').ReasoningLevel>
+    reasoningSupport?: string
+    thinkingFormat?: string
+  }
   webSearchConfig?: Record<string, unknown>
   agentSystemPrompt?: string
   agentSkillsBlock?: string
@@ -253,6 +261,7 @@ export async function prompt(
       api?: string
       baseUrl?: string
       supportsVision?: boolean
+      reasoningEfforts?: Record<string, import('../types').ReasoningLevel>
       reasoningSupport?: string
       thinkingFormat?: string
     }

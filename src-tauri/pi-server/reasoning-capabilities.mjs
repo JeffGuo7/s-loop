@@ -52,6 +52,12 @@ export function applyThinkingLevel(agent, model, requested = 'medium') {
   return effective
 }
 
+export function getConfiguredThinkingLevel(runtimeConfig = {}, modelID = runtimeConfig.modelID) {
+  return runtimeConfig.thinkingLevel
+    || runtimeConfig.providerConfig?.reasoningEfforts?.[modelID]
+    || 'medium'
+}
+
 function inferThinkingFormat(providerID, baseUrl) {
   const target = `${providerID} ${baseUrl}`.toLowerCase()
   if (target.includes('openrouter')) return 'openrouter'

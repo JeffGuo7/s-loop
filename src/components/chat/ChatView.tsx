@@ -46,6 +46,10 @@ export function ChatView() {
     updateSessionTitle,
     providerList,
   } = useAppStore()
+  const activeAgentModel = useAgentStore((state) => {
+    if (!state.activeAgentId) return ''
+    return state.agents.find((agent) => agent.id === state.activeAgentId)?.model || ''
+  })
 
   const [error, setError] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
@@ -317,6 +321,7 @@ export function ChatView() {
           ...(providerInfo?.api ? { api: providerInfo.api } : {}),
           baseUrl: providerConfig?.baseUrl || '',
           supportsVision: providerConfig?.supportsVision === true,
+          reasoningEfforts: providerConfig?.reasoningEfforts,
           reasoningSupport: providerConfig?.reasoningSupport || 'auto',
           thinkingFormat: providerConfig?.thinkingFormat || 'auto',
         },
@@ -693,9 +698,7 @@ export function ChatView() {
                 />
                 <ReasoningLevelSelector
                   providerId={activeProvider!}
-                  modelId={useAgentStore.getState().activeAgentId
-                    ? useAgentStore.getState().agents.find(a => a.id === useAgentStore.getState().activeAgentId)?.model || providerConfigs[activeProvider]?.model || ''
-                    : providerConfigs[activeProvider]?.model || ''}
+                  modelId={activeAgentModel || providerConfigs[activeProvider]?.model || ''}
                   providerApi={providerList.find(p => p.id === activeProvider)?.api}
                   baseUrl={providerConfigs[activeProvider]?.baseUrl}
                 />
