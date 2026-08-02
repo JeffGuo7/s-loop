@@ -1,5 +1,6 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
+    path::Path,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
@@ -32,6 +33,34 @@ impl KokoroSpeaker {
     const fn id(self) -> i32 {
         self.0
     }
+
+    const fn prefers_chinese(self) -> bool {
+        self.0 >= 45
+    }
+}
+
+fn contains_han(text: &str) -> bool {
+    text.chars().any(|character| {
+        matches!(
+            character,
+            '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}'
+        )
+    })
+}
+
+fn should_use_chinese_text_rules(text: &str, speaker: KokoroSpeaker) -> bool {
+    if contains_han(text) {
+        return true;
+    }
+    let has_digit = text.chars().any(|character| character.is_ascii_digit());
+    let has_latin = text.chars().any(|character| character.is_ascii_alphabetic());
+    speaker.prefers_chinese() && has_digit && !has_latin
+}
+
+fn chinese_rule_fsts(root: &Path) -> String {
+    ["date-zh.fst", "phone-zh.fst", "number-zh.fst"]
+        .map(|name| root.join(name).to_string_lossy().into_owned())
+        .join(",")
 }
 
 impl Default for KokoroSpeaker {
@@ -75,7 +104,7 @@ pub struct SpeechPlaybackEvent {
 pub struct SpeechSynthesizer {
     assets: Arc<VoiceAssets>,
     playback_reference: Arc<PlaybackReference>,
-    engine: Mutex<Option<Arc<OfflineTts>>>,
+    engines: Mutex<HashMap<bool, Arc<OfflineTts>>>,
     generation: AtomicU64,
     current_request: Arc<AtomicU64>,
     speaking: AtomicBool,
@@ -87,7 +116,7 @@ impl SpeechSynthesizer {
         Self {
             assets,
             playback_reference,
-            engine: Mutex::new(None),
+            engines: Mutex::new(HashMap::new()),
             generation: AtomicU64::new(0),
             current_request: Arc::new(AtomicU64::new(0)),
             speaking: AtomicBool::new(false),
@@ -156,7 +185,8 @@ impl SpeechSynthesizer {
         speaker: KokoroSpeaker,
         on_event: Arc<dyn Fn(SpeechPlaybackEvent) + Send + Sync>,
     ) -> Result<(), String> {
-        let engine = self.load_engine()?;
+        let use_chinese_rules = should_use_chinese_text_rules(text, speaker);
+        let engine = self.load_engine(use_chinese_rules)?;
         if self.current_request.load(Ordering::SeqCst) != request_id {
             return Ok(());
         }
@@ -279,12 +309,12 @@ impl SpeechSynthesizer {
         Ok(())
     }
 
-    fn load_engine(&self) -> Result<Arc<OfflineTts>, String> {
+    fn load_engine(&self, use_chinese_rules: bool) -> Result<Arc<OfflineTts>, String> {
         let mut cached = self
-            .engine
+            .engines
             .lock()
             .map_err(|_| "The text-to-speech engine is unavailable.".to_owned())?;
-        if let Some(engine) = cached.as_ref() {
+        if let Some(engine) = cached.get(&use_chinese_rules) {
             return Ok(engine.clone());
         }
 
@@ -310,13 +340,14 @@ impl SpeechSynthesizer {
                 provider: Some("cpu".to_owned()),
                 ..Default::default()
             },
+            rule_fsts: use_chinese_rules.then(|| chinese_rule_fsts(&root)),
             ..Default::default()
         };
         let engine =
             Arc::new(OfflineTts::create(&config).ok_or_else(|| {
                 "Could not initialize the local text-to-speech model.".to_owned()
             })?);
-        *cached = Some(engine.clone());
+        cached.insert(use_chinese_rules, engine.clone());
         Ok(engine)
     }
 
@@ -333,8 +364,8 @@ impl SpeechSynthesizer {
 
     pub fn reset_model(&self) {
         let _ = self.stop();
-        if let Ok(mut engine) = self.engine.lock() {
-            *engine = None;
+        if let Ok(mut engines) = self.engines.lock() {
+            engines.clear();
         }
     }
 }
@@ -529,18 +560,37 @@ mod tests {
 
     #[test]
     fn enables_chinese_rules_for_chinese_and_mixed_text() {
-        assert!(should_use_chinese_text_rules("现在是2026年8月2日。"));
+        let chinese_voice = KokoroSpeaker::default();
         assert!(should_use_chinese_text_rules(
-            "S-Loop 已完成 80% of the task."
+            "现在是2026年8月2日。",
+            chinese_voice
+        ));
+        assert!(should_use_chinese_text_rules(
+            "S-Loop 已完成 80% of the task.",
+            chinese_voice
         ));
     }
 
     #[test]
     fn keeps_pure_english_numbers_on_the_english_path() {
+        let chinese_voice = KokoroSpeaker::default();
         assert!(!should_use_chinese_text_rules(
-            "S-Loop completed 80% of the task in 2026."
+            "S-Loop completed 80% of the task in 2026.",
+            chinese_voice
         ));
-        assert!(!should_use_chinese_text_rules("Call 123456 now."));
+        assert!(!should_use_chinese_text_rules(
+            "Call 123456 now.",
+            chinese_voice
+        ));
+    }
+
+    #[test]
+    fn uses_the_selected_voice_for_number_only_text() {
+        let chinese_voice = KokoroSpeaker::default();
+        let american_voice = KokoroSpeaker::try_from(0).unwrap();
+
+        assert!(should_use_chinese_text_rules("123456", chinese_voice));
+        assert!(!should_use_chinese_text_rules("123456", american_voice));
     }
 
     #[test]
