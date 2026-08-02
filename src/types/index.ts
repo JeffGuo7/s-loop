@@ -164,11 +164,18 @@ export interface Session {
 
 // ----- Provider -----
 
+export type ReasoningLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export type ReasoningSupport = 'auto' | 'enabled' | 'disabled'
+export type ThinkingFormat = 'auto' | 'openai' | 'openrouter' | 'deepseek' | 'qwen' | 'together' | 'zai'
+
 export interface ProviderConfig {
   apiKey: string
   model: string
   baseUrl: string
   supportsVision?: boolean
+  reasoningEfforts?: Record<string, ReasoningLevel>
+  reasoningSupport?: ReasoningSupport
+  thinkingFormat?: ThinkingFormat
 }
 
 export interface ProviderInfo {
