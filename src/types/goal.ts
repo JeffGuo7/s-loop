@@ -56,11 +56,11 @@ export interface GoalState {
 export type GoalSSEEvent =
   | { type: 'goal_planning' }
   | { type: 'goal_plan'; plan: GoalPlan | null }
-  | { type: 'goal_step_start'; agent: string; task: string; stepIndex: number }
-  | { type: 'goal_step_end'; stepIndex: number; result: GoalStep['result'] }
+  | { type: 'goal_step_start'; agent: string; task: string; stepIndex: number; planIndex?: number }
+  | { type: 'goal_step_end'; stepIndex: number; planIndex?: number; result: GoalStep['result'] }
   | { type: 'goal_step_update'; stepIndex: number; update: unknown }
   | { type: 'goal_checking' }
-  | { type: 'goal_progress'; note: string }
+  | { type: 'goal_progress'; note: string; planIndex?: number; planStep?: GoalPlanStep; progressNotes?: string[] }
   | { type: 'goal_waiting_for_approval'; approvalId: string; toolName: string; goalState: GoalState }
   | { type: 'goal_resumed'; approvalId: string; goalState: GoalState }
   | { type: 'goal_done'; goalState: GoalState }

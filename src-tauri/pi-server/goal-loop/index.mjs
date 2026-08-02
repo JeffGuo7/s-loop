@@ -171,6 +171,7 @@ export async function runGoalLoop({
             agent: step.agent,
             task: step.task,
             stepIndex: goalState.steps.length,
+            planIndex,
           })
         }
       } else if (event.toolName === 'check_progress') {
@@ -183,12 +184,20 @@ export async function runGoalLoop({
         const executionIndex = event.result?.details?.stepIndex ?? goalState.steps.length - 1
         const step = goalState.steps[executionIndex]
         if (step) {
-          onUpdate?.({ type: 'goal_step_end', stepIndex: executionIndex, result: step.result })
+          onUpdate?.({
+            type: 'goal_step_end',
+            stepIndex: executionIndex,
+            planIndex: step.planIndex,
+            result: step.result,
+          })
         }
       } else if (event.toolName === 'check_progress') {
         onUpdate?.({
           type: 'goal_progress',
+          planIndex: goalState.currentStepIndex,
+          planStep: goalState.plan?.steps?.[goalState.currentStepIndex],
           note: goalState.progressNotes[goalState.progressNotes.length - 1] || '',
+          progressNotes: [...goalState.progressNotes],
         })
       }
     } else if (event.type === 'tool_execution_update') {

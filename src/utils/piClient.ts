@@ -206,6 +206,8 @@ export async function syncRuntimeConfig(config: {
   providerApiKeys?: Record<string, string>
   workspaceDir?: string
   workspaceRoots?: WorkspaceRoot[]
+  agentMcpServers?: string[]
+  agentMcpTools?: Array<{ serverName: string; toolName: string }>
   thinkingLevel?: string
   providerConfig?: {
     api?: string
@@ -256,6 +258,7 @@ export async function prompt(
     modelID?: string
     thinkingLevel?: string
     tools?: McpToolDef[]
+    allowedSseMcpToolNames?: string[]
     apiKey?: string
     workspaceDir?: string
     workspaceRoots?: WorkspaceRoot[]
@@ -291,6 +294,9 @@ export async function prompt(
     if (options?.thinkingLevel) body.thinkingLevel = options.thinkingLevel
     if (options?.apiKey) body.apiKey = options.apiKey
     if (options?.tools && options.tools.length > 0) body.tools = options.tools
+    if (options?.allowedSseMcpToolNames !== undefined) {
+      body.allowedSseMcpToolNames = options.allowedSseMcpToolNames
+    }
     if (options?.workspaceDir) body.workspaceDir = options.workspaceDir
     if (options?.workspaceRoots) body.workspaceRoots = options.workspaceRoots
     if (options?.webSearchConfig) body.webSearchConfig = options.webSearchConfig

@@ -1,4 +1,4 @@
-import { Square } from 'lucide-react'
+import { CheckCircle2, Circle, LoaderCircle, ShieldCheck, Square, XCircle } from 'lucide-react'
 import type { GoalState, GoalStep } from '../../types/goal'
 
 interface GoalProgressProps {
@@ -9,10 +9,18 @@ interface GoalProgressProps {
 
 export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
   const steps: GoalStep[] = goal.steps || []
-  const total = steps.length
-  const completed = steps.filter((s) => s.status === 'completed').length
-  const failed = steps.filter((s) => s.status === 'failed').length
-  const pct = total > 0 ? Math.round(((completed + failed) / total) * 100) : 0
+  const planSteps = goal.plan?.steps || []
+  const total = planSteps.length || steps.length
+  const completed = planSteps.length
+    ? planSteps.filter((step) => step.status === 'completed' && step.achieved === true).length
+    : steps.filter((step) => step.status === 'completed').length
+  const failed = planSteps.length
+    ? planSteps.filter((step) => step.status === 'failed' || step.achieved === false).length
+    : steps.filter((step) => step.status === 'failed').length
+  const reviewed = planSteps.length
+    ? planSteps.filter((step) => step.checked).length
+    : completed + failed
+  const pct = total > 0 ? Math.round((reviewed / total) * 100) : 0
 
   // Aggregate usage
   const totalTokens = steps.reduce((sum, s) => {
@@ -54,7 +62,7 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
             </span>
             {total > 0 && (
               <span className="text-[10px] font-bold text-text-tertiary">
-                {completed + failed}/{total} steps
+                {reviewed}/{total} checked
               </span>
             )}
           </div>
@@ -90,6 +98,87 @@ export function GoalProgress({ goal, isRunning, onAbort }: GoalProgressProps) {
               style={{ width: `${pct}%` }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Enforced plan and per-step verification */}
+      {planSteps.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[9px] font-black uppercase tracking-[0.12em] text-text-tertiary">
+              Execution plan
+            </span>
+            <span className="text-[9px] font-bold text-text-quaternary">
+              {goal.currentIteration}/{goal.maxIterations} iterations
+            </span>
+          </div>
+          {planSteps.map((step) => {
+            const isRunning = step.status === 'running'
+            const isFailed = step.status === 'failed' || step.achieved === false
+            const isVerified = step.checked && step.achieved === true
+            const StepIcon = isVerified
+              ? CheckCircle2
+              : isFailed
+                ? XCircle
+                : isRunning
+                  ? LoaderCircle
+                  : Circle
+            return (
+              <div
+                key={step.index}
+                className={`rounded-2xl border px-3 py-3 transition-colors ${
+                  isRunning
+                    ? 'border-accent/30 bg-accent/6'
+                    : isFailed
+                      ? 'border-red-500/20 bg-red-500/5'
+                      : 'border-border-light/70 bg-surface-secondary/35'
+                }`}
+              >
+                <div className="flex items-start gap-2.5">
+                  <StepIcon
+                    size={15}
+                    className={`mt-0.5 shrink-0 ${
+                      isVerified ? 'text-green-500' : isFailed ? 'text-red-500' : isRunning ? 'animate-spin text-accent' : 'text-text-quaternary'
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[12px] font-black text-text">
+                        {step.index + 1}. {step.name}
+                      </span>
+                      <span className="rounded-full bg-surface px-2 py-0.5 text-[9px] font-bold text-text-tertiary">
+                        {step.agent}
+                      </span>
+                      {step.checked && (
+                        <span className={`inline-flex items-center gap-1 text-[9px] font-black ${isVerified ? 'text-green-500' : 'text-red-500'}`}>
+                          <ShieldCheck size={10} />
+                          {isVerified ? 'Verified' : 'Needs work'}
+                        </span>
+                      )}
+                    </div>
+                    {(step.description || step.task) && (
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-text-tertiary">
+                        {step.description || step.task}
+                      </p>
+                    )}
+                    {step.checkNote && (
+                      <p className={`mt-1.5 text-[10px] font-medium ${isVerified ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                        {step.checkNote}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+          {goal.plan?.reasoning && (
+            <details className="px-1 text-[10px] text-text-tertiary">
+              <summary className="cursor-pointer font-bold text-text-quaternary hover:text-text-tertiary">
+                Planning rationale
+              </summary>
+              <p className="mt-1.5 leading-relaxed">{goal.plan.reasoning}</p>
+            </details>
+          )}
         </div>
       )}
 

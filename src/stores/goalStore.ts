@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getBaseUrl } from '../utils/piClient'
-import type { GoalState, GoalSSEEvent, GoalStep } from '../types/goal'
+import type { GoalState, GoalSSEEvent } from '../types/goal'
 
 interface GoalStoreState {
   goals: GoalState[]
@@ -20,6 +20,83 @@ interface GoalStoreState {
 }
 
 const BASE = () => getBaseUrl()
+
+export function applyGoalSseEvent(goal: GoalState, event: GoalSSEEvent): GoalState {
+  if (event.type === 'goal_plan') {
+    return { ...goal, plan: event.plan }
+  }
+
+  if (event.type === 'goal_step_start') {
+    const steps = [...goal.steps]
+    steps[event.stepIndex] = {
+      agent: event.agent,
+      task: event.task,
+      status: 'running',
+    }
+    const planIndex = event.planIndex ?? goal.plan?.steps.find(
+      (step) => step.status === 'pending',
+    )?.index ?? -1
+    const plan = goal.plan
+      ? {
+          ...goal.plan,
+          steps: goal.plan.steps.map((step) => (
+            step.index === planIndex ? { ...step, status: 'running' as const } : step
+          )),
+        }
+      : null
+    return {
+      ...goal,
+      steps,
+      plan,
+      currentStepIndex: planIndex,
+      currentIteration: planIndex >= 0
+        ? Math.max(goal.currentIteration, planIndex + 1)
+        : goal.currentIteration,
+    }
+  }
+
+  if (event.type === 'goal_step_end') {
+    const status = event.result?.exitCode === 0 ? 'completed' as const : 'failed' as const
+    const steps = goal.steps.map((step, index) => (
+      index === event.stepIndex ? { ...step, status, result: event.result } : step
+    ))
+    const plan = goal.plan && event.planIndex !== undefined
+      ? {
+          ...goal.plan,
+          steps: goal.plan.steps.map((step) => (
+            step.index === event.planIndex
+              ? { ...step, status, result: event.result }
+              : step
+          )),
+        }
+      : goal.plan
+    return { ...goal, steps, plan }
+  }
+
+  if (event.type === 'goal_progress') {
+    const plan = goal.plan && event.planIndex !== undefined
+      ? {
+          ...goal.plan,
+          steps: goal.plan.steps.map((step) => (
+            step.index === event.planIndex && event.planStep
+              ? { ...event.planStep }
+              : step
+          )),
+        }
+      : goal.plan
+    return {
+      ...goal,
+      plan,
+      progressNotes: event.progressNotes || [...goal.progressNotes, event.note],
+    }
+  }
+
+  if ((event.type === 'goal_waiting_for_approval' || event.type === 'goal_resumed') && event.goalState) {
+    return event.goalState
+  }
+
+  return goal
+}
 
 export const useGoalStore = create<GoalStoreState>((set, get) => ({
   goals: [],
@@ -158,32 +235,7 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
                 if (eventType === 'goal_event') {
                   set((s) => ({ liveEvents: [...s.liveEvents, data] }))
 
-                  if (data.type === 'goal_step_start') {
-                    set((s) => {
-                      if (!s.activeGoal) return s
-                      const newStep: GoalStep = {
-                        agent: data.agent,
-                        task: data.task,
-                        status: 'running',
-                      }
-                      return {
-                        activeGoal: {
-                          ...s.activeGoal,
-                          steps: [...s.activeGoal.steps, newStep],
-                        },
-                      }
-                    })
-                  } else if (data.type === 'goal_step_end') {
-                    set((s) => {
-                      if (!s.activeGoal) return s
-                      const steps = s.activeGoal.steps.map((step, i) =>
-                        i === data.stepIndex
-                          ? { ...step, status: data.result?.exitCode === 0 ? 'completed' as const : 'failed' as const, result: data.result }
-                          : step
-                      ) as GoalStep[]
-                      return { activeGoal: { ...s.activeGoal, steps } }
-                    })
-                  } else if (data.type === 'goal_done') {
+                  if (data.type === 'goal_done') {
                     if (data.goalState) {
                       set(() => ({
                         activeGoal: data.goalState,
@@ -196,18 +248,20 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
                       }))
                     }
                     get().fetchGoals()
-                  } else if (
-                    data.type === 'goal_waiting_for_approval'
-                    || data.type === 'goal_resumed'
-                  ) {
-                    if (data.goalState) {
-                      set({ activeGoal: data.goalState, isRunning: true })
-                    }
                   } else if (data.type === 'goal_error') {
                     set((s) => ({
                       error: data.message,
                       isRunning: false,
                       activeGoal: s.activeGoal ? { ...s.activeGoal, status: 'failed' as const, finalResult: data.message } : null,
+                    }))
+                  } else {
+                    set((s) => ({
+                      activeGoal: s.activeGoal
+                        ? applyGoalSseEvent(s.activeGoal, data as GoalSSEEvent)
+                        : null,
+                      ...(data.type === 'goal_waiting_for_approval' || data.type === 'goal_resumed'
+                        ? { isRunning: true }
+                        : {}),
                     }))
                   }
                 } else if (eventType === 'done') {

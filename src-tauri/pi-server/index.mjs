@@ -104,6 +104,7 @@ import {
   verifyAuditTrail,
 } from './audit-store.mjs'
 import { assembleRuntimeSystemPrompt } from './runtime-prompt.mjs'
+import { filterRemoteMcpTools } from './mcp-scope.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -128,9 +129,21 @@ const runtimeConfig = {
   modelID: 'claude-sonnet-4-20250514',
   apiKey: process.env.PI_API_KEY || '',
   providerApiKeys: {},
+  agentMcpServers: undefined,
+  agentMcpTools: undefined,
   workspaceDir: undefined,
   workspaceRoots: [],
   providerConfig: {},
+}
+
+function runtimeRemoteMcpScope(config = {}) {
+  const hasServerScope = Array.isArray(config.agentMcpServers)
+  const hasToolScope = Array.isArray(config.agentMcpTools)
+  if (!hasServerScope && !hasToolScope) return undefined
+  return {
+    serverNames: hasServerScope ? config.agentMcpServers : [],
+    tools: hasToolScope ? config.agentMcpTools : [],
+  }
 }
 
 function createCustomModel(providerID, modelID, providerConfig = {}) {
@@ -185,7 +198,7 @@ function createSSE(event, data) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
-function getTools(dir, webSearchConfig) {
+function getTools(dir, webSearchConfig, remoteMcpScope) {
   const toolRoot = dir || process.cwd()
   const bashOptions = {
     spawnHook: ({ command, env }) => ({
@@ -207,7 +220,7 @@ function getTools(dir, webSearchConfig) {
   }
 
   // Merge tools from connected SSE MCP servers
-  const sseMcpTools = getAllSseMcpTools()
+  const sseMcpTools = filterRemoteMcpTools(getAllSseMcpTools(), remoteMcpScope)
   if (sseMcpTools.length > 0) {
     console.log(`[pi-server] adding ${sseMcpTools.length} SSE MCP tool(s)`)
     all.push(...sseMcpTools)
@@ -610,9 +623,16 @@ function createChatToolBundle({
   workspaceDir,
   webSearchConfig,
   mcpTools,
+  allowedSseMcpToolNames,
 }) {
   const cwd = workspaceDir || process.cwd()
-  const baseTools = getTools(cwd, webSearchConfig)
+  const baseTools = getTools(
+    cwd,
+    webSearchConfig,
+    allowedSseMcpToolNames === undefined
+      ? undefined
+      : { toolNames: allowedSseMcpToolNames },
+  )
   const mcpToolDefs = Array.isArray(mcpTools)
     ? mcpTools.map((tool) => createMcpToolDefinition(tool, wrapper, sessionId))
     : []
@@ -869,7 +889,11 @@ async function promptPlatformConversation(sessionId, content, platformRun, resum
   wrapper.persistedMessageCount = fullInitialMessages.length
   if (!wrapper.agent) {
     const cwd = runtimeConfig.workspaceDir || process.cwd()
-    const tools = getTools(cwd, runtimeConfig.webSearchConfig)
+    const tools = getTools(
+      cwd,
+      runtimeConfig.webSearchConfig,
+      runtimeRemoteMcpScope(runtimeConfig),
+    )
     wrapper.config = {
       ...runtimeConfig,
       toolSecurity: buildToolSecurityIndex(tools),
@@ -973,7 +997,11 @@ async function promptPlatformConversation(sessionId, content, platformRun, resum
     wrapper.previousMessageCount = initialMessages.length
   } else {
     wrapper.agent.state.model = model
-    const tools = getTools(runtimeConfig.workspaceDir || process.cwd(), runtimeConfig.webSearchConfig)
+    const tools = getTools(
+      runtimeConfig.workspaceDir || process.cwd(),
+      runtimeConfig.webSearchConfig,
+      runtimeRemoteMcpScope(runtimeConfig),
+    )
     wrapper.agent.state.tools = tools
     wrapper.config = {
       ...runtimeConfig,
@@ -1210,7 +1238,7 @@ const createCronPrompt = async (content, options) => {
     const model = resolveModel(options.providerID, options.modelID, options.providerConfig)
     if (!model) return { text: '', error: 'Model not found' }
     const cwd = options.workspaceDir || process.cwd()
-    const tools = getTools(cwd, options.webSearchConfig)
+  const tools = getTools(cwd, options.webSearchConfig, runtimeRemoteMcpScope(options))
     const policyConfig = {
       ...options,
       toolSecurity: buildToolSecurityIndex(tools),
@@ -1385,7 +1413,11 @@ async function executeGoalRun(goalId, {
           ...(providerConfig.api ? { api: providerConfig.api } : {}),
           ...(providerConfig.baseUrl ? { baseUrl: providerConfig.baseUrl } : {}),
         }),
-      getTools,
+      getTools: (dir, webSearchConfig) => getTools(
+        dir,
+        webSearchConfig,
+        runtimeRemoteMcpScope(runtimeConfig),
+      ),
       projectDir,
       signal: goalController.signal,
       persistFn: (updated) => updateGoal(goalId, updated),
@@ -1455,6 +1487,12 @@ createServer((req, res) => {
       runtimeConfig.agentSystemPrompt = data.agentSystemPrompt || undefined
       runtimeConfig.agentSkillsBlock = data.agentSkillsBlock || undefined
       runtimeConfig.agentModel = data.agentModel || undefined
+      runtimeConfig.agentMcpServers = Array.isArray(data.agentMcpServers)
+        ? [...data.agentMcpServers]
+        : undefined
+      runtimeConfig.agentMcpTools = Array.isArray(data.agentMcpTools)
+        ? data.agentMcpTools.map((tool) => ({ ...tool }))
+        : undefined
       runtimeConfig.permissionMode = data.permissionMode || undefined
       runtimeConfig.permissionRules = data.permissionRules || undefined
       runtimeConfig.workspaceRoots = Array.isArray(data.workspaceRoots) ? data.workspaceRoots : []
@@ -2432,7 +2470,7 @@ createServer((req, res) => {
   req.on('end', async () => {
     const wrapper = await getOrCreateWrapper(sessionId)
     if (!wrapper) { res.writeHead(404); res.end('Session not found'); return }
-    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, workspaceRoots, accessiblePaths, webSearchConfig, tools: mcpTools, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
+    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, workspaceRoots, accessiblePaths, webSearchConfig, tools: mcpTools, allowedSseMcpToolNames, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
     console.log('[pi-server] session message — permissionMode:', permissionMode, 'permissionRules:', JSON.stringify(permissionRules))
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
@@ -2466,6 +2504,7 @@ createServer((req, res) => {
           workspaceDir,
           webSearchConfig,
           mcpTools,
+          allowedSseMcpToolNames,
         })
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
@@ -2622,6 +2661,7 @@ createServer((req, res) => {
           workspaceDir,
           webSearchConfig,
           mcpTools,
+          allowedSseMcpToolNames,
         })
         wrapper.agent.state.tools = tools
         if (wrapper.agent.state.systemPrompt !== fullPrompt) wrapper.agent.state.systemPrompt = fullPrompt

@@ -26,6 +26,7 @@ import {
   assembleAgentRuntimePrompt,
   formatAgentSkillsBlock,
 } from '../../utils/agentRuntime'
+import { isAgentMcpToolAllowed, remoteMcpToolName } from '../../utils/agentMcpRuntime'
 
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
@@ -214,21 +215,15 @@ export function ChatView() {
       const mcpStore = useMCPStore.getState()
       const mcpServers = mcpStore.servers
       const connectedMCPTools: { serverName: string; toolName: string }[] = []
-      if (activeAgent && activeAgent.mcpTools.length > 0) {
-        for (const mcpRef of activeAgent.mcpTools) {
-          // Skip SSE-type MCP servers — they're handled directly by pi-server via getAllSseMcpTools()
-          const server = mcpServers.find(s => s.name === mcpRef.serverName)
+      for (const [name, status] of Object.entries(mcpStore.serverStatuses)) {
+        if (status.status === 'connected' && status.tools) {
+          // Skip SSE-type MCP servers — they're handled directly by pi-server via getAllSseMcpTools().
+          const server = mcpServers.find(s => s.name === name)
           if (server && (server.type === 'sse' || server.type === 'http')) continue
-          connectedMCPTools.push({ serverName: mcpRef.serverName, toolName: mcpRef.toolName })
-        }
-      } else {
-        for (const [name, status] of Object.entries(mcpStore.serverStatuses)) {
-          if (status.status === 'connected' && status.tools) {
-            // Skip SSE-type MCP servers — they're handled directly by pi-server via getAllSseMcpTools()
-            const server = mcpServers.find(s => s.name === name)
-            if (server && (server.type === 'sse' || server.type === 'http')) continue
-            for (const tool of status.tools)
+          for (const tool of status.tools) {
+            if (isAgentMcpToolAllowed(activeAgent, name, tool.name)) {
               connectedMCPTools.push({ serverName: name, toolName: tool.name })
+            }
           }
         }
       }
@@ -252,16 +247,18 @@ export function ChatView() {
         if (status.status === 'connected' && status.tools) {
           const server = mcpServers.find(s => s.name === name)
           if (server && (server.type === 'sse' || server.type === 'http')) {
-            for (const tool of status.tools)
-              sseMcpTools.push({ serverName: name, toolName: tool.name })
+            for (const tool of status.tools) {
+              if (isAgentMcpToolAllowed(activeAgent, name, tool.name)) {
+                sseMcpTools.push({ serverName: name, toolName: tool.name })
+              }
+            }
           }
         }
       }
       if (sseMcpTools.length > 0) {
         const listings = sseMcpTools.map(({ serverName, toolName }) => {
           const tool = mcpStore.serverStatuses[serverName]?.tools?.find(t => t.name === toolName)
-          const safeServerName = serverName.replace(/[^a-zA-Z0-9]/g, '_')
-          const sseName = `mcp_sse_${safeServerName}_${toolName}`
+          const sseName = remoteMcpToolName(serverName, toolName)
           return tool
             ? `- \`${sseName}\` (from ${serverName}/${toolName}): ${tool.description || 'No description'}`
             : `- \`${sseName}\` (from ${serverName}/${toolName})`
@@ -316,6 +313,9 @@ export function ChatView() {
         workspaceRoots: activeAgent?.workspaceRoots || [],
         webSearchConfig: useWebSearchStore.getState().getActiveConfig(),
         tools: mcpToolDefs,
+        allowedSseMcpToolNames: activeAgent
+          ? sseMcpTools.map(({ serverName, toolName }) => remoteMcpToolName(serverName, toolName))
+          : undefined,
         permissionMode: activeAgent?.permissionMode,
         permissionRules: activeAgent?.permissionRules,
         providerAPI: providerInfo?.api,

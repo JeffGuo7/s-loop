@@ -1,6 +1,6 @@
 import { useAgentStore } from '../stores/agentStore'
 import { useSkillStore } from '../stores/skillStore'
-import type { WorkspaceRoot } from '../types/agent'
+import type { AgentMCPTool, WorkspaceRoot } from '../types/agent'
 import type { SkillInfo } from '../types/skill'
 import { assembleAgentSystemPrompt } from './agentPrompt'
 
@@ -22,6 +22,8 @@ export interface AgentRuntimeConfig {
   permissionMode?: string
   permissionRules?: Record<string, unknown>
   workspaceRoots?: WorkspaceRoot[]
+  agentMcpServers?: string[]
+  agentMcpTools?: AgentMCPTool[]
 }
 
 export function formatAgentSkillsBlock(skills: SkillInfo[]): string | undefined {
@@ -69,5 +71,7 @@ export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
     permissionMode: activeAgent?.permissionMode,
     permissionRules: activeAgent?.permissionRules,
     workspaceRoots: activeAgent?.workspaceRoots || [],
+    agentMcpServers: activeAgent ? [...activeAgent.mcpServers] : undefined,
+    agentMcpTools: activeAgent ? activeAgent.mcpTools.map((tool) => ({ ...tool })) : undefined,
   }
 }
