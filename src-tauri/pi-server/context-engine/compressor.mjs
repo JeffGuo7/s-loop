@@ -38,8 +38,9 @@ export class ContextEngine {
       reserveTokens: options.reserveTokens ?? scaledReserve,
       keepRecentTokens: options.keepRecentTokens ?? scaledKeep,
     }
-    this.lastTotalTokens = 0
-    this.compressionCount = 0
+    this.lastTotalTokens = options.lastTotalTokens || 0
+    this.compressionCount = options.compressionCount || 0
+    this.lastCompression = null
   }
 
   get thresholdTokens() {
@@ -99,21 +100,20 @@ export class ContextCompressor extends ContextEngine {
       compactResult = await compact(preparation, model, apiKey, undefined, IDENTIFIER_PRESERVATION_INSTRUCTIONS, signal)
     } catch (err) {
       console.warn('[context-engine] compact failed, falling back to compaction note:', err)
-      return this._fallbackCompact(messages, preparation, estimate.tokens)
+      return this._fallbackCompact(messages, preparation, estimate.tokens, onStatus)
     }
 
     if (!compactResult.ok) {
       console.warn('[context-engine] compact failed, falling back to compaction note:', compactResult.error)
-      return this._fallbackCompact(messages, preparation, estimate.tokens)
+      return this._fallbackCompact(messages, preparation, estimate.tokens, onStatus)
     }
 
     const { summary, firstKeptEntryId, tokensBefore } = compactResult.value
-    this.compressionCount++
-
     const firstKeptIndex = entries.findIndex((e) => e.id === firstKeptEntryId)
     if (firstKeptIndex < 0) {
       return messages
     }
+    this.compressionCount++
 
     // Try branch-aware summarization on the compacted section for richer context.
     // This gives the model a structured view of tools/delegates/branches that
@@ -137,10 +137,29 @@ export class ContextCompressor extends ContextEngine {
     }
 
     const tail = messages.slice(firstKeptIndex)
-    return [summaryMessage, ...tail]
+    const compressedMessages = [summaryMessage, ...tail]
+    this._recordCompression(compressedMessages, tokensBefore || estimate.tokens, onStatus, false)
+    return compressedMessages
   }
 
-  _fallbackCompact(messages, preparation, tokensBefore) {
+  _recordCompression(messages, tokensBefore, onStatus, fallback) {
+    const tokensAfter = estimateContextTokens(messages).tokens
+    this.lastTotalTokens = tokensAfter
+    this.lastCompression = {
+      compressionCount: this.compressionCount,
+      tokensBefore,
+      tokensAfter,
+      fallback,
+      createdAt: Date.now(),
+    }
+    onStatus?.({
+      type: 'compacted',
+      message: fallback ? 'Context compacted with a fallback checkpoint.' : 'Context compacted.',
+      ...this.lastCompression,
+    })
+  }
+
+  _fallbackCompact(messages, preparation, tokensBefore, onStatus) {
     const entries = messagesToEntries(messages)
     const firstKeptEntryId = preparation.firstKeptEntryId
     const firstKeptIndex = entries.findIndex((e) => e.id === firstKeptEntryId)
@@ -150,7 +169,10 @@ export class ContextCompressor extends ContextEngine {
       role: 'user',
       content: `${SUMMARY_PREFIX}\n\n${FALLBACK_COMPACTION_NOTE}\n\n${SUMMARY_END_MARKER}`,
     }
-    return [summaryMessage, ...messages.slice(firstKeptIndex)]
+    const compressedMessages = [summaryMessage, ...messages.slice(firstKeptIndex)]
+    this.compressionCount++
+    this._recordCompression(compressedMessages, tokensBefore, onStatus, true)
+    return compressedMessages
   }
 }
 
@@ -161,5 +183,7 @@ export function createDefaultEngine(model, options = {}) {
     reserveTokens: options.reserveTokens,
     keepRecentTokens: options.keepRecentTokens,
     enabled: options.enabled,
+    compressionCount: options.compressionCount,
+    lastTotalTokens: options.lastTotalTokens,
   })
 }

@@ -29,6 +29,13 @@ export function initGoalPersistence(baseDir) {
     goal.steps = (goal.steps || []).map((step) =>
       step.status === 'running' ? { ...step, status: 'failed' } : step
     )
+    if (goal.plan?.steps) {
+      goal.plan.steps = goal.plan.steps.map((step) =>
+        step.status === 'running'
+          ? { ...step, status: 'failed', checked: false }
+          : step
+      )
+    }
     goal.updatedAt = Date.now()
     appendAuditEvent('run.interrupted', {
       surface: 'goal',
@@ -71,6 +78,11 @@ export function createGoal(data) {
     goal: data.goal || '',
     status: 'pending',
     steps: [],
+    plan: null,
+    currentStepIndex: -1,
+    currentIteration: 0,
+    maxIterations: Math.max(1, Math.min(Number(data.maxIterations) || 5, 20)),
+    progressNotes: [],
     finalResult: null,
     createdAt: now,
     updatedAt: now,

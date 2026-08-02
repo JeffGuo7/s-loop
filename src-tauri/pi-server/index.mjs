@@ -7,6 +7,13 @@ import { getModel, getModels } from '@earendil-works/pi-ai/compat'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
 import { webSearch, fetchUrl, resetBrowser } from './searchProviders.mjs'
 import { createDefaultEngine, calculateContextTokens, truncateContent } from './context-engine/index.mjs'
+import {
+  createContextSnapshot,
+  deleteContextSnapshot,
+  loadContextSnapshot,
+  restoreContextFromSnapshot,
+  saveContextSnapshot,
+} from './context-engine/snapshot-store.mjs'
 import { createSessionRepo, findSession } from './session-store.mjs'
 import {
   init as initTasks,
@@ -96,6 +103,7 @@ import {
   listAuditEvents,
   verifyAuditTrail,
 } from './audit-store.mjs'
+import { assembleRuntimeSystemPrompt } from './runtime-prompt.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -119,6 +127,7 @@ const runtimeConfig = {
   providerID: 'anthropic',
   modelID: 'claude-sonnet-4-20250514',
   apiKey: process.env.PI_API_KEY || '',
+  providerApiKeys: {},
   workspaceDir: undefined,
   workspaceRoots: [],
   providerConfig: {},
@@ -551,7 +560,8 @@ async function getOrCreateWrapper(sessionId, autoCreate = false) {
   const metadata = await findSession(sessionRepo, sessionId)
   if (metadata) {
     const session = await sessionRepo.open(metadata)
-    wrapper = { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() }
+    const contextSnapshot = await loadContextSnapshot(DATA_DIR, sessionId)
+    wrapper = { session, agent: null, emit: null, contextEngine: null, contextSnapshot, persistedMessageCount: 0, apiKey: '', config: {}, mcpToolRequests: new Map() }
     sessions.set(sessionId, wrapper)
     fireExtensionEvent('session_start', { sessionId }, { sessionId })
     return wrapper
@@ -560,7 +570,7 @@ async function getOrCreateWrapper(sessionId, autoCreate = false) {
   if (!autoCreate) return null
 
   const session = await sessionRepo.create({ cwd: DATA_DIR, id: sessionId })
-  wrapper = { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() }
+  wrapper = { session, agent: null, emit: null, contextEngine: null, contextSnapshot: null, persistedMessageCount: 0, apiKey: '', config: {}, mcpToolRequests: new Map() }
   sessions.set(sessionId, wrapper)
   fireExtensionEvent('session_start', { sessionId }, { sessionId })
   return wrapper
@@ -573,6 +583,7 @@ async function persistAgentMessages(wrapper) {
   for (const message of messages) {
     await wrapper.session.appendMessage(message)
   }
+  wrapper.persistedMessageCount = (wrapper.persistedMessageCount || 0) + messages.length
   wrapper.previousMessageCount = wrapper.agent.state.messages.length
 }
 
@@ -585,6 +596,52 @@ function createMcpToolDefinition(tool, wrapper, sessionId) {
     _sandboxCategory: 'mcp',
     executionMode: 'parallel',
     execute: async (_toolCallId, params, signal) => callMcpTool(wrapper, sessionId, tool.serverName, tool.name, params, signal),
+  }
+}
+
+function createChatToolBundle({
+  wrapper,
+  sessionId,
+  provider,
+  modelId,
+  apiKey,
+  thinkingLevel,
+  providerConfig,
+  workspaceDir,
+  webSearchConfig,
+  mcpTools,
+}) {
+  const cwd = workspaceDir || process.cwd()
+  const baseTools = getTools(cwd, webSearchConfig)
+  const mcpToolDefs = Array.isArray(mcpTools)
+    ? mcpTools.map((tool) => createMcpToolDefinition(tool, wrapper, sessionId))
+    : []
+  const delegateRuntimeConfig = {
+    ...runtimeConfig,
+    providerID: provider,
+    modelID: modelId,
+    apiKey,
+    thinkingLevel,
+    providerConfig,
+  }
+  const delegateOptions = {
+    runtimeConfig: delegateRuntimeConfig,
+    resolveModel,
+    getTools,
+    projectDir: workspaceDir || DATA_DIR,
+    wrapper,
+  }
+  const delegationTools = [
+    createDelegateTaskTool(delegateOptions),
+    createDelegateParallelTool(delegateOptions),
+    createDelegateChainTool(delegateOptions),
+  ]
+
+  return {
+    baseTools,
+    mcpToolDefs,
+    delegationTools,
+    tools: [...baseTools, ...mcpToolDefs, ...delegationTools],
   }
 }
 
@@ -798,15 +855,18 @@ async function promptPlatformConversation(sessionId, content, platformRun, resum
   // Honor the active agent's instructions + skills (synced via /runtime/config).
   // MCP tools are excluded — they require a live frontend SSE proxy that a
   // platform message can't rely on. Skills are prompt text, so they work here.
-  const basePrompt = runtimeConfig.agentSystemPrompt
-    || 'You are a helpful assistant. Keep external platform replies concise and readable.'
-  const systemPrompt = runtimeConfig.agentSkillsBlock
-    ? `${basePrompt}\n\n${runtimeConfig.agentSkillsBlock}`
-    : basePrompt
+  const systemPrompt = assembleRuntimeSystemPrompt({
+    agentSystemPrompt: runtimeConfig.agentSystemPrompt,
+    agentSkillsBlock: runtimeConfig.agentSkillsBlock,
+    surfacePrompt: '## External Platform Channel\nKeep replies concise, readable, and appropriate for the current messaging platform.',
+    fallbackPrompt: 'You are a helpful assistant. Follow safety, permission, and tool rules.',
+  })
 
   const wrapper = await getOrCreateWrapper(sessionId, true)
   const ctx = wrapper.agent ? null : await wrapper.session.buildContext()
-  const initialMessages = ctx?.messages || []
+  const fullInitialMessages = ctx?.messages || []
+  const initialMessages = restoreContextFromSnapshot(fullInitialMessages, wrapper.contextSnapshot)
+  wrapper.persistedMessageCount = fullInitialMessages.length
   if (!wrapper.agent) {
     const cwd = runtimeConfig.workspaceDir || process.cwd()
     const tools = getTools(cwd, runtimeConfig.webSearchConfig)
@@ -1155,7 +1215,12 @@ const createCronPrompt = async (content, options) => {
       ...options,
       toolSecurity: buildToolSecurityIndex(tools),
     }
-    const sysPrompt = options.systemPrompt || 'You are a helpful assistant.'
+    const sysPrompt = assembleRuntimeSystemPrompt({
+      agentSystemPrompt: options.agentSystemPrompt,
+      agentSkillsBlock: options.agentSkillsBlock,
+      surfacePrompt: options.systemPrompt || '## Scheduled Task Runtime\nExecute only the scheduled instruction below. Report the outcome clearly and do not invent successful completion.',
+      fallbackPrompt: 'You are a helpful assistant. Follow safety, permission, and tool rules.',
+    })
     const fullPrompt = options.workspaceDir ? `${sysPrompt}\n\nWorkspace: ${options.workspaceDir}` : sysPrompt
     const executingApprovals = new Map()
     const toolAudit = createToolAuditTracker({
@@ -1279,6 +1344,10 @@ async function executeGoalRun(goalId, {
     ...storedGoal,
     status: 'running',
     steps: [],
+    plan: null,
+    currentStepIndex: -1,
+    currentIteration: 0,
+    progressNotes: [],
     finalResult: null,
     pendingApprovalId: undefined,
     lastRunId: runId,
@@ -1375,6 +1444,9 @@ createServer((req, res) => {
       runtimeConfig.providerID = data.providerID || runtimeConfig.providerID
       runtimeConfig.modelID = data.modelID || runtimeConfig.modelID
       runtimeConfig.apiKey = data.apiKey ?? runtimeConfig.apiKey
+      runtimeConfig.providerApiKeys = data.providerApiKeys && typeof data.providerApiKeys === 'object'
+        ? { ...data.providerApiKeys }
+        : runtimeConfig.providerApiKeys
       runtimeConfig.workspaceDir = data.workspaceDir || undefined
       runtimeConfig.thinkingLevel = data.thinkingLevel || runtimeConfig.thinkingLevel
       if (data.providerConfig) runtimeConfig.providerConfig = data.providerConfig
@@ -2338,6 +2410,7 @@ createServer((req, res) => {
         const list = await sessionRepo.list()
         const meta = list.find((m) => m.id === deleteSid)
         if (meta) { await sessionRepo.delete(meta) }
+        await deleteContextSnapshot(DATA_DIR, deleteSid)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true }))
       } catch (e) {
@@ -2378,21 +2451,29 @@ createServer((req, res) => {
       }
 
       const ctx = wrapper.agent ? null : await wrapper.session.buildContext()
-      const initialMessages = ctx?.messages || []
+      const fullInitialMessages = ctx?.messages || []
+      const initialMessages = restoreContextFromSnapshot(fullInitialMessages, wrapper.contextSnapshot)
+      wrapper.persistedMessageCount = fullInitialMessages.length
       if (!wrapper.agent) {
-        const cwd = workspaceDir || process.cwd()
-        const baseTools = getTools(cwd, webSearchConfig)
-        const mcpToolDefs = Array.isArray(mcpTools)
-          ? mcpTools.map((t) => createMcpToolDefinition(t, wrapper, sessionId))
-          : []
-        const tools = [...baseTools, ...mcpToolDefs,
-          createDelegateTaskTool({ runtimeConfig: { ...runtimeConfig, providerID: provider, modelID: modelId, apiKey, thinkingLevel, providerConfig: effectiveProviderConfig }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
-          createDelegateParallelTool({ runtimeConfig: { ...runtimeConfig, providerID: provider, modelID: modelId, apiKey, thinkingLevel, providerConfig: effectiveProviderConfig }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
-          createDelegateChainTool({ runtimeConfig: { ...runtimeConfig, providerID: provider, modelID: modelId, apiKey, thinkingLevel, providerConfig: effectiveProviderConfig }, resolveModel, getTools, projectDir: workspaceDir || DATA_DIR, emit, wrapper }),
-        ]
+        const { mcpToolDefs, tools } = createChatToolBundle({
+          wrapper,
+          sessionId,
+          provider,
+          modelId,
+          apiKey,
+          thinkingLevel,
+          providerConfig: effectiveProviderConfig,
+          workspaceDir,
+          webSearchConfig,
+          mcpTools,
+        })
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
-        const contextEngine = createDefaultEngine(model, { contextLength: model?.contextLength })
+        const contextEngine = createDefaultEngine(model, {
+          contextLength: model?.contextLength,
+          compressionCount: wrapper.contextSnapshot?.compressionCount || 0,
+          lastTotalTokens: wrapper.contextSnapshot?.tokensAfter || 0,
+        })
         wrapper.apiKey = apiKey
 
         const agent = new Agent({
@@ -2406,13 +2487,26 @@ createServer((req, res) => {
           sessionId,
           getApiKey: async () => wrapper.apiKey,
           transformContext: async (messages, signal) => {
-            const currentTokens = contextEngine.lastTotalTokens || calculateContextTokens(messages)
-            if (!contextEngine.shouldCompress(currentTokens)) return messages
-            return await contextEngine.compress(messages, {
+            const activeContextEngine = wrapper.contextEngine || contextEngine
+            const currentTokens = activeContextEngine.lastTotalTokens || calculateContextTokens(messages)
+            if (!activeContextEngine.shouldCompress(currentTokens)) return messages
+            const compressedMessages = await activeContextEngine.compress(messages, {
               model: agent.state.model,
               apiKey: wrapper.apiKey,
               onStatus: (s) => emit('status', s),
+              signal,
             })
+            if (compressedMessages !== messages && activeContextEngine.lastCompression) {
+              const pendingMessageCount = Math.max(0, messages.length - (wrapper.previousMessageCount || 0))
+              const snapshot = createContextSnapshot({
+                sourceMessageCount: (wrapper.persistedMessageCount || 0) + pendingMessageCount,
+                messages: compressedMessages,
+                ...activeContextEngine.lastCompression,
+              })
+              await saveContextSnapshot(DATA_DIR, sessionId, snapshot)
+              wrapper.contextSnapshot = snapshot
+            }
+            return compressedMessages
           },
           beforeToolCall: async ({ toolCall }) => {
             // Guard: prevent model from retrying tools that keep failing
@@ -2511,12 +2605,25 @@ createServer((req, res) => {
         if (model) {
           wrapper.agent.state.model = model
           applyThinkingLevel(wrapper.agent, model, thinkingLevel || 'medium')
+          wrapper.contextEngine = createDefaultEngine(model, {
+            contextLength: model?.contextLength,
+            compressionCount: wrapper.contextEngine?.compressionCount || wrapper.contextSnapshot?.compressionCount || 0,
+            lastTotalTokens: wrapper.contextEngine?.lastTotalTokens || wrapper.contextSnapshot?.tokensAfter || 0,
+          })
         }
-        const baseTools = getTools(workspaceDir || process.cwd(), webSearchConfig)
-        const mcpToolDefs = Array.isArray(mcpTools)
-          ? mcpTools.map((t) => createMcpToolDefinition(t, wrapper, sessionId))
-          : []
-        wrapper.agent.state.tools = [...baseTools, ...mcpToolDefs]
+        const { mcpToolDefs, tools } = createChatToolBundle({
+          wrapper,
+          sessionId,
+          provider,
+          modelId,
+          apiKey: apiKey || wrapper.apiKey,
+          thinkingLevel,
+          providerConfig: effectiveProviderConfig,
+          workspaceDir,
+          webSearchConfig,
+          mcpTools,
+        })
+        wrapper.agent.state.tools = tools
         if (wrapper.agent.state.systemPrompt !== fullPrompt) wrapper.agent.state.systemPrompt = fullPrompt
         if (apiKey) wrapper.apiKey = apiKey
         wrapper.config = {
@@ -2528,7 +2635,7 @@ createServer((req, res) => {
           permissionRules,
           providerConfig: effectiveProviderConfig,
           mcpToolNames: new Set(mcpToolDefs.map((tool) => tool.name)),
-          toolSecurity: buildToolSecurityIndex([...baseTools, ...mcpToolDefs]),
+          toolSecurity: buildToolSecurityIndex(tools),
         }
       }
 

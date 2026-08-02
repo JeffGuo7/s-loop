@@ -119,7 +119,6 @@ export function createTask(taskData) {
     contextFrom: taskData.contextFrom || undefined,
     model: taskData.model || undefined,
     provider: taskData.provider || undefined,
-    apiKey: taskData.apiKey || '',
     workspaceDir: taskData.workspaceDir || undefined,
     deliver: taskData.deliver || 'chat',
     deliverSessionId: taskData.deliverSessionId || undefined,
@@ -147,7 +146,9 @@ export function updateTask(taskId, updates) {
   const tasks = _loadTasksRaw()
   const idx = tasks.findIndex(t => t.id === taskId)
   if (idx === -1) return null
-  tasks[idx] = { ...tasks[idx], ...updates }
+  const { apiKey: _discardedApiKey, ...safeUpdates } = updates || {}
+  tasks[idx] = { ...tasks[idx], ...safeUpdates }
+  delete tasks[idx].apiKey
   _saveTasks(tasks)
   return tasks[idx]
 }
@@ -418,7 +419,9 @@ export async function runTask(task, deps) {
       providerID: activeTask.provider || deps.defaultProvider,
       modelID: activeTask.model || deps.defaultModel,
       thinkingLevel: 'off',
-      apiKey: activeTask.apiKey || apiKey,
+      apiKey: deps.runtimeConfig?.providerApiKeys?.[activeTask.provider]
+        || deps.runtimeConfig?.apiKey
+        || apiKey,
       workspaceDir: activeTask.workspaceDir || deps.projectDir,
       taskId: activeTask.id,
       runId,
@@ -494,6 +497,17 @@ export function startTicker(deps) {
 
       const due = getDueTasks().slice(0, capacity)
       for (const task of due) {
+        const provider = task.provider || deps.defaultProvider
+        const providerKey = deps.runtimeConfig?.providerApiKeys?.[provider]
+          || deps.runtimeConfig?.apiKey
+          || deps.apiKey
+        if (!providerKey) {
+          // The desktop frontend hydrates DPAPI credentials immediately after
+          // the sidecar starts. Leave the task due instead of failing it in
+          // that short startup window; the next tick will pick it up.
+          console.warn('[task-scheduler] waiting for protected credentials:', task.id, provider)
+          continue
+        }
         // Fire-and-forget each due task
         runTask(task, { ...deps, trigger: 'scheduled' }).catch(err => {
           console.error('[task-scheduler] run failed:', task.id, err?.message)
@@ -523,6 +537,10 @@ export function init(baseDir) {
   const tasks = _loadTasksRaw()
   let changed = false
   for (const task of tasks) {
+    if (Object.prototype.hasOwnProperty.call(task, 'apiKey')) {
+      delete task.apiKey
+      changed = true
+    }
     if (task.lastStatus !== 'running') continue
     const now = Date.now()
     task.lastStatus = 'failed'

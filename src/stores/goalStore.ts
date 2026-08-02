@@ -83,8 +83,30 @@ export const useGoalStore = create<GoalStoreState>((set, get) => ({
 
     const existing = goals.find(g => g.id === id)
     const cleanGoal: GoalState = existing
-      ? { ...existing, status: 'running' as const, steps: [], finalResult: null }
-      : { id, goal: '', status: 'running' as const, steps: [], finalResult: null, createdAt: Date.now(), updatedAt: Date.now() }
+      ? {
+          ...existing,
+          status: 'running' as const,
+          steps: [],
+          plan: null,
+          currentStepIndex: -1,
+          currentIteration: 0,
+          progressNotes: [],
+          finalResult: null,
+        }
+      : {
+          id,
+          goal: '',
+          status: 'running' as const,
+          steps: [],
+          plan: null,
+          currentStepIndex: -1,
+          currentIteration: 0,
+          maxIterations: 5,
+          progressNotes: [],
+          finalResult: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
     set({ activeGoal: cleanGoal, liveEvents: [], isRunning: true, error: null })
 
     const controller = new AbortController()

@@ -18,6 +18,7 @@ function makeGoalState(overrides = {}) {
     id: 'test-goal-1',
     goal: 'Test goal: write a hello world program',
     status: 'pending',
+    steps: [],
     plan: null,
     currentStepIndex: -1,
     currentIteration: 0,
@@ -99,6 +100,33 @@ describe('goal-loop persistence', () => {
     const goalsFile = join(TEST_DIR, 'goals', 'goals.json')
     assert.ok(existsSync(goalsFile))
   })
+
+  it('recovers an interrupted run as failed', () => {
+    const created = persistence.createGoal({ goal: 'Interrupted goal' })
+    persistence.updateGoal(created.id, {
+      status: 'running',
+      steps: [{ agent: 'coder', task: 'work', status: 'running' }],
+      plan: {
+        reasoning: 'test',
+        steps: [{
+          index: 0,
+          name: 'Work',
+          description: '',
+          agent: 'coder',
+          task: 'work',
+          status: 'running',
+          checked: false,
+        }],
+      },
+    })
+
+    persistence.initGoalPersistence(TEST_DIR)
+    const recovered = persistence.getGoal(created.id)
+    assert.equal(recovered.status, 'failed')
+    assert.equal(recovered.steps[0].status, 'failed')
+    assert.equal(recovered.plan.steps[0].status, 'failed')
+    assert.ok(recovered.finalResult.includes('restart'))
+  })
 })
 
 // ── Tools tests (unit) ──────────────────────────────────────
@@ -122,7 +150,7 @@ describe('goal-loop tools', () => {
         reasoning: 'We need two steps',
       })
 
-      assert.equal(gs.status, 'executing')
+      assert.equal(gs.status, 'pending')
       assert.equal(gs.plan.steps.length, 2)
       assert.equal(gs.plan.steps[0].name, 'Step 1')
       assert.equal(gs.plan.steps[0].status, 'pending')
@@ -131,6 +159,31 @@ describe('goal-loop tools', () => {
       assert.equal(gs.plan.reasoning, 'We need two steps')
       assert.ok(Array.isArray(result.content))
     })
+
+    it('rejects a second plan and plans over the iteration budget', async () => {
+      const gs = makeGoalState({ maxIterations: 1 })
+      const tool = tools.createPlanGoalTool(gs)
+      const tooLarge = await tool.execute('id-budget', {
+        steps: [
+          { name: 'S1', description: '', agent: 'coder', task: 'one' },
+          { name: 'S2', description: '', agent: 'reviewer', task: 'two' },
+        ],
+        reasoning: 'too large',
+      })
+      assert.equal(tooLarge.isError, true)
+      assert.equal(gs.plan, null)
+
+      await tool.execute('id-valid', {
+        steps: [{ name: 'S1', description: '', agent: 'coder', task: 'one' }],
+        reasoning: 'valid',
+      })
+      const duplicate = await tool.execute('id-duplicate', {
+        steps: [{ name: 'Replacement', description: '', agent: 'coder', task: 'replace' }],
+        reasoning: 'replace',
+      })
+      assert.equal(duplicate.isError, true)
+      assert.equal(gs.plan.steps[0].name, 'S1')
+    })
   })
 
   describe('check_progress tool', () => {
@@ -138,10 +191,11 @@ describe('goal-loop tools', () => {
       const gs = makeGoalState()
       gs.plan = {
         steps: [
-          { index: 0, name: 'S1', description: '', agent: 'coder', task: 'do', status: 'completed' },
+          { index: 0, name: 'S1', description: '', agent: 'coder', task: 'do', status: 'completed', checked: false },
         ],
         reasoning: 'test',
       }
+      gs.currentStepIndex = 0
       const tool = tools.createCheckProgressTool(gs)
       const result = await tool.execute('id-2', {
         step_index: 0,
@@ -151,18 +205,20 @@ describe('goal-loop tools', () => {
 
       assert.equal(gs.progressNotes.length, 1)
       assert.ok(gs.progressNotes[0].includes('All good'))
-      assert.ok(result.content[0].text.includes('achieved'))
+      assert.equal(gs.plan.steps[0].checked, true)
+      assert.ok(result.content[0].text.includes('checked'))
     })
 
     it('records adjustments', async () => {
       const gs = makeGoalState()
       gs.plan = {
         steps: [
-          { index: 0, name: 'S1', description: '', agent: 'coder', task: 'do', status: 'completed' },
-          { index: 1, name: 'S2', description: '', agent: 'reviewer', task: 'review', status: 'pending' },
+          { index: 0, name: 'S1', description: '', agent: 'coder', task: 'do', status: 'completed', checked: false },
+          { index: 1, name: 'S2', description: '', agent: 'reviewer', task: 'review', status: 'pending', checked: false },
         ],
         reasoning: 'test',
       }
+      gs.currentStepIndex = 0
       const tool = tools.createCheckProgressTool(gs)
       await tool.execute('id-3', {
         step_index: 0,
@@ -173,6 +229,70 @@ describe('goal-loop tools', () => {
 
       assert.equal(gs.progressNotes.length, 2) // note + adjustment
       assert.ok(gs.progressNotes[1].includes('edge case'))
+    })
+
+    it('rejects checking a pending or already checked step', async () => {
+      const gs = makeGoalState({
+        currentStepIndex: 0,
+        plan: {
+          steps: [
+            { index: 0, name: 'S1', description: '', agent: 'coder', task: 'do', status: 'pending', checked: false },
+          ],
+          reasoning: 'test',
+        },
+      })
+      const tool = tools.createCheckProgressTool(gs)
+      const pending = await tool.execute('id-pending', {
+        step_index: 0,
+        achieved: true,
+        note: 'premature',
+      })
+      assert.equal(pending.isError, true)
+
+      gs.plan.steps[0].status = 'completed'
+      await tool.execute('id-checked', { step_index: 0, achieved: true, note: 'done' })
+      const duplicate = await tool.execute('id-recheck', { step_index: 0, achieved: true, note: 'again' })
+      assert.equal(duplicate.isError, true)
+    })
+  })
+
+  describe('execute_step tool', () => {
+    it('enforces ordered execution with a check between steps', async () => {
+      const gs = makeGoalState()
+      const planTool = tools.createPlanGoalTool(gs)
+      await planTool.execute('plan', {
+        steps: [
+          { name: 'S1', description: '', agent: 'coder', task: 'one' },
+          { name: 'S2', description: '', agent: 'reviewer', task: 'two' },
+        ],
+        reasoning: 'ordered',
+      })
+      const executed = []
+      const executeTool = tools.createExecuteStepTool(gs, {
+        runtimeConfig: {},
+        runSubagent: async ({ agentName, task }) => {
+          executed.push([agentName, task])
+          return {
+            exitCode: 0,
+            finalOutput: `${task} done`,
+            usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 1 },
+          }
+        },
+      })
+      const checkTool = tools.createCheckProgressTool(gs)
+
+      await executeTool.execute('execute-0', { step_index: 0 })
+      assert.equal(gs.plan.steps[0].status, 'completed')
+      assert.equal(gs.steps[0].status, 'completed')
+
+      const beforeCheck = await executeTool.execute('execute-1-early', { step_index: 1 })
+      assert.equal(beforeCheck.isError, true)
+      assert.equal(executed.length, 1)
+
+      await checkTool.execute('check-0', { step_index: 0, achieved: true, note: 'done' })
+      await executeTool.execute('execute-1', { step_index: 1 })
+      assert.deepEqual(executed, [['coder', 'one'], ['reviewer', 'two']])
+      assert.equal(gs.currentIteration, 2)
     })
   })
 })

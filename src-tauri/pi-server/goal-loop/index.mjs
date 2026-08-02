@@ -1,12 +1,10 @@
 /**
- * Goal Loop Engine — simple agent loop for achieving goals.
- *
- * Pattern: one Agent with access to sub-agents as tools.
- * No enforced plan/execute/check protocol — the AI decides how to work.
+ * Goal Loop Engine — stateful goal orchestration with an enforced
+ * plan -> execute -> check protocol.
  */
 import { Agent } from '@earendil-works/pi-agent-core'
 import { buildGoalSystemPrompt } from './system-prompt.mjs'
-import { createRunSubagentTool } from './tools.mjs'
+import { createPlanGoalTool, createExecuteStepTool, createCheckProgressTool } from './tools.mjs'
 import { evaluateToolCall } from '../execution-policy.mjs'
 import { buildToolSecurityIndex } from '../tool-security.mjs'
 import { createToolAuditTracker } from '../audit-store.mjs'
@@ -62,7 +60,7 @@ export async function runGoalLoop({
     }
   }
 
-  // 2. Build tools — context tools + run_subagent
+  // 2. Build tools — read-only context plus the enforced goal state machine
   const allTools = getTools
     ? getTools(runtimeConfig.workspaceDir, runtimeConfig.webSearchConfig)
     : []
@@ -75,7 +73,8 @@ export async function runGoalLoop({
     allowedToolNames: allTools.map((tool) => tool.name),
     toolSecurity: buildToolSecurityIndex(allTools),
   }
-  const runSubagentTool = createRunSubagentTool(goalState, {
+  const planGoalTool = createPlanGoalTool(goalState)
+  const executeStepTool = createExecuteStepTool(goalState, {
     runtimeConfig: delegationRuntimeConfig, resolveModel, getTools, projectDir,
     requestToolApproval: requestToolApproval
       ? (toolCall, decision) => authorize(toolCall, decision)
@@ -83,7 +82,8 @@ export async function runGoalLoop({
     onToolCallFinished,
     auditContext,
   })
-  const tools = [...contextTools, runSubagentTool]
+  const checkProgressTool = createCheckProgressTool(goalState)
+  const tools = [...contextTools, planGoalTool, executeStepTool, checkProgressTool]
   const effectiveConfig = {
     ...runtimeConfig,
     toolSecurity: buildToolSecurityIndex(tools),
@@ -94,7 +94,7 @@ export async function runGoalLoop({
   })
 
   // 3. Build system prompt
-  const systemPrompt = buildGoalSystemPrompt(goalState, projectDir)
+  const systemPrompt = buildGoalSystemPrompt(goalState, projectDir, runtimeConfig)
 
   // 4. Create Agent
   const sessionId = `goal-${goalState.id}-${Date.now()}`
@@ -157,18 +157,54 @@ export async function runGoalLoop({
     toolExecution: 'sequential',
   })
 
-  // 5. Subscribe to events → forward tool events for UI progress
+  // 5. Subscribe to events -> forward structured progress and persist each transition
   const unsub = agent.subscribe((event) => {
-    if (!onUpdate) return
-    // Forward subagent tool events for step tracking in the UI
-    if (event.type === 'tool_execution_end' && event.toolName === 'run_subagent') {
-      // Step events are already emitted by the tool's execute function
+    if (event.type === 'tool_execution_start') {
+      if (event.toolName === 'plan_goal') {
+        onUpdate?.({ type: 'goal_planning' })
+      } else if (event.toolName === 'execute_step') {
+        const planIndex = Number(event.args?.step_index)
+        const step = goalState.plan?.steps?.[planIndex]
+        if (step) {
+          onUpdate?.({
+            type: 'goal_step_start',
+            agent: step.agent,
+            task: step.task,
+            stepIndex: goalState.steps.length,
+          })
+        }
+      } else if (event.toolName === 'check_progress') {
+        onUpdate?.({ type: 'goal_checking' })
+      }
+    } else if (event.type === 'tool_execution_end') {
+      if (event.toolName === 'plan_goal') {
+        onUpdate?.({ type: 'goal_plan', plan: goalState.plan })
+      } else if (event.toolName === 'execute_step') {
+        const executionIndex = event.result?.details?.stepIndex ?? goalState.steps.length - 1
+        const step = goalState.steps[executionIndex]
+        if (step) {
+          onUpdate?.({ type: 'goal_step_end', stepIndex: executionIndex, result: step.result })
+        }
+      } else if (event.toolName === 'check_progress') {
+        onUpdate?.({
+          type: 'goal_progress',
+          note: goalState.progressNotes[goalState.progressNotes.length - 1] || '',
+        })
+      }
+    } else if (event.type === 'tool_execution_update') {
+      onUpdate?.({
+        type: 'goal_step_update',
+        stepIndex: Math.max(0, goalState.steps.length - 1),
+        update: event.partialResult,
+      })
     }
-    if (persistFn) persistFn(goalState)
+    persistFn?.(goalState)
   })
 
   // 6. Execute
-  const initialPrompt = `Goal: ${goalState.goal}\n\nWork towards this goal. Research first, then delegate to sub-agents as needed. When done, summarize what was accomplished.`
+  const initialPrompt = `Goal: ${goalState.goal}
+
+You MUST begin with plan_goal. Then execute every planned step in order with execute_step and call check_progress immediately after each one. Do not claim completion while any planned step is pending, running, or unchecked.`
 
   let finalOutput = ''
   let usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 }
@@ -182,6 +218,22 @@ export async function runGoalLoop({
       await agent.prompt(initialPrompt)
       if (blockedApprovalReason) {
         throw new Error(blockedApprovalReason)
+      }
+
+      if (!goalState.plan) {
+        throw new Error('Goal agent stopped without creating the required plan.')
+      }
+      const unfinishedSteps = goalState.plan.steps.filter(
+        (step) => step.status === 'pending' || step.status === 'running',
+      )
+      const uncheckedSteps = goalState.plan.steps.filter((step) => !step.checked)
+      const unsuccessfulSteps = goalState.plan.steps.filter(
+        (step) => step.status !== 'completed' || step.achieved !== true,
+      )
+      if (unfinishedSteps.length > 0 || uncheckedSteps.length > 0 || unsuccessfulSteps.length > 0) {
+        throw new Error(
+          `Goal agent stopped before achieving the plan: ${unfinishedSteps.length} unfinished, ${uncheckedSteps.length} unchecked, and ${unsuccessfulSteps.length} unsuccessful step(s).`,
+        )
       }
 
       // Collect results from messages
@@ -203,7 +255,9 @@ export async function runGoalLoop({
             usage.output += msg.usage.output || 0
             usage.cacheRead += msg.usage.cacheRead || 0
             usage.cacheWrite += msg.usage.cacheWrite || 0
-            usage.cost += msg.usage.cost || 0
+            usage.cost += typeof msg.usage.cost === 'number'
+              ? msg.usage.cost
+              : msg.usage.cost?.total || 0
             usage.turns += 1
           }
         }

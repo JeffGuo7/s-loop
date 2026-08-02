@@ -43,7 +43,6 @@ export interface ScheduledTask {
   /** Per-task model/provider overrides */
   model?: string
   provider?: string
-  apiKey?: string
   workspaceDir?: string
   /** Deliver output to chat or a configured platform when done */
   deliver: TaskDelivery

@@ -1,15 +1,16 @@
 /**
  * Goal Loop system prompt builder.
- * Simple directive: achieve the goal using available tools and sub-agents.
- * No enforced protocol — the AI decides how to decompose and execute.
+ * Enforced Plan → Execute → Check protocol for durable goal runs.
  */
 import { discoverAgents, formatAgentList } from '../subagent/agent-registry.mjs'
+import { assembleRuntimeSystemPrompt } from '../runtime-prompt.mjs'
 
-export function buildGoalSystemPrompt(goalState, projectDir) {
+export function buildGoalSystemPrompt(goalState, projectDir, runtimeConfig = {}) {
   const { agents } = discoverAgents(projectDir)
   const agentList = formatAgentList(agents)
 
-  return `You are an autonomous goal executor. Achieve the user's goal by researching, delegating, and building.
+  const goalPrompt = `## Goal Runtime
+Operate autonomously within the active agent's identity, rules, permissions, and workspace authority. You must use the structured protocol below; a text-only completion without the required tool state is a failed run.
 
 ## Goal
 ${goalState.goal}
@@ -17,16 +18,27 @@ ${goalState.goal}
 ## Sub-Agents
 ${agentList}
 
-Use **run_subagent** to delegate tasks. Choose the right sub-agent for each task:
-- \`researcher\` — investigate code, search docs, analyze patterns
-- \`coder\` — write and edit code
-- \`reviewer\` — review for bugs, security, and quality
+## Required Protocol
+1. Use read-only context tools when necessary to understand the task.
+2. Your first state-changing action must be **plan_goal** with an ordered plan.
+3. Call **execute_step(0)**, wait for completion, then call **check_progress(0)**.
+4. Continue strictly in order: execute_step(N), then check_progress(N).
+5. Do not execute another step until the previous step has been checked.
+6. Execute and check every planned step before writing the final answer.
+7. You may call execute_step at most ${goalState.maxIterations} times.
+8. The final answer must distinguish completed work, failed work, evidence, and anything remaining.
 
-Use **web_search** and **web_fetch** to gather information. Use **read**, **grep**, and other tools to explore the codebase.
+## Planning Rules
+- Each plan step must select one available sub-agent and contain a complete standalone task.
+- Keep the plan proportional to the goal and within the iteration budget.
+- Use researcher for investigation, coder for implementation, and reviewer for independent verification.
+- A failed step still requires check_progress and must be reported honestly.
+- Never claim success merely because the model stopped or a tool returned partial output.`
 
-## Approach
-1. Research first — understand the codebase and problem before acting
-2. Delegate strategically — use sub-agents for focused work
-3. Verify results — review what sub-agents produce
-4. When the goal is achieved, write a clear final summary of what was done`
+  return assembleRuntimeSystemPrompt({
+    agentSystemPrompt: runtimeConfig.agentSystemPrompt,
+    agentSkillsBlock: runtimeConfig.agentSkillsBlock,
+    surfacePrompt: goalPrompt,
+    fallbackPrompt: 'You are an autonomous goal executor. Follow safety, permission, and tool rules.',
+  })
 }

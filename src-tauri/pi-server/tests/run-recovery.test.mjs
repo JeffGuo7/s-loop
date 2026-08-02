@@ -33,8 +33,14 @@ test('startup marks uncertain task, goal, and platform executions interrupted', 
     const task = createTask({
       name: 'recovery task',
       prompt: 'work',
+      apiKey: 'legacy-plaintext-secret',
       schedule: { kind: 'interval', minutes: 30, display: 'every 30m' },
     })
+    assert.equal(Object.hasOwn(task, 'apiKey'), false)
+    assert.doesNotMatch(
+      fs.readFileSync(path.join(root, 'tasks', 'tasks.json'), 'utf8'),
+      /legacy-plaintext-secret/,
+    )
     markTaskRunning(task.id, { runId: 'task-run', trigger: 'scheduled' })
 
     initGoalPersistence(root)

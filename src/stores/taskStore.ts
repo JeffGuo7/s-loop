@@ -25,7 +25,6 @@ export interface CreateTaskInput {
   contextFrom?: string[]
   model?: string
   provider?: string
-  apiKey?: string
   workspaceDir?: string
   deliver?: TaskDelivery
   deliverSessionId?: string

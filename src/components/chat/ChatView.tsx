@@ -22,6 +22,10 @@ import {
 import type { KiloMessage } from '../../types'
 import { motion, AnimatePresence } from 'framer-motion'
 import { assembleAgentSystemPrompt } from '../../utils/agentPrompt'
+import {
+  assembleAgentRuntimePrompt,
+  formatAgentSkillsBlock,
+} from '../../utils/agentRuntime'
 
 const EMPTY_MESSAGES: never[] = []
 const EMPTY_STREAMING = null
@@ -52,6 +56,7 @@ export function ChatView() {
   })
 
   const [error, setError] = useState<string | null>(null)
+  const [contextStatus, setContextStatus] = useState<Pi.ContextStatus | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [dragTargetZone, setDragTargetZone] = useState<'message' | 'input'>('message')
   const [showPermissionPopup, setShowPermissionPopup] = useState(false)
@@ -118,6 +123,11 @@ export function ChatView() {
       onToolApproval: (request) => {
         setPendingApproval({ ...request, piSessionId })
       },
+      onStatus: (status) => {
+        if (status.type === 'compacting' || status.type === 'compacted') {
+          setContextStatus(status)
+        }
+      },
       onDone: () => {
         unsubscribe()
         streamUnsubsRef.current.delete(piSessionId)
@@ -146,6 +156,7 @@ export function ChatView() {
       if ((!content || !content.trim()) && (!images || images.length === 0)) return
       if (!sid) return
       setError(null)
+      setContextStatus(null)
 
       if (isReadOnlySession) {
         setError(t('chat.session.readOnlyHint'))
@@ -178,11 +189,7 @@ export function ChatView() {
         try {
           const ks = await Pi.createSession()
           pid = ks.id
-          useAppStore.setState((state) => ({
-            sessions: state.sessions.map((s) =>
-              s.id === sid ? { ...s, piId: pid } : s,
-            ),
-          }))
+          useAppStore.getState().setSessionPiId(sid, pid)
         } catch {
           setError(t('chat.errors.sessionFailed'))
           usePetStore.getState().onError()
@@ -202,6 +209,7 @@ export function ChatView() {
       const enabledSkills = activeAgent
         ? activeAgent.skills.map(n => skillStore.skills.find(s => s.name === n)).filter((s): s is NonNullable<typeof s> => s !== undefined && s.enabled)
         : skillStore.skills.filter(s => s.enabled)
+      const agentSkillsBlock = formatAgentSkillsBlock(enabledSkills)
 
       const mcpStore = useMCPStore.getState()
       const mcpServers = mcpStore.servers
@@ -227,15 +235,6 @@ export function ChatView() {
 
       let enrichedContent = content
       const blocks: string[] = []
-
-      if (enabledSkills.length > 0) {
-        const skillBlocks = enabledSkills.map(s =>
-          s.content
-            ? `<skill name="${s.name}">\n${s.description ? `Description: ${s.description}\n` : ''}${s.content}\n</skill>`
-            : `<skill name="${s.name}">\n${s.description || ''}\n</skill>`
-        )
-        blocks.push('## Active Skills\nThe following skills are activated and their instructions should be followed:\n' + skillBlocks.join('\n\n'))
-      }
 
       if (connectedMCPTools.length > 0) {
         const listings = connectedMCPTools.map(({ serverName, toolName }) => {
@@ -297,12 +296,15 @@ export function ChatView() {
       usePetStore.getState().onThinking()
 
       const providerInfo = providerList.find((p) => p.id === activeProvider)
-      const agentSystemPrompt = activeAgent
-        ? assembleAgentSystemPrompt(activeAgent, {
-            userProfile: agentStore.userProfile,
-            voice: getVoiceConversation().active,
-          })
-        : undefined
+      const agentSystemPrompt = assembleAgentRuntimePrompt(
+        activeAgent
+          ? assembleAgentSystemPrompt(activeAgent, {
+              userProfile: agentStore.userProfile,
+              voice: getVoiceConversation().active,
+            })
+          : undefined,
+        agentSkillsBlock,
+      )
 
       const result = await Pi.prompt(pid!, enrichedContent, {
         systemPrompt: agentSystemPrompt,
@@ -616,6 +618,17 @@ export function ChatView() {
         </div>
         <div className="bg-linear-to-t from-bg to-transparent pt-1 pb-2 shrink-0">
           <div className="w-full max-w-(--spacing-chat-max) mx-auto relative px-4">
+            {contextStatus && (
+              <div className="mb-2 flex justify-center" role="status" aria-live="polite">
+                <div className="rounded-full border border-accent/20 bg-accent/8 px-3 py-1 text-[10px] font-semibold text-text-secondary">
+                  {contextStatus.type === 'compacting'
+                    ? '正在整理较早的对话上下文…'
+                    : `上下文已整理${contextStatus.tokensBefore && contextStatus.tokensAfter
+                      ? ` · ${contextStatus.tokensBefore.toLocaleString()} → ${contextStatus.tokensAfter.toLocaleString()} tokens`
+                      : ''}`}
+                </div>
+              </div>
+            )}
             <ChatInput
                   onSubmit={handleSubmit}
                   onAbort={abort}

@@ -2,6 +2,17 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { WebSearchConfig, WebSearchProviderId, WebSearchProviderConfig } from '../types/websearch'
 import { WEB_SEARCH_PROVIDERS } from '../types/websearch'
+import {
+  mergeProtectedCredential,
+  readProtectedCredential,
+  webSearchCredentialName,
+} from '../utils/credentialVault'
+
+export function redactWebSearchProviders(
+  providers: WebSearchProviderConfig[],
+): WebSearchProviderConfig[] {
+  return providers.map((provider) => ({ ...provider, apiKey: '' }))
+}
 
 interface WebSearchState {
   /** Currently active provider ID */
@@ -18,6 +29,9 @@ interface WebSearchState {
 
   /** Update a provider's config */
   updateProvider: (id: WebSearchProviderId, updates: Partial<WebSearchProviderConfig>) => void
+
+  /** Load API keys from the OS-protected credential vault. */
+  hydrateProviderSecrets: () => Promise<void>
 
   /** Switch active provider */
   setActiveProvider: (id: WebSearchProviderId) => void
@@ -54,6 +68,35 @@ export const useWebSearchStore = create<WebSearchState>()(
             p.id === id ? { ...p, ...updates } : p
           ),
         }))
+        if (Object.prototype.hasOwnProperty.call(updates, 'apiKey')) {
+          mergeProtectedCredential(webSearchCredentialName(id), {
+            apiKey: updates.apiKey || null,
+          }).catch((error) => {
+            console.warn(`[websearch] Unable to protect API key for "${id}":`, error)
+          })
+        }
+      },
+
+      hydrateProviderSecrets: async () => {
+        const current = get().providers
+        const hydrated = [...current]
+        await Promise.all(current.map(async (provider, index) => {
+          try {
+            const credential = await readProtectedCredential(webSearchCredentialName(provider.id))
+            const protectedKey = typeof credential.apiKey === 'string' ? credential.apiKey : ''
+            if (protectedKey) {
+              hydrated[index] = { ...provider, apiKey: protectedKey }
+            } else if (provider.apiKey) {
+              // One-time migration from legacy localStorage plaintext.
+              await mergeProtectedCredential(webSearchCredentialName(provider.id), {
+                apiKey: provider.apiKey,
+              })
+            }
+          } catch (error) {
+            console.warn(`[websearch] Unable to load protected API key for "${provider.id}":`, error)
+          }
+        }))
+        set({ providers: hydrated })
       },
 
       setActiveProvider: (id) => {
@@ -82,7 +125,7 @@ export const useWebSearchStore = create<WebSearchState>()(
       name: 'snotra-websearch-storage',
       partialize: (state) => ({
         activeProvider: state.activeProvider,
-        providers: state.providers,
+        providers: redactWebSearchProviders(state.providers),
         maxResults: state.maxResults,
       }),
     }

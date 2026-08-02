@@ -139,6 +139,11 @@ function App() {
       providerID: activeProvider,
       modelID: config.model,
       apiKey: config.apiKey,
+      providerApiKeys: Object.fromEntries(
+        Object.entries(providerConfigs)
+          .filter(([, providerConfig]) => Boolean(providerConfig.apiKey))
+          .map(([providerId, providerConfig]) => [providerId, providerConfig.apiKey]),
+      ),
       workspaceDir: workspaceDir ?? undefined,
       thinkingLevel: config.reasoningEfforts?.[config.model] || 'medium',
       providerConfig: {
@@ -171,6 +176,8 @@ function App() {
   }, [agents, userProfile, kokoroSpeakerId])
 
   useEffect(() => {
+    useAppStore.getState().hydrateProviderSecrets().catch(() => {})
+    useWebSearchStore.getState().hydrateProviderSecrets().catch(() => {})
     useMCPStore.getState().refreshAllServers().catch(() => {})
     useSkillStore.getState().refreshSkills().catch(() => {})
 
@@ -184,7 +191,7 @@ function App() {
             const existing = await getAllSessions()
             if (existing.length === 0) {
               for (const s of sessions) {
-                await dbCreateSession(s.id, s.title || '', s.model || '')
+                await dbCreateSession(s.id, s.title || '', s.model || '', s.piId || undefined)
               }
               if (sessionMessages) {
                 for (const [sessionId, msgs] of Object.entries(sessionMessages)) {

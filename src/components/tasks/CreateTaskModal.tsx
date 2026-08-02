@@ -92,7 +92,7 @@ export function CreateTaskModal({ onClose }: CreateTaskModalProps) {
     setSaving(true);
     try {
       const schedule = parseSchedule(scheduleValue.trim());
-      await createTask({ name: name.trim(), prompt: prompt.trim(), schedule, provider: activeProvider, model: providerConfigs[activeProvider]?.model || '', apiKey: providerConfigs[activeProvider]?.apiKey || '', workspaceDir: workspaceDir || undefined, deliver, enabled: true });
+      await createTask({ name: name.trim(), prompt: prompt.trim(), schedule, provider: activeProvider, model: providerConfigs[activeProvider]?.model || '', workspaceDir: workspaceDir || undefined, deliver, enabled: true });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

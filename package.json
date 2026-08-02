@@ -8,7 +8,7 @@
     "build": "tsc && vite build && node scripts/pack-pi-server.mjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:server": "node --test src-tauri/pi-server/tests/*.test.mjs src-tauri/pi-server/subagent/*.test.mjs",
+    "test:server": "node --test src-tauri/pi-server/tests/*.test.mjs src-tauri/pi-server/subagent/*.test.mjs src-tauri/pi-server/goal-loop/test.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "tauri": "node scripts/with-native-build-env.mjs tauri",

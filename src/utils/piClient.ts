@@ -68,6 +68,15 @@ export interface ToolApprovalRequest {
   reason?: string
 }
 
+export interface ContextStatus {
+  type: 'compacting' | 'compacted' | string
+  message?: string
+  compressionCount?: number
+  tokensBefore?: number
+  tokensAfter?: number
+  fallback?: boolean
+}
+
 export interface PiStreamCallbacks {
   onText: (pid: string, delta: string) => void
   onThinking: (delta: string) => void
@@ -76,6 +85,7 @@ export interface PiStreamCallbacks {
   onToolUpdate?: (id: string, name: string, partialResult: any) => void
   onMcpToolRequest?: (request: McpToolRequest) => void
   onToolApproval?: (request: ToolApprovalRequest) => void
+  onStatus?: (status: ContextStatus) => void
   onDone: () => void
   onResult?: (text: string) => void
   onError?: (msg: string) => void
@@ -193,6 +203,7 @@ export async function syncRuntimeConfig(config: {
   providerID: string
   modelID: string
   apiKey?: string
+  providerApiKeys?: Record<string, string>
   workspaceDir?: string
   workspaceRoots?: WorkspaceRoot[]
   thinkingLevel?: string
@@ -357,6 +368,9 @@ export async function prompt(
                 case 'tool_approval_request':
                   cb?.onToolApproval?.(data)
                   break
+                case 'status':
+                  cb?.onStatus?.(data)
+                  break
                 case 'result':
                   resultText = data.text || ''
                   cb?.onResult?.(resultText)
@@ -511,7 +525,8 @@ export async function deleteSession(sessionId: string): Promise<void> {
 export interface GoalState {
   id: string
   goal: string
-  status: 'pending' | 'planning' | 'executing' | 'completed' | 'failed' | 'aborted'
+  status: 'pending' | 'running' | 'waiting_for_approval' | 'completed' | 'failed' | 'aborted'
+  steps: GoalExecutionStep[]
   plan: GoalPlan | null
   currentStepIndex: number
   currentIteration: number
@@ -533,7 +548,10 @@ export interface GoalStep {
   description: string
   agent: string
   task: string
-  status: 'pending' | 'running' | 'completed' | 'skipped' | 'failed'
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  checked: boolean
+  achieved?: boolean
+  checkNote?: string
   result?: {
     agent: string
     exitCode: number
@@ -542,6 +560,15 @@ export interface GoalStep {
     stopReason?: string
     errorMessage?: string
   }
+}
+
+export interface GoalExecutionStep {
+  agent: string
+  task: string
+  status: 'running' | 'completed' | 'failed'
+  planIndex?: number
+  name?: string
+  result?: GoalStep['result']
 }
 
 export async function fetchGoals(): Promise<GoalState[]> {

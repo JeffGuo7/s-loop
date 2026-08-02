@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL DEFAULT '',
   model TEXT NOT NULL DEFAULT '',
+  pi_id TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -35,6 +36,10 @@ export async function initDatabase(): Promise<Database> {
   if (db) return db
   db = await Database.load('sqlite:snotra.db')
   await db.execute(SCHEMA)
+  const sessionColumns = await db.select<{ name: string }[]>('PRAGMA table_info(sessions)')
+  if (!sessionColumns.some((column) => column.name === 'pi_id')) {
+    await db.execute('ALTER TABLE sessions ADD COLUMN pi_id TEXT')
+  }
   await db.execute('PRAGMA journal_mode=WAL')
   return db
 }
@@ -50,6 +55,7 @@ export interface SessionRow {
   id: string
   title: string
   model: string
+  pi_id: string | null
   created_at: number
   updated_at: number
 }
@@ -65,21 +71,30 @@ export async function getSession(id: string): Promise<SessionRow | null> {
   return rows[0] || null
 }
 
-export async function createSession(id: string, title: string, model = ''): Promise<void> {
+export async function createSession(
+  id: string,
+  title: string,
+  model = '',
+  piId?: string,
+): Promise<void> {
   const d = await getDatabase()
   const now = Date.now()
   await d.execute(
-    'INSERT INTO sessions (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-    [id, title, model, now, now]
+    'INSERT INTO sessions (id, title, model, pi_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, title, model, piId || null, now, now]
   )
 }
 
-export async function updateSession(id: string, updates: Partial<Pick<SessionRow, 'title' | 'model'>>): Promise<void> {
+export async function updateSession(
+  id: string,
+  updates: Partial<Pick<SessionRow, 'title' | 'model' | 'pi_id'>>,
+): Promise<void> {
   const d = await getDatabase()
   const sets: string[] = []
   const params: any[] = []
   if (updates.title !== undefined) { sets.push('title = ?'); params.push(updates.title) }
   if (updates.model !== undefined) { sets.push('model = ?'); params.push(updates.model) }
+  if (updates.pi_id !== undefined) { sets.push('pi_id = ?'); params.push(updates.pi_id) }
   sets.push('updated_at = ?'); params.push(Date.now())
   params.push(id)
   await d.execute(`UPDATE sessions SET ${sets.join(', ')} WHERE id = ?`, params)

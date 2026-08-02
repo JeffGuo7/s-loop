@@ -10,6 +10,11 @@ import {
   normalizeKokoroSpeakerId,
   type KokoroSpeakerId,
 } from '../config/kokoroVoices'
+import {
+  loadProviderApiKey,
+  redactProviderConfigs,
+  saveProviderApiKey,
+} from '../utils/credentialVault'
 
 interface AppState {
   // Sessions (cached from DB)
@@ -58,6 +63,7 @@ interface AppState {
   deleteSession: (id: string) => void
   setActiveSession: (id: string | null) => void
   updateSessionTitle: (id: string, title: string) => void
+  setSessionPiId: (id: string, piId: string) => void
   clearSessions: () => void
 
   // Actions - Messages
@@ -77,6 +83,7 @@ interface AppState {
   // Actions - Provider
   setActiveProvider: (id: string) => void
   setProviderConfig: (id: string, config: Partial<ProviderConfig>) => void
+  hydrateProviderSecrets: () => Promise<void>
   setProviderList: (list: ProviderInfo[]) => void
   addCustomProvider: (provider: ProviderInfo) => void
   updateCustomProvider: (id: string, updates: Partial<ProviderInfo>) => void
@@ -148,6 +155,7 @@ export const useAppStore = create<AppState>()(
             id: r.id,
             title: r.title,
             model: r.model,
+            piId: r.pi_id || undefined,
             createdAt: r.created_at,
             updatedAt: r.updated_at,
           }))
@@ -185,6 +193,7 @@ export const useAppStore = create<AppState>()(
 
       deleteSession: (id) => {
         const state = get()
+        const piId = state.sessions.find((session) => session.id === id)?.piId
         set({
           sessions: state.sessions.filter((s) => s.id !== id),
           activeSessionId: state.activeSessionId === id ? (state.sessions.find(s => s.id !== id)?.id ?? null) : state.activeSessionId,
@@ -197,7 +206,9 @@ export const useAppStore = create<AppState>()(
         })
         db.deleteSession(id).catch(console.warn)
         // Also delete the session file from disk (pi-server)
-        import('../utils/piClient').then((pi) => pi.deleteSession(id).catch(() => {}))
+        if (piId) {
+          import('../utils/piClient').then((pi) => pi.deleteSession(piId).catch(() => {}))
+        }
       },
 
       setActiveSession: (id) => {
@@ -219,17 +230,33 @@ export const useAppStore = create<AppState>()(
         db.updateSession(id, { title }).catch(console.warn)
       },
 
+      setSessionPiId: (id, piId) => {
+        set((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === id
+              ? { ...session, piId, updatedAt: Date.now() }
+              : session,
+          ),
+        }))
+        db.updateSession(id, { pi_id: piId }).catch(console.warn)
+      },
+
       clearSessions: () => {
-        const ids = get().sessions.map(s => s.id)
+        const sessions = get().sessions.map(({ id, piId }) => ({ id, piId }))
         set({
           sessions: [],
           activeSessionId: null,
           sessionMessages: {},
           streamingMessage: {},
         })
-        Promise.all(ids.map(sid => db.deleteSession(sid))).catch(console.warn)
+        Promise.all(sessions.map(({ id }) => db.deleteSession(id))).catch(console.warn)
         // Also delete session files from disk
-        import('../utils/piClient').then((pi) => Promise.all(ids.map(sid => pi.deleteSession(sid).catch(() => {}))).catch(() => {}))
+        const piIds = sessions.flatMap(({ piId }) => piId ? [piId] : [])
+        if (piIds.length > 0) {
+          import('../utils/piClient').then((pi) =>
+            Promise.all(piIds.map((piId) => pi.deleteSession(piId).catch(() => {}))).catch(() => {}),
+          )
+        }
       },
 
       // ---- Message actions ----
@@ -462,6 +489,30 @@ export const useAppStore = create<AppState>()(
             [id]: { ...(state.providerConfigs[id] || { apiKey: '', model: '', baseUrl: '', supportsVision: false }), ...config },
           },
         }))
+        if (Object.prototype.hasOwnProperty.call(config, 'apiKey')) {
+          saveProviderApiKey(id, config.apiKey || '').catch((error) => {
+            console.warn(`[provider] Unable to protect API key for "${id}":`, error)
+          })
+        }
+      },
+
+      hydrateProviderSecrets: async () => {
+        const current = get().providerConfigs
+        const hydrated = { ...current }
+        await Promise.all(Object.entries(current).map(async ([id, config]) => {
+          try {
+            const protectedKey = await loadProviderApiKey(id)
+            if (protectedKey) {
+              hydrated[id] = { ...config, apiKey: protectedKey }
+            } else if (config.apiKey) {
+              // One-time migration from legacy localStorage plaintext.
+              await saveProviderApiKey(id, config.apiKey)
+            }
+          } catch (error) {
+            console.warn(`[provider] Unable to load protected API key for "${id}":`, error)
+          }
+        }))
+        set({ providerConfigs: hydrated })
       },
 
       setProviderList: (list) => set((state) => ({ providerList: mergeProviderList(list, state.customProviders) })),
@@ -526,7 +577,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         sessions: state.sessions,
         activeProvider: state.activeProvider,
-        providerConfigs: state.providerConfigs,
+        providerConfigs: redactProviderConfigs(state.providerConfigs),
         customProviders: state.customProviders,
         theme: state.theme,
         colorScheme: state.colorScheme,

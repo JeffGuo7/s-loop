@@ -1,6 +1,7 @@
 import { useAgentStore } from '../stores/agentStore'
 import { useSkillStore } from '../stores/skillStore'
 import type { WorkspaceRoot } from '../types/agent'
+import type { SkillInfo } from '../types/skill'
 import { assembleAgentSystemPrompt } from './agentPrompt'
 
 /**
@@ -23,6 +24,27 @@ export interface AgentRuntimeConfig {
   workspaceRoots?: WorkspaceRoot[]
 }
 
+export function formatAgentSkillsBlock(skills: SkillInfo[]): string | undefined {
+  if (skills.length === 0) return undefined
+  const blocks = skills.map((skill) =>
+    skill.content
+      ? `<skill name="${skill.name}">\n${skill.description ? `Description: ${skill.description}\n` : ''}${skill.content}\n</skill>`
+      : `<skill name="${skill.name}">\n${skill.description || ''}\n</skill>`,
+  )
+  return '## Active Skills\nThe following skills are activated and their instructions should be followed:\n' +
+    blocks.join('\n\n')
+}
+
+export function assembleAgentRuntimePrompt(
+  agentSystemPrompt?: string,
+  agentSkillsBlock?: string,
+): string | undefined {
+  const sections = [agentSystemPrompt, agentSkillsBlock]
+    .map((section) => section?.trim())
+    .filter((section): section is string => Boolean(section))
+  return sections.length > 0 ? sections.join('\n\n') : undefined
+}
+
 export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
   const agentStore = useAgentStore.getState()
   const activeAgent = agentStore.activeAgentId
@@ -36,23 +58,13 @@ export function buildAgentRuntimeConfig(): AgentRuntimeConfig {
         .filter((s): s is NonNullable<typeof s> => s !== undefined && s.enabled)
     : skillStore.skills.filter((s) => s.enabled)
 
-  let skillsBlock = ''
-  if (enabledSkills.length > 0) {
-    const blocks = enabledSkills.map((s) =>
-      s.content
-        ? `<skill name="${s.name}">\n${s.description ? `Description: ${s.description}\n` : ''}${s.content}\n</skill>`
-        : `<skill name="${s.name}">\n${s.description || ''}\n</skill>`,
-    )
-    skillsBlock =
-      '## Active Skills\nThe following skills are activated and their instructions should be followed:\n' +
-      blocks.join('\n\n')
-  }
+  const skillsBlock = formatAgentSkillsBlock(enabledSkills)
 
   return {
     agentSystemPrompt: activeAgent
       ? assembleAgentSystemPrompt(activeAgent, { userProfile: agentStore.userProfile })
       : undefined,
-    agentSkillsBlock: skillsBlock || undefined,
+    agentSkillsBlock: skillsBlock,
     agentModel: activeAgent?.model || undefined,
     permissionMode: activeAgent?.permissionMode,
     permissionRules: activeAgent?.permissionRules,

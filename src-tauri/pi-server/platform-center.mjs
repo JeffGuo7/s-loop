@@ -137,6 +137,7 @@ const PLATFORM_PRESETS = [
 ]
 
 const MESSAGE_LIMIT = 100
+const _platformSecrets = new Map()
 
 let _platformDir = ''
 let _platformFile = ''
@@ -170,15 +171,62 @@ function _clonePlatform(platform) {
   }
 }
 
+function _secretFieldKeys(platform) {
+  return new Set(platform.fields
+    .filter((field) => (
+      field.type === 'password'
+      || field.key === 'webhookUrl'
+      || (platform.id === 'webhook' && field.key === 'url')
+    ))
+    .map((field) => field.key))
+}
+
+function _applyRuntimeSecrets(platform, values) {
+  const secretKeys = _secretFieldKeys(platform)
+  const current = { ...(_platformSecrets.get(platform.id) || {}) }
+  for (const key of secretKeys) {
+    if (!Object.prototype.hasOwnProperty.call(values, key)) continue
+    const value = values[key]
+    if (value) current[key] = value
+    else delete current[key]
+  }
+  _platformSecrets.set(platform.id, current)
+}
+
+function _captureLegacySecrets(platform) {
+  const current = { ...(_platformSecrets.get(platform.id) || {}) }
+  for (const key of _secretFieldKeys(platform)) {
+    if (platform.values[key]) current[key] = platform.values[key]
+  }
+  _platformSecrets.set(platform.id, current)
+}
+
+function _withRuntimeSecrets(platform) {
+  return {
+    ...platform,
+    values: { ...platform.values, ...(_platformSecrets.get(platform.id) || {}) },
+  }
+}
+
+function _redactPlatform(platform) {
+  const values = { ...platform.values }
+  for (const key of _secretFieldKeys(platform)) values[key] = ''
+  return { ...platform, values }
+}
+
 function _mergePlatforms(savedPlatforms = []) {
   return PLATFORM_PRESETS.map((preset) => {
     const saved = savedPlatforms.find((item) => item.id === preset.id)
-    return {
+    const platform = {
       ..._clonePlatform(preset),
       enabled: saved?.enabled ?? preset.enabled,
       connected: saved?.connected ?? preset.connected,
       values: { ...preset.values, ...(saved?.values || {}) },
     }
+    // Migrate legacy plaintext values into process memory; the next save
+    // rewrites the file without these secrets.
+    _captureLegacySecrets(platform)
+    return _withRuntimeSecrets(platform)
   })
 }
 
@@ -188,7 +236,10 @@ function _loadPlatforms() {
 }
 
 function _savePlatforms(platforms) {
-  _writeJson(_platformFile, { updatedAt: new Date().toISOString(), platforms })
+  _writeJson(_platformFile, {
+    updatedAt: new Date().toISOString(),
+    platforms: platforms.map(_redactPlatform),
+  })
 }
 
 function _loadMessages() {
@@ -253,6 +304,7 @@ async function _dispatchMessage(platform, text, options = {}) {
 }
 
 export function initPlatformCenter(baseDir) {
+  _platformSecrets.clear()
   _initPaths(baseDir)
   if (!existsSync(_platformFile)) {
     _savePlatforms(_mergePlatforms())
@@ -260,6 +312,8 @@ export function initPlatformCenter(baseDir) {
   if (!existsSync(_messageFile)) {
     _saveMessages([])
   }
+  // Always migrate an existing plaintext configuration to redacted storage.
+  _savePlatforms(_loadPlatforms())
 }
 
 export function getPlatformSnapshot() {
@@ -274,7 +328,9 @@ export function getPlatformConfig(platformId) {
 export function updatePlatformConfig(platformId, values = {}) {
   const platforms = _loadPlatforms()
   const platform = _findPlatform(platforms, platformId)
+  _applyRuntimeSecrets(platform, values)
   platform.values = { ...platform.values, ...values }
+  Object.assign(platform.values, _platformSecrets.get(platform.id) || {})
   _savePlatforms(platforms)
   return _snapshot()
 }
@@ -282,7 +338,9 @@ export function updatePlatformConfig(platformId, values = {}) {
 export async function connectPlatform(platformId, values = {}) {
   const platforms = _loadPlatforms()
   const platform = _findPlatform(platforms, platformId)
+  _applyRuntimeSecrets(platform, values)
   platform.values = { ...platform.values, ...values }
+  Object.assign(platform.values, _platformSecrets.get(platform.id) || {})
   await _validateConnection(platform)
   platform.connected = true
   platform.enabled = true
