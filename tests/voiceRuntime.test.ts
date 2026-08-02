@@ -76,4 +76,20 @@ describe('real-time voice command boundary', () => {
       ),
     ).toBe('结果。请看文档。 代码块。')
   })
+
+  it('removes visual emoji sequences while preserving semantic symbols', () => {
+    expect(
+      speechTextFromMarkdown(
+        '晚上好呀！😊 📂 查看文件\n👍🏽 已完成 👨‍👩‍👧‍👦 1️⃣ 温度 25℃，完成 80%',
+      ),
+    ).toBe('晚上好呀！ 查看文件 已完成 温度 25℃，完成 80%')
+  })
+
+  it('omits image descriptions and raw urls from speech', () => {
+    expect(
+      speechTextFromMarkdown(
+        '请看 ![架构图](https://example.com/a.png) [项目说明](https://example.com) https://example.com/raw',
+      ),
+    ).toBe('请看 项目说明')
+  })
 })
