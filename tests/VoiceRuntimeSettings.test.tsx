@@ -57,7 +57,10 @@ describe('VoiceRuntimeSettings Kokoro voice selection', () => {
     await waitFor(() => {
       expect(vi.mocked(invoke)).toHaveBeenCalledWith(
         'speak_text',
-        expect.objectContaining({ speakerId: 48 }),
+        expect.objectContaining({
+          speakerId: 48,
+          text: expect.stringContaining('123'),
+        }),
       )
     })
   })
