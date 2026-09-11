@@ -29,3 +29,21 @@ use Sonora's pure-Rust port of the WebRTC Audio Processing Module.
 Copyright (c) the Sonora and WebRTC contributors.
 
 Licensed under the BSD 3-Clause License. See <https://github.com/dignifiedquire/sonora>.
+
+## pptxgenjs
+
+The pi-server bundles pptxgenjs, used by agents to generate native PowerPoint files.
+
+Copyright 2015-2022 Brent Ely and pptxgenjs contributors.
+
+Licensed under the MIT License. See <https://github.com/gitbrent/PptxGenJS>.
+
+## OfficeCLI
+
+PPTX layout-issue inspection, OOXML validation, and high-fidelity preview rendering use the
+OfficeCLI binary, distributed via the `@officecli/officecli` npm package.
+
+OfficeCLI, Copyright 2026 OfficeCLI (https://OfficeCLI.AI), created and maintained by goworm.
+
+Licensed under the Apache License 2.0. Per its NOTICE, redistribution with or without
+modification must retain this notice. See <https://github.com/iOfficeAI/OfficeCLI>.

@@ -7,8 +7,11 @@ import {
   DEFAULT_COMPACTION_SETTINGS,
   prepareCompaction,
   compact,
+  prepareBranchEntries,
   generateBranchSummary,
+  BACKGROUND_CONTEXT,
 } from '@earendil-works/pi-agent-core'
+import { completeSimple } from '@earendil-works/pi-ai/compat'
 import { resolveContextLength } from './token-utils.mjs'
 import { truncateToolResult as truncateToolResultMessage } from './truncate.mjs'
 import { SUMMARY_PREFIX, SUMMARY_END_MARKER, FALLBACK_COMPACTION_NOTE, IDENTIFIER_PRESERVATION_INSTRUCTIONS } from './prompts.mjs'
@@ -95,9 +98,25 @@ export class ContextCompressor extends ContextEngine {
       return messages
     }
 
+    // 0.85's compaction routes provider calls through a Models registry;
+    // duck-type one so S-Loop's per-call apiKey and abort signal still flow.
+    const summaryModels = {
+      completeSimple: (completionModel, aiContext, requestOptions) =>
+        completeSimple(completionModel, aiContext, { ...requestOptions, apiKey, signal }),
+    }
+
     let compactResult
     try {
-      compactResult = await compact(preparation, model, apiKey, undefined, IDENTIFIER_PRESERVATION_INSTRUCTIONS, signal)
+      compactResult = await compact(
+        preparation,
+        summaryModels,
+        model,
+        IDENTIFIER_PRESERVATION_INSTRUCTIONS,
+        undefined,
+        undefined,
+        undefined,
+        BACKGROUND_CONTEXT,
+      )
     } catch (err) {
       console.warn('[context-engine] compact failed, falling back to compaction note:', err)
       return this._fallbackCompact(messages, preparation, estimate.tokens, onStatus)
@@ -122,9 +141,14 @@ export class ContextCompressor extends ContextEngine {
     const keptEntries = entries.slice(0, firstKeptIndex)
     if (keptEntries.length > 2) {
       try {
-        const branchResult = await generateBranchSummary(keptEntries, { model, apiKey })
-        if (branchResult && typeof branchResult === 'string') {
-          branchSummary = `\n\n## Branch Activity\n\n${branchResult}`
+        const branchPreparation = prepareBranchEntries(keptEntries)
+        const branchResult = await generateBranchSummary(
+          keptEntries,
+          { models: summaryModels, model },
+          BACKGROUND_CONTEXT,
+        )
+        if (branchResult?.ok && typeof branchResult.value?.summary === 'string') {
+          branchSummary = `\n\n## Branch Activity\n\n${branchResult.value.summary}`
         }
       } catch {
         // Branch summary is best-effort; fall back to flat summary only.

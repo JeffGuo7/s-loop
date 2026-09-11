@@ -12,6 +12,7 @@ import { ScrollShadow } from "@heroui/react"
 import i18n from '../../i18n'
 import { COLOR_SCHEMES } from '../../themes'
 import { VoiceInputSettings } from './VoiceInputSettings'
+import * as Pi from '../../utils/piClient'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -47,6 +48,29 @@ const BUILT_IN_PROVIDERS: ProviderInfo[] = [
   { id: 'lmstudio', name: 'LM Studio (Local)', env: 'LMSTUDIO_API_KEY', source: 'http://localhost:1234/v1' },
   { id: 'custom', name: 'Custom Provider', env: '', source: '' },
 ]
+
+// Friendly names for pi-catalog providers that have no curated entry above.
+const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
+  google: 'Google Gemini',
+  'google-vertex': 'Google Vertex AI',
+  'amazon-bedrock': 'Amazon Bedrock',
+  'azure-openai-responses': 'Azure OpenAI',
+  'openai-codex': 'OpenAI Codex',
+  'cloudflare-ai-gateway': 'Cloudflare AI Gateway',
+  'cloudflare-workers-ai': 'Cloudflare Workers AI',
+  'vercel-ai-gateway': 'Vercel AI Gateway',
+  'ant-ling': 'Ant Group (Ling)',
+  'minimax-cn': 'MiniMax (CN)',
+  'moonshotai-cn': 'Moonshot AI (CN)',
+  'qwen-token-plan': 'Qwen (Coding Plan)',
+  'qwen-token-plan-cn': 'Qwen (CN Coding Plan)',
+  xiaomi: 'Xiaomi AI',
+  'zai-coding-cn': 'Z AI Coding (CN)',
+}
+
+function prettifyProviderId(id: string): string {
+  return id.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
 
 export function SettingsModal({ onClose, initialTab = 'provider' }: SettingsModalProps) {
   const {
@@ -89,6 +113,25 @@ export function SettingsModal({ onClose, initialTab = 'provider' }: SettingsModa
   useEffect(() => {
     setProviderList(BUILT_IN_PROVIDERS)
   }, [setProviderList, customProviders])
+
+  // Overlay the pi SDK's live provider catalog so the picker stays in sync
+  // with the bundled SDK (new providers appear without frontend changes).
+  useEffect(() => {
+    let cancelled = false
+    Pi.fetchProviders().then((catalog) => {
+      if (cancelled || !Array.isArray(catalog) || catalog.length === 0) return
+      const dynamic: ProviderInfo[] = catalog.map((entry) => ({
+        id: entry.id,
+        name: PROVIDER_NAME_OVERRIDES[entry.id] ?? prettifyProviderId(entry.id),
+        env: `${entry.id.toUpperCase().replace(/-/g, '_')}_API_KEY`,
+        source: entry.baseUrl || '',
+        api: entry.api || undefined,
+      }))
+      const curatedIds = new Set(BUILT_IN_PROVIDERS.map((b) => b.id))
+      setProviderList([...BUILT_IN_PROVIDERS, ...dynamic.filter((d) => !curatedIds.has(d.id))])
+    }).catch(() => { /* keep curated list on failure */ })
+    return () => { cancelled = true }
+  }, [setProviderList])
 
   // Sync local configs from store on open
   useEffect(() => {

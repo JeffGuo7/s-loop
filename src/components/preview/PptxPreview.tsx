@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getBaseUrl } from '../../utils/piClient'
 
 interface PptxPreviewProps {
   filePath: string
@@ -36,6 +37,8 @@ interface SlideData {
   index: number
   content: SlideContent
 }
+
+const PREVIEW_TIMEOUT_MS = 60_000
 
 /** Find child elements by local name, ignoring XML namespace prefixes. */
 function childrenByLocalName(parent: Element, name: string): Element[] {
@@ -191,48 +194,79 @@ async function loadSlideImages(
   return images
 }
 
+/** Fallback: extract text/tables/images from the raw OOXML (no layout). */
+async function loadFallbackSlides(filePath: string): Promise<SlideData[]> {
+  const JSZip = (await import('jszip')).default
+  const { invoke } = await import('@tauri-apps/api/core')
+  const base64 = await invoke<string>('read_file_base64', { path: filePath })
+  const binaryString = atob(base64)
+  const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0))
+  const zip = await JSZip.loadAsync(bytes)
+
+  const slideFiles: string[] = []
+  zip.forEach((relativePath: string) => {
+    if (/^ppt\/slides\/slide\d+\.xml$/.test(relativePath)) slideFiles.push(relativePath)
+  })
+  slideFiles.sort((a: string, b: string) => {
+    const na = parseInt(a.match(/slide(\d+)/)![1])
+    const nb = parseInt(b.match(/slide(\d+)/)![1])
+    return na - nb
+  })
+
+  const slideData: SlideData[] = []
+  for (const slidePath of slideFiles) {
+    const xmlContent = await zip.file(slidePath)!.async('text')
+    const content = slideXmlToContent(xmlContent)
+
+    const relsPath = slidePath.replace('slides/', 'slides/_rels/') + '.rels'
+    const relsFile = zip.file(relsPath)
+    const relsXml = relsFile ? await relsFile.async('text') : null
+    content.images = await loadSlideImages(relsXml, zip)
+
+    slideData.push({ index: slideFiles.indexOf(slidePath) + 1, content })
+  }
+  return slideData
+}
+
 export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
   const [slides, setSlides] = useState<SlideData[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
+  const [htmlDoc, setHtmlDoc] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setCurrentSlide(0)
+    setSlides([])
+    setHtmlDoc(null)
 
     async function load() {
+      // Preferred path: officecli-rendered, layout-faithful HTML from the
+      // pi-server. Any failure (server busy, officecli missing, non-workspace
+      // path) falls back to raw OOXML text extraction below.
       try {
-        const JSZip = (await import('jszip')).default
-        const { invoke } = await import('@tauri-apps/api/core')
-        const base64 = await invoke<string>('read_file_base64', { path: filePath })
-        const binaryString = atob(base64)
-        const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0))
-        const zip = await JSZip.loadAsync(bytes)
-
-        const slideFiles: string[] = []
-        zip.forEach((relativePath: string) => {
-          if (/^ppt\/slides\/slide\d+\.xml$/.test(relativePath)) slideFiles.push(relativePath)
-        })
-        slideFiles.sort((a: string, b: string) => {
-          const na = parseInt(a.match(/slide(\d+)/)![1])
-          const nb = parseInt(b.match(/slide(\d+)/)![1])
-          return na - nb
-        })
-
-        const slideData: SlideData[] = []
-        for (const slidePath of slideFiles) {
-          const xmlContent = await zip.file(slidePath)!.async('text')
-          const content = slideXmlToContent(xmlContent)
-
-          const relsPath = slidePath.replace('slides/', 'slides/_rels/') + '.rels'
-          const relsFile = zip.file(relsPath)
-          const relsXml = relsFile ? await relsFile.async('text') : null
-          content.images = await loadSlideImages(relsXml, zip)
-
-          slideData.push({ index: slideFiles.indexOf(slidePath) + 1, content })
+        const res = await fetch(
+          `${getBaseUrl()}/preview/pptx?path=${encodeURIComponent(filePath)}`,
+          { signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS) },
+        )
+        const contentType = res.headers.get('content-type') || ''
+        if (res.ok && contentType.includes('text/html')) {
+          const html = await res.text()
+          if (!cancelled && html.trim()) {
+            setHtmlDoc(html)
+            setLoading(false)
+            onLoaded()
+            return
+          }
         }
+      } catch {
+        // fall through to the text-extraction fallback
+      }
+      if (cancelled) return
 
+      try {
+        const slideData = await loadFallbackSlides(filePath)
         if (!cancelled) {
           setSlides(slideData)
           setLoading(false)
@@ -248,7 +282,7 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
 
     load()
     return () => { cancelled = true }
-  }, [filePath])
+  }, [filePath, onLoaded, onError])
 
   if (loading) {
     return (
@@ -257,6 +291,23 @@ export function PptxPreview({ filePath, onLoaded, onError }: PptxPreviewProps) {
           <div className="w-8 h-8 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
           <span className="text-[12px] text-text-tertiary">Loading slides...</span>
         </div>
+      </div>
+    )
+  }
+
+  if (htmlDoc) {
+    return (
+      <div className="h-full flex flex-col bg-[var(--color-surface)]">
+        <div className="flex items-center justify-between px-5 py-2.5 border-b border-border-light/50 shrink-0">
+          <span className="text-[11px] font-bold text-text-secondary">Rendered preview</span>
+          <span className="text-[10px] text-text-quaternary">layout-faithful</span>
+        </div>
+        <iframe
+          srcDoc={htmlDoc}
+          sandbox="allow-scripts"
+          title="PPTX preview"
+          className="flex-1 w-full border-0 bg-white"
+        />
       </div>
     )
   }

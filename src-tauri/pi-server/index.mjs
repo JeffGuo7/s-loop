@@ -2,9 +2,16 @@ import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
-import { Agent } from '@earendil-works/pi-agent-core'
-import { getModel, getModels } from '@earendil-works/pi-ai/compat'
+import * as os from 'node:os'
+import { fileURLToPath } from 'node:url'
+import { Agent, setDefaultStreamFn } from '@earendil-works/pi-agent-core'
+import { getModel, getModels, getProviders, streamSimple } from '@earendil-works/pi-ai/compat'
 import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-coding-agent'
+
+// pi-agent-core >= 0.81 no longer derives streaming from initialState.model —
+// install the compat stream function once for every Agent constructed in this
+// process (chat, cron, platform, subagents).
+setDefaultStreamFn(streamSimple)
 import { webSearch, fetchUrl, resetBrowser } from './searchProviders.mjs'
 import { createDefaultEngine, calculateContextTokens, truncateContent } from './context-engine/index.mjs'
 import {
@@ -60,7 +67,9 @@ import { tryGetAdapter } from './platforms/registry.mjs'
 import { authorizeInbound } from './platforms/access-control.mjs'
 import { ToolGuard } from './tool-guardrails.mjs'
 import { evaluateToolCall } from './execution-policy.mjs'
-import { sanitizeChildEnvironment } from './sandbox.mjs'
+import { checkWorkspacePath, sanitizeChildEnvironment } from './sandbox.mjs'
+import { createPptxTools, renderPptxHtml } from './pptx-tools.mjs'
+import { seedBuiltinSkills } from './builtin-skills.mjs'
 import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
 import {
   callSseMcpTool,
@@ -120,6 +129,7 @@ process.env.PYTHONIOENCODING = 'utf-8';
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
 const API_TOKEN = process.env.SNOTRA_API_TOKEN || ''
 const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url))
 const sessionRepo = createSessionRepo(DATA_DIR)
 const sessions = new Map()
 const inboundSeen = new Map()
@@ -227,6 +237,17 @@ function getTools(dir, webSearchConfig, remoteMcpScope) {
     all.push(...sseMcpTools)
   }
 
+  // PPTX generation/inspection tools (fail-soft when deps are missing)
+  try {
+    all.push(...createPptxTools({
+      workspaceDir: toolRoot,
+      serverDir: SERVER_DIR,
+      workspaceRoots: runtimeConfig.workspaceRoots,
+    }))
+  } catch (err) {
+    console.warn('[pi-server] pptx tools unavailable:', err?.message || err)
+  }
+
   const seen = new Set()
   const tools = all.filter(t => { if (seen.has(t.name)) return false; seen.add(t.name); return true })
   if (!seen.has('web_search')) {
@@ -288,6 +309,70 @@ function getTools(dir, webSearchConfig, remoteMcpScope) {
 
   return tools
 }
+
+// ── PPTX preview + builtin skill seeding ─────────────────
+
+async function handlePptxPreview(req, res, rawPath) {
+  if (!rawPath.trim()) {
+    res.writeHead(400, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'Missing "path"' }))
+    return
+  }
+  let absPath
+  try {
+    const check = checkWorkspacePath(
+      rawPath,
+      runtimeConfig.workspaceDir || DATA_DIR,
+      Array.isArray(runtimeConfig.workspaceRoots) ? runtimeConfig.workspaceRoots : [],
+      'read',
+    )
+    if (!check.allowed) {
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: check.reason || 'Path is outside the workspace sandbox' }))
+      return
+    }
+    absPath = check.resolvedPath
+  } catch (err) {
+    res.writeHead(500, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: err?.message || String(err) }))
+    return
+  }
+  if (!fs.existsSync(absPath)) {
+    res.writeHead(404, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: `File not found: ${absPath}` }))
+    return
+  }
+
+  // Render into the OS temp dir: SERVER_DIR can be read-only (Program Files
+  // installs), and the preview output has no module-resolution constraint.
+  const tmpOut = path.join(os.tmpdir(), `sloop-pptx-preview-${randomUUID()}.html`)
+  const controller = new AbortController()
+  req.on('close', () => controller.abort())
+  try {
+    await renderPptxHtml(absPath, tmpOut, {}, controller.signal)
+    if (controller.signal.aborted) return
+    const html = await fs.promises.readFile(tmpOut, 'utf8')
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.end(html)
+  } catch (err) {
+    if (controller.signal.aborted) {
+      try { res.destroy() } catch { /* socket already gone */ }
+      return
+    }
+    const status = err?.unavailable ? 503 : 500
+    try {
+      res.writeHead(status, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: err?.message || String(err) }))
+    } catch { /* headers already sent */ }
+  } finally {
+    fs.rm(tmpOut, { force: true }, () => {})
+  }
+}
+
+// Copy bundled SKILL.md folders into ~/.pi/agent/skills on first run so they
+// show up in the frontend skill scan (which feeds agentSkillsBlock for both
+// chat and cron). Never overwrites an existing skill (user edits win).
+// Implementation lives in builtin-skills.mjs (kept import-side-effect free).
 
 // ── Sub-agent tool factories ─────────────────────────────
 
@@ -2156,6 +2241,15 @@ createServer((req, res) => {
     return
   }
 
+  // GET /preview/pptx?path=... — render a workspace .pptx to high-fidelity
+  // HTML via officecli for the frontend preview panel. Falls back to the
+  // frontend's text extraction when this errors.
+  if (req.method === 'GET' && url.pathname === '/preview/pptx') {
+    const rawPath = url.searchParams.get('path') || ''
+    handlePptxPreview(req, res, rawPath)
+    return
+  }
+
   // POST /mcp-sse/connect — connect to an SSE MCP server
   if (req.method === 'POST' && url.pathname === '/mcp-sse/connect') {
     readJsonBody(req).then(async (data) => {
@@ -2353,6 +2447,26 @@ createServer((req, res) => {
       res.end(JSON.stringify(list))
     })().catch((e) => {
       console.error('[pi-server] /models error:', e)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify([]))
+    })
+    return
+  }
+
+  // GET /providers — full builtin provider catalog from the pi SDK, so the
+  // frontend picker tracks the SDK instead of a hardcoded list.
+  if (req.method === 'GET' && url.pathname === '/providers') {
+    (async () => {
+      const list = getProviders()
+        .map((id) => {
+          const models = getModels(id)
+          return { id, models: models.length, baseUrl: models[0]?.baseUrl || '', api: models[0]?.api || '' }
+        })
+        .filter((p) => p.models > 0)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(list))
+    })().catch((e) => {
+      console.error('[pi-server] /providers error:', e)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify([]))
     })
@@ -2814,6 +2928,7 @@ createServer((req, res) => {
   const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
   initAuditStore(sLoopDir)
   initApprovalStore(sLoopDir)
+  seedBuiltinSkills(SERVER_DIR)
 
   // Detect parent process exit via stdin pipe close (works on all platforms)
   if (process.stdin) {

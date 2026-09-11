@@ -5,6 +5,7 @@ import {
   readdir,
   readFile,
   realpath,
+  rename,
   rm,
   writeFile,
   mkdtemp,
@@ -13,7 +14,25 @@ import {
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve, basename } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { JsonlSessionRepo, ok, err, FileError } from '@earendil-works/pi-agent-core'
+import {
+  JsonlSessionRepo,
+  ok,
+  err,
+  FileError,
+  BACKGROUND_CONTEXT,
+  branchTip,
+  createCompactionSummaryMessage,
+  createBranchSummaryMessage,
+} from '@earendil-works/pi-agent-core'
+
+// pi-agent-core >= 0.84 exposes a low-level v4 session storage (branches,
+// values, context-threaded FileSystem). S-Loop needs only three high-level
+// operations — append a message, rebuild `{messages}` for resume, and
+// session CRUD — so createSessionRepo returns a thin adapter over the v4
+// primitives that keeps the pre-0.84 surface intact. All storage calls run
+// on the ambient background context; aborts are not threaded into persistence.
+const SESSION_BRANCH = 'main'
+const CTX = BACKGROUND_CONTEXT
 
 function nodeCodeToFileErrorCode(code) {
   switch (code) {
@@ -42,7 +61,7 @@ export class NodeFileSystem {
     this.cwd = cwd
   }
 
-  async absolutePath(path, _abortSignal) {
+  async absolutePath(path, _context) {
     try {
       return ok(isAbsolute(path) ? path : resolve(this.cwd, path))
     } catch (error) {
@@ -50,7 +69,7 @@ export class NodeFileSystem {
     }
   }
 
-  async joinPath(parts, _abortSignal) {
+  async joinPath(parts, _context) {
     try {
       return ok(join(...parts))
     } catch (error) {
@@ -58,7 +77,7 @@ export class NodeFileSystem {
     }
   }
 
-  async readTextFile(path, _abortSignal) {
+  async readTextFile(path, _context) {
     try {
       return ok(await readFile(path, 'utf8'))
     } catch (error) {
@@ -66,7 +85,7 @@ export class NodeFileSystem {
     }
   }
 
-  async readTextLines(path, options = {}) {
+  async readTextLines(path, options = {}, _context) {
     try {
       const text = await readFile(path, 'utf8')
       const lines = text.split('\n')
@@ -79,7 +98,7 @@ export class NodeFileSystem {
     }
   }
 
-  async readBinaryFile(path, _abortSignal) {
+  async readBinaryFile(path, _context) {
     try {
       return ok(await readFile(path))
     } catch (error) {
@@ -87,7 +106,7 @@ export class NodeFileSystem {
     }
   }
 
-  async writeFile(path, content, _abortSignal) {
+  async writeFile(path, content, _context) {
     try {
       await writeFile(path, content)
       return ok(undefined)
@@ -96,7 +115,7 @@ export class NodeFileSystem {
     }
   }
 
-  async appendFile(path, content, _abortSignal) {
+  async appendFile(path, content, _context) {
     try {
       await appendFile(path, content)
       return ok(undefined)
@@ -105,7 +124,16 @@ export class NodeFileSystem {
     }
   }
 
-  async fileInfo(path, _abortSignal) {
+  async renameFile(sourcePath, destinationPath, _context) {
+    try {
+      await rename(sourcePath, destinationPath)
+      return ok(undefined)
+    } catch (error) {
+      return err(toFileError(error, sourcePath))
+    }
+  }
+
+  async fileInfo(path, _context) {
     try {
       const stats = await lstat(path)
       const kind = stats.isFile() ? 'file' : stats.isDirectory() ? 'directory' : stats.isSymbolicLink() ? 'symlink' : undefined
@@ -122,7 +150,7 @@ export class NodeFileSystem {
     }
   }
 
-  async listDir(path, _abortSignal) {
+  async listDir(path, _context) {
     try {
       const entries = await readdir(path, { withFileTypes: true })
       const infos = []
@@ -145,7 +173,7 @@ export class NodeFileSystem {
     }
   }
 
-  async canonicalPath(path, _abortSignal) {
+  async canonicalPath(path, _context) {
     try {
       return ok(await realpath(path))
     } catch (error) {
@@ -153,7 +181,7 @@ export class NodeFileSystem {
     }
   }
 
-  async exists(path, _abortSignal) {
+  async exists(path, _context) {
     try {
       await access(path)
       return ok(true)
@@ -162,7 +190,7 @@ export class NodeFileSystem {
     }
   }
 
-  async createDir(path, options = {}) {
+  async createDir(path, options = {}, _context) {
     try {
       await mkdir(path, { recursive: options.recursive ?? true })
       return ok(undefined)
@@ -171,7 +199,7 @@ export class NodeFileSystem {
     }
   }
 
-  async remove(path, options = {}) {
+  async remove(path, options = {}, _context) {
     try {
       await rm(path, { recursive: options.recursive ?? false, force: options.force ?? false })
       return ok(undefined)
@@ -180,7 +208,7 @@ export class NodeFileSystem {
     }
   }
 
-  async createTempDir(prefix = 'tmp-', _abortSignal) {
+  async createTempDir(prefix = 'tmp-', _context) {
     try {
       const dir = await mkdtemp(join(tmpdir(), prefix))
       return ok(dir)
@@ -189,7 +217,7 @@ export class NodeFileSystem {
     }
   }
 
-  async createTempFile(options = {}, _abortSignal) {
+  async createTempFile(options = {}, _context) {
     const prefix = options.prefix ?? ''
     const suffix = options.suffix ?? ''
     const path = join(tmpdir(), `${prefix}${randomUUID()}${suffix}`)
@@ -201,14 +229,93 @@ export class NodeFileSystem {
     }
   }
 
-  async cleanup() {
+  async cleanup(_context) {
     // No persistent resources to release.
   }
 }
 
+/** Rebuild `{messages}` for session resume from the persisted branch. */
+async function buildSessionContext(raw) {
+  const storedTip = await raw.getValue(branchTip(SESSION_BRANCH), CTX)
+  const tipId = storedTip?.value
+  if (!tipId) return { messages: [] }
+  const entries = await raw.scanBranch({ start: tipId, order: 'oldestFirst' }, CTX)
+  const messages = []
+  for (const entry of entries) {
+    if (entry.type === 'message') {
+      messages.push(entry.message)
+    } else if (entry.type === 'compaction') {
+      // A compaction replaces earlier history with its summary; the retained
+      // tail stays verbatim so recent turns survive compaction intact.
+      messages.push(createCompactionSummaryMessage(entry.summary, entry.tokensBefore, entry.timestamp))
+      if (Array.isArray(entry.retainedTail)) messages.push(...entry.retainedTail)
+    } else if (entry.type === 'branch_summary') {
+      messages.push(createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp))
+    }
+  }
+  return { messages }
+}
+
+/** Present the v4 storage-backed session through the pre-0.84 surface. */
+function wrapSession(raw, onClosed) {
+  let mainBranch = null
+  async function ensureBranch() {
+    if (!mainBranch) {
+      mainBranch = (await raw.branch(SESSION_BRANCH, CTX))
+        ?? await raw.createBranch(SESSION_BRANCH, null, CTX)
+    }
+    return mainBranch
+  }
+  return {
+    get metadata() { return raw.metadata },
+    async getMetadata() {
+      return raw.metadata
+    },
+    async appendMessage(message) {
+      const branch = await ensureBranch()
+      await branch.appendMessage(message, CTX)
+    },
+    buildContext() {
+      return buildSessionContext(raw)
+    },
+    async close() {
+      try { await raw.close(CTX) } finally { onClosed?.() }
+    },
+  }
+}
+
 export function createSessionRepo(dataDir) {
-  const fs = new NodeFileSystem(dataDir)
-  return new JsonlSessionRepo({ fs, sessionsRoot: '.s-loop/sessions' })
+  const fileSystem = new NodeFileSystem(dataDir)
+  const repo = new JsonlSessionRepo({ fileSystem, sessionsRoot: '.s-loop/sessions' })
+  // The v4 repo refuses duplicate opens and deleting open sessions, so track
+  // raw handles here: reopen returns the live handle, and delete closes first.
+  const openRaw = new Map()
+  return {
+    async create(options) {
+      const raw = await repo.create(options, CTX)
+      openRaw.set(raw.metadata.id, raw)
+      return wrapSession(raw, () => openRaw.delete(raw.metadata.id))
+    },
+    async open(metadata) {
+      let raw = openRaw.get(metadata.id)
+      if (!raw) {
+        raw = await repo.open(metadata, CTX)
+        openRaw.set(metadata.id, raw)
+      }
+      return wrapSession(raw, () => openRaw.delete(metadata.id))
+    },
+    async list() {
+      return repo.list(undefined, CTX)
+    },
+    async delete(metadata) {
+      const raw = openRaw.get(metadata.id)
+      if (raw) {
+        openRaw.delete(metadata.id)
+        await raw.close(CTX).catch(() => {})
+      }
+      await repo.delete(metadata, CTX)
+    },
+  }
 }
 
 export async function findSession(repo, sessionId) {

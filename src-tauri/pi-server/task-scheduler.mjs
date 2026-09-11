@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import cronParser from 'cron-parser'
+import { CronExpressionParser } from 'cron-parser'
 import { appendAuditEvent } from './audit-store.mjs'
 
 const TICK_INTERVAL = 60_000  // check every 60s
@@ -54,7 +54,7 @@ function _computeNextRun(schedule, lastRunAt) {
     case 'cron': {
       if (!schedule.expr) return null
       try {
-        const interval = cronParser.parseExpression(schedule.expr, {
+        const interval = CronExpressionParser.parse(schedule.expr, {
           currentDate: lastRunAt ? new Date(lastRunAt) : new Date(),
         })
         return interval.next().getTime()
@@ -71,7 +71,7 @@ function _graceSeconds(schedule) {
   }
   if (schedule.kind === 'cron' && schedule.expr) {
     try {
-      const interval = cronParser.parseExpression(schedule.expr)
+      const interval = CronExpressionParser.parse(schedule.expr)
       const first = interval.next().getTime()
       const second = interval.next().getTime()
       return Math.max(MIN, Math.min((second - first) / 2000, MAX))

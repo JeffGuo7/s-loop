@@ -26,6 +26,8 @@ const BUILTIN_TOOL_SECURITY = new Map([
   ['delete', metadata('write-local', { pathArguments: ['path', 'filePath', 'file_path'] })],
   ['remove', metadata('write-local', { pathArguments: ['path', 'filePath', 'file_path'] })],
   ['bash', metadata('exec')],
+  ['create_pptx', metadata('exec', { pathArguments: ['outputPath'] })],
+  ['inspect_pptx', metadata('read', { pathArguments: ['path'], parallelSafe: true })],
   ['web_search', metadata('read', { targetArgument: 'query', parallelSafe: true })],
   ['web_fetch', metadata('read', { targetArgument: 'url', parallelSafe: true })],
   ['get_current_time', metadata('read', { parallelSafe: true })],

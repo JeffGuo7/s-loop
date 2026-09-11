@@ -1,5 +1,7 @@
 import { File, Folder, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
+import { useAppStore } from '../../../stores/appStore'
+import { useFilePreviewStore } from '../../../stores/filePreviewStore'
 
 interface FileChipProps {
   name: string
@@ -7,6 +9,16 @@ interface FileChipProps {
   isFolder?: boolean
   /** Render on a dark/accent background (e.g. user message bubble) */
   onDark?: boolean
+}
+
+function isAbsolutePath(path: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(path) || path.startsWith('\\\\') || path.startsWith('/')
+}
+
+function resolvePreviewPath(path: string, workspaceDir: string | null): string | null {
+  if (isAbsolutePath(path)) return path
+  if (!workspaceDir) return null
+  return `${workspaceDir.replace(/[\\/]+$/, '')}/${path.replace(/^[\\/]+/, '')}`
 }
 
 const EXT_COLORS: Record<string, string> = {
@@ -32,6 +44,18 @@ function getAccentColor(name: string): string {
 export function FileChip({ name, path, isFolder, onDark }: FileChipProps) {
   const [hover, setHover] = useState(false)
   const ext = isFolder ? '' : getExtension(name)
+  const workspaceDir = useAppStore((s) => s.workspaceDir)
+
+  const previewPath = path && !isFolder && !/^https?:\/\//i.test(path)
+    ? resolvePreviewPath(path, workspaceDir)
+    : null
+  // Category detection in filePreviewStore keys off the file extension, so
+  // always hand it the path basename — the chip label may be arbitrary text.
+  const pathBase = previewPath ? previewPath.split(/[\\/]/).pop() || name : name
+
+  const handleOpen = previewPath
+    ? () => useFilePreviewStore.getState().openFile(previewPath, pathBase)
+    : undefined
 
   const bg = onDark ? 'rgba(255,255,255,0.12)' : 'var(--color-surface-secondary)'
   const border = onDark ? 'rgba(255,255,255,0.15)' : 'var(--color-border)'
@@ -43,7 +67,7 @@ export function FileChip({ name, path, isFolder, onDark }: FileChipProps) {
 
   return (
     <span
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-300 cursor-default select-none align-middle mx-0.5"
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-300 select-none align-middle mx-0.5 ${previewPath ? 'cursor-pointer' : 'cursor-default'}`}
       style={{
         backgroundColor: bg,
         borderColor: hover ? borderHover : border,
@@ -51,7 +75,8 @@ export function FileChip({ name, path, isFolder, onDark }: FileChipProps) {
       }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={path || name}
+      onClick={handleOpen}
+      title={previewPath ? `${path || name} — click to preview` : (path || name)}
     >
       {isFolder ? (
         hover ? <FolderOpen size={16} className="shrink-0" style={{ color: onDark ? 'rgba(255,255,255,0.9)' : 'var(--color-accent)' }} /> : <Folder size={16} className="shrink-0" style={{ color: iconColor }} />

@@ -146,6 +146,25 @@ export async function fetchModels(
   }
 }
 
+export interface ProviderCatalogEntry {
+  id: string
+  models: number
+  baseUrl: string
+  api: string
+}
+
+/** Full builtin provider catalog from the pi SDK (auto-tracks SDK updates). */
+export async function fetchProviders(): Promise<ProviderCatalogEntry[]> {
+  try {
+    const res = await fetch(`${_base}/providers`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch {
+    return []
+  }
+}
+
 export async function fetchModelCapabilities(
   provider: string,
   modelID: string,
