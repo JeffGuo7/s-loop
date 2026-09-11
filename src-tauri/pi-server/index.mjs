@@ -176,8 +176,9 @@ function createCustomModel(providerID, modelID, providerConfig = {}) {
     contextWindow: 128000,
     contextLength: 128000,
     // Reasoning models routinely spend thousands of tokens thinking before
-    // any visible content; 4096 left them truncated with empty replies.
-    maxTokens: 16384,
+    // any visible content; a small cap leaves them truncated with empty
+    // replies. Aligned with the largest catalog default (glm-5.3-flash).
+    maxTokens: 131072,
     ...(reasoningConfig.compat ? { compat: reasoningConfig.compat } : {}),
   }
 }
