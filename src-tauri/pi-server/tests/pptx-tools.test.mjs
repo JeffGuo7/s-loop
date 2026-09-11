@@ -73,7 +73,8 @@ test('in ask mode create_pptx requires explicit approval (exec risk)', () => {
 
 test('job wrapper pre-creates the instance and guards the output path', () => {
   const script = buildJobScript('pptx.layout = "LAYOUT_16x9"')
-  assert.ok(script.includes("import PptxGenJS from 'pptxgenjs'"))
+  assert.ok(script.includes("createRequire("))
+  assert.ok(script.includes("nodeRequire('pptxgenjs')"))
   assert.ok(script.includes('const pptx = new PptxGenJS()'))
   assert.ok(script.includes('PPTX_OUTPUT_PATH'))
   assert.ok(script.includes('writeFile'))
@@ -131,7 +132,7 @@ test('create_pptx honors granted secondary workspace roots', async () => {
 
 test('create_pptx generates a real deck end to end', { timeout: 60_000 }, async () => {
   const workspace = makeTempWorkspace()
-  const jobsDir = path.join(PI_SERVER_DIR, 'pptx-jobs')
+  const jobsDir = path.join(os.tmpdir(), 'sloop-pptx-jobs')
   fs.rmSync(jobsDir, { recursive: true, force: true })
   const [tool] = createPptxTools({ workspaceDir: workspace, serverDir: PI_SERVER_DIR })
 

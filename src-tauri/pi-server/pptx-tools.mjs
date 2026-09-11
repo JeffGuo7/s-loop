@@ -13,8 +13,9 @@
 import { spawn, execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
+import * as os from 'node:os'
 import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { checkWorkspacePath, sanitizeChildEnvironment } from './sandbox.mjs'
 
 const SCRIPT_TIMEOUT_MS = 120_000
@@ -23,6 +24,20 @@ const RENDER_TIMEOUT_MS = 200_000
 const MAX_SCRIPT_BYTES = 1_000_000
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url))
+
+// Job wrappers must live OUTSIDE src-tauri: `tauri dev` watches that tree and
+// rebuilds/restarts the app whenever a file in it changes, which would kill
+// the app mid-generation. The OS temp dir is safe.
+const JOBS_DIR_NAME = 'sloop-pptx-jobs'
+
+// The wrapper script lives in the OS temp dir, far from pi-server's
+// node_modules. Resolve pptxgenjs through an explicit createRequire anchored
+// at the server directory so module resolution never depends on the wrapper's
+// own location (the sandbox strips NODE_PATH).
+function pptxgenRequireAnchor(serverDir) {
+  const pkgJson = path.join(serverDir || MODULE_DIR, 'package.json')
+  return JSON.stringify(pathToFileURL(pkgJson).href)
+}
 
 let officecliModulePromise = null
 function loadOfficecli() {
@@ -143,8 +158,10 @@ async function runOfficeCli(args, timeoutMs, { officecli, signal } = {}) {
 
 export const RESULT_SENTINEL = '__SLOOP_PPTX_RESULT__'
 
-function wrapperPrelude() {
-  return `import PptxGenJS from 'pptxgenjs'
+function wrapperPrelude(pptxgenAnchor) {
+  return `import { createRequire } from 'node:module'
+const nodeRequire = createRequire(${pptxgenAnchor})
+const PptxGenJS = nodeRequire('pptxgenjs')
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
@@ -179,14 +196,14 @@ if (!(__deck && typeof __deck.writeFile === 'function')) {
   console.error('No presentation instance is available to write.')
   process.exit(1)
 }
-await fs.mkdirSync(path.dirname(OUT), { recursive: true })
+fs.mkdirSync(path.dirname(OUT), { recursive: true })
 await __deck.writeFile({ fileName: OUT })
 process.stdout.write('\\n${RESULT_SENTINEL}' + JSON.stringify({ ok: true, outputPath: OUT }))
 `
 }
 
-export function buildJobScript(userScript) {
-  return `${wrapperPrelude()}
+export function buildJobScript(userScript, pptxgenSpecifier) {
+  return `${wrapperPrelude(pptxgenSpecifier)}
 try {
 ${userScript}
 } catch (err) {
@@ -197,7 +214,7 @@ ${wrapperEpilogue()}
 `
 }
 
-async function runCreatePptx(params, { workspaceDir, workspaceRoots, jobsDir, spawnImpl }) {
+async function runCreatePptx(params, { workspaceDir, workspaceRoots, jobsDir, pptxgenAnchor, spawnImpl }) {
   const script = typeof params.script === 'string' ? params.script : ''
   const outputPath = typeof params.outputPath === 'string' ? params.outputPath : ''
   if (!script.trim()) {
@@ -223,7 +240,7 @@ async function runCreatePptx(params, { workspaceDir, workspaceRoots, jobsDir, sp
 
   fs.mkdirSync(jobsDir, { recursive: true })
   const jobFile = path.join(jobsDir, `job-${randomUUID()}.mjs`)
-  fs.writeFileSync(jobFile, buildJobScript(script), 'utf8')
+  fs.writeFileSync(jobFile, buildJobScript(script, pptxgenAnchor), 'utf8')
 
   const child = spawnImpl(process.execPath, [jobFile], {
     cwd: workspaceDir,
@@ -315,7 +332,8 @@ export async function renderPptxHtml(absPath, outPath, deps = {}, signal) {
 export function createPptxTools({ workspaceDir, serverDir, workspaceRoots, deps = {} } = {}) {
   const root = workspaceDir || process.cwd()
   const roots = workspaceRoots
-  const jobsDir = path.join(serverDir || MODULE_DIR, 'pptx-jobs')
+  const jobsDir = path.join(os.tmpdir(), JOBS_DIR_NAME)
+  const pptxgenAnchor = pptxgenRequireAnchor(serverDir)
   const spawnImpl = deps.spawnImpl || spawn
 
   return [
@@ -336,7 +354,7 @@ export function createPptxTools({ workspaceDir, serverDir, workspaceRoots, deps 
         required: ['script', 'outputPath'],
       },
       execute: async (_id, params) => {
-        const result = await runCreatePptx(params, { workspaceDir: root, workspaceRoots: roots, jobsDir, spawnImpl })
+        const result = await runCreatePptx(params, { workspaceDir: root, workspaceRoots: roots, jobsDir, pptxgenAnchor, spawnImpl })
         const text = result.ok
           ? `PPTX created: ${result.outputPath}${result.consoleLog ? `\n\nScript output:\n${result.consoleLog}` : ''}`
           : `PPTX generation failed: ${result.error}${result.consoleLog ? `\n\nScript output:\n${result.consoleLog}` : ''}`
