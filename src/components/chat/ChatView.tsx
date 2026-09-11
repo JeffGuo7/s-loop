@@ -25,6 +25,7 @@ import { assembleAgentSystemPrompt } from '../../utils/agentPrompt'
 import {
   assembleAgentRuntimePrompt,
   formatAgentSkillsBlock,
+  resolveAgentSkillNames,
 } from '../../utils/agentRuntime'
 import { isAgentMcpToolAllowed, remoteMcpToolName } from '../../utils/agentMcpRuntime'
 
@@ -207,9 +208,9 @@ export function ChatView() {
         ? agentStore.agents.find((a) => a.id === agentStore.activeAgentId) : null
 
       const skillStore = useSkillStore.getState()
-      const enabledSkills = activeAgent
-        ? activeAgent.skills.map(n => skillStore.skills.find(s => s.name === n)).filter((s): s is NonNullable<typeof s> => s !== undefined && s.enabled)
-        : skillStore.skills.filter(s => s.enabled)
+      const enabledSkills = resolveAgentSkillNames(activeAgent ?? null, skillStore.skills)
+        .map(n => skillStore.skills.find(s => s.name === n))
+        .filter((s): s is NonNullable<typeof s> => s !== undefined && s.enabled)
       const agentSkillsBlock = formatAgentSkillsBlock(enabledSkills)
 
       const mcpStore = useMCPStore.getState()

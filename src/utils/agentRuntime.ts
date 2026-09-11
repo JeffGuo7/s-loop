@@ -48,6 +48,24 @@ export function assembleAgentRuntimePrompt(
   return sections.length > 0 ? sections.join('\n\n') : undefined
 }
 
+export const DEFAULT_AGENT_ID = 'agent_default'
+
+/**
+ * Skills the agent should see. Custom agents are curated: only explicitly
+ * mounted skills. The built-in default agent is a generalist — unless the
+ * user mounted at least one skill on it, it sees every enabled skill, so
+ * seeded skills (e.g. make-pptx) work out of the box.
+ */
+export function resolveAgentSkillNames(agent: Agent | null, availableSkills: SkillInfo[]): string[] {
+  if (agent && agent.id !== DEFAULT_AGENT_ID && agent.skills.length > 0) {
+    return [...agent.skills]
+  }
+  if (agent && agent.id !== DEFAULT_AGENT_ID) {
+    return []
+  }
+  return availableSkills.filter((skill) => skill.enabled).map((skill) => skill.name)
+}
+
 export function buildAgentRuntimeSnapshot(
   agent: Agent | null,
   availableSkills: SkillInfo[],
@@ -55,9 +73,7 @@ export function buildAgentRuntimeSnapshot(
   selectedSkillNames?: string[],
   workspaceDir?: string,
 ): TaskAgentRuntime {
-  const skillNames = selectedSkillNames ?? (agent
-    ? agent.skills
-    : availableSkills.filter((skill) => skill.enabled).map((skill) => skill.name))
+  const skillNames = selectedSkillNames ?? resolveAgentSkillNames(agent, availableSkills)
   const enabledSkills = skillNames
     .map((name) => availableSkills.find((skill) => skill.name === name))
     .filter((skill): skill is SkillInfo => Boolean(skill?.enabled))

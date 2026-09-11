@@ -57,4 +57,24 @@ describe('task agent runtime snapshot', () => {
     expect(snapshot.agentMcpServers).toEqual([])
     expect(snapshot.agentMcpTools).toEqual([])
   })
+
+  it('gives the uncurated default agent every enabled skill', () => {
+    const defaultAgent = { ...makeAgent(), id: 'agent_default', skills: [] }
+    const snapshot = buildAgentRuntimeSnapshot(defaultAgent, [
+      { name: 'make-pptx', description: 'PPT skill', content: 'ppt workflow', location: '', enabled: true },
+      { name: 'off-skill', description: '', content: 'disabled', location: '', enabled: false },
+    ], '', undefined)
+
+    expect(snapshot.agentSkillsBlock).toContain('ppt workflow')
+    expect(snapshot.agentSkillsBlock).not.toContain('disabled')
+  })
+
+  it('keeps custom agents curated when nothing is mounted', () => {
+    const customAgent = { ...makeAgent(), skills: [] }
+    const snapshot = buildAgentRuntimeSnapshot(customAgent, [
+      { name: 'make-pptx', description: 'PPT skill', content: 'ppt workflow', location: '', enabled: true },
+    ], '', undefined)
+
+    expect(snapshot.agentSkillsBlock).toBeUndefined()
+  })
 })
