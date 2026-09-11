@@ -175,7 +175,9 @@ function createCustomModel(providerID, modelID, providerConfig = {}) {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
     contextLength: 128000,
-    maxTokens: 4096,
+    // Reasoning models routinely spend thousands of tokens thinking before
+    // any visible content; 4096 left them truncated with empty replies.
+    maxTokens: 16384,
     ...(reasoningConfig.compat ? { compat: reasoningConfig.compat } : {}),
   }
 }
@@ -2885,6 +2887,15 @@ createServer((req, res) => {
       if (last?.content) {
         const types = last.content.map(c => c.type).join(', ')
         console.log('[pi-server] Message content types:', types)
+      }
+      if (last) {
+        const textLen = (extractAssistantText(last) || '').length
+        console.log(
+          '[pi-server] assistant finished — stopReason:', last.stopReason,
+          last.errorMessage ? `| error: ${last.errorMessage}` : '',
+          `| textLen: ${textLen}`,
+          last.usage ? `| usage: ${JSON.stringify(last.usage).slice(0, 200)}` : '',
+        )
       }
 
       if (last?.usage) {
