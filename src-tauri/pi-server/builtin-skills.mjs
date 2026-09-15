@@ -18,7 +18,7 @@ function hashFile(filePath) {
   return createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
 }
 
-export function seedBuiltinSkills(serverDir, homeDir = os.homedir(), log = console) {
+export function seedBuiltinSkills(serverDir, homeDir = os.homedir(), log = console.log.bind(console)) {
   const builtinDir = path.join(serverDir, 'builtin-skills')
   let entries
   try {

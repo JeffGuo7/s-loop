@@ -50,6 +50,19 @@ test('tolerates a missing builtin-skills directory', () => {
   assert.deepEqual(seeded, [])
 })
 
+// Regression: production calls seedBuiltinSkills(serverDir) with no logger —
+// the default must be callable, and seeding must never throw.
+test('seeds cleanly with the default logger (production call shape)', () => {
+  const home = makeTempHome()
+  try {
+    const seeded = seedBuiltinSkills(PI_SERVER_DIR, home)
+    assert.ok(seeded.includes('make-pptx'))
+    assert.ok(fs.existsSync(path.join(home, '.pi', 'agent', 'skills', 'make-pptx', 'SKILL.md')))
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  }
+})
+
 test('refreshes an unmodified seeded skill when a new version ships', () => {
   const home = makeTempHome()
   try {
