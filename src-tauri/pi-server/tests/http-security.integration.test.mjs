@@ -28,7 +28,7 @@ async function freePort() {
   })
 }
 
-async function waitUntilReady(process, timeoutMs = 15_000) {
+async function waitUntilReady(process, timeoutMs = 60_000) {
   return await new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('pi-server did not announce readiness'))

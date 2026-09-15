@@ -48,6 +48,16 @@ jobs:
           path: stt/target/sherpa-onnx-prebuilt
           key: sherpa-onnx-1.13.4-windows-x64-static-mt
 
+      - name: Restore sherpa prebuilt archive
+        shell: pwsh
+        run: |
+          $dir = "stt/target/sherpa-onnx-prebuilt"
+          $file = Join-Path $dir "sherpa-onnx-v1.13.4-win-x64-static-MT-Release-lib.tar.bz2"
+          if (!(Test-Path $file)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.4/sherpa-onnx-v1.13.4-win-x64-static-MT-Release-lib.tar.bz2" -OutFile $file
+          }
+
       - run: node scripts/with-native-build-env.mjs cargo test --manifest-path stt/Cargo.toml --lib
         name: Test local speech engine
 
