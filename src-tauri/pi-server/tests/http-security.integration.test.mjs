@@ -31,9 +31,12 @@ async function freePort() {
 async function waitUntilReady(process, timeoutMs = 60_000) {
   return await new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error('pi-server did not announce readiness'))
+      reject(new Error(
+        'pi-server did not announce readiness. STDERR: ' + stderr + ' STDOUT-TAIL: ' + stdoutTail,
+      ))
     }, timeoutMs)
     let stderr = ''
+    let stdoutTail = ''
 
     const cleanup = () => {
       clearTimeout(timer)
@@ -42,6 +45,7 @@ async function waitUntilReady(process, timeoutMs = 60_000) {
       process.off('exit', onExit)
     }
     const onStdout = (chunk) => {
+      stdoutTail = (stdoutTail + String(chunk)).slice(-1500)
       if (String(chunk).includes('listening on')) {
         cleanup()
         resolve()
