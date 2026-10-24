@@ -5,7 +5,7 @@
 [English](README.md)
 
 <p align="center">
-  <img src="public/home.png" alt="S-Loop Screenshot" width="800" />
+  <img src="public/screenshots/chat-light.png" alt="S-Loop 对话界面" width="860" />
 </p>
 
 <p align="center">
@@ -41,6 +41,29 @@ S-Loop 是一款本地优先的 Windows AI 工作台。一个应用里集成：3
 | **PPTX 生成** | 原生 PowerPoint 生成与工作区预览 |
 | **桌面宠物** | SVG 动画宠物、独立透明窗口、多状态切换、多主题包 |
 | **主题系统** | 9 套色系 × 深色/浅色、毛玻璃效果、CSS 变量驱动实时切换 |
+
+## 界面预览
+
+<p align="center">
+  <img src="public/screenshots/chat-dark.png" alt="暗色主题" width="49%" />
+  <img src="public/screenshots/agent-builder.png" alt="智能体构建器" width="49%" />
+</p>
+<p align="center">
+  <img src="public/screenshots/providers.png" alt="模型服务商" width="49%" />
+  <img src="public/screenshots/skills.png" alt="技能系统" width="49%" />
+</p>
+<p align="center">
+  <img src="public/screenshots/platforms.png" alt="平台消息中心" width="49%" />
+  <img src="public/screenshots/tasks.png" alt="定时任务" width="49%" />
+</p>
+<p align="center">
+  <img src="public/screenshots/goals.png" alt="目标循环" width="49%" />
+  <img src="public/screenshots/mcp.png" alt="MCP 服务器" width="49%" />
+</p>
+<p align="center">
+  <img src="public/screenshots/workspace.png" alt="工作区文件树" width="49%" />
+  <img src="public/screenshots/pet.png" alt="桌面宠物" width="49%" />
+</p>
 
 ## 安全模型
 

@@ -5,7 +5,7 @@
 [中文文档](README.zh-CN.md)
 
 <p align="center">
-  <img src="public/home.png" alt="S-Loop Screenshot" width="800" />
+  <img src="public/screenshots/chat-light.png" alt="S-Loop chat view" width="860" />
 </p>
 
 <p align="center">
@@ -43,6 +43,29 @@ execution audit trail.
 | **PPTX Generation** | Native PowerPoint generation and workspace preview |
 | **Desktop Pet** | SVG animated pet in a transparent overlay window, multi-state, theme packs |
 | **Themes** | 9 color schemes × dark/light, glassmorphism, CSS-variable driven |
+
+## Screenshots
+
+<p align="center">
+  <img src="public/screenshots/chat-dark.png" alt="Dark theme" width="49%" />
+  <img src="public/screenshots/agent-builder.png" alt="Agent builder" width="49%" />
+</p>
+<p align="center">
+  <img src="public/screenshots/providers.png" alt="Model providers" width="49%" />
+  <img src="public/screenshots/skills.png" alt="Skills" width="49%" />
+</p>
+<p align="center">
+  <img src="public/screenshots/platforms.png" alt="Platform hub" width="49%" />
+  <img src="public/screenshots/tasks.png" alt="Scheduled tasks" width="49%" />
+</p>
+<p align="center">
+  <img src="public/screenshots/goals.png" alt="Goal loop" width="49%" />
+  <img src="public/screenshots/mcp.png" alt="MCP servers" width="49%" />
+</p>
+<p align="center">
+  <img src="public/screenshots/workspace.png" alt="Workspace file tree" width="49%" />
+  <img src="public/screenshots/pet.png" alt="Desktop pet" width="49%" />
+</p>
 
 ## Security model
 
