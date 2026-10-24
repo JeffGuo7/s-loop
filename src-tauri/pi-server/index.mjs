@@ -143,7 +143,7 @@ const goalLoopControllers = new Map()  // goalId → AbortController
 const platformRunsInFlight = new Set()
 const runtimeConfig = {
   providerID: 'anthropic',
-  modelID: 'claude-sonnet-4-20250514',
+  modelID: 'claude-sonnet-4-5',
   apiKey: process.env.PI_API_KEY || '',
   providerApiKeys: {},
   agentMcpServers: undefined,
@@ -790,7 +790,7 @@ function shouldProcessInbound(incoming) {
 
 async function promptPlatformConversation(sessionId, content, platformRun, resumeApprovalId) {
   const provider = runtimeConfig.providerID || 'anthropic'
-  const modelId = runtimeConfig.agentModel || runtimeConfig.modelID || 'claude-sonnet-4-20250514'
+  const modelId = runtimeConfig.agentModel || runtimeConfig.modelID || 'claude-sonnet-4-5'
   const model = resolveModel(provider, modelId, runtimeConfig.providerConfig)
   if (!model) {
     throw new Error(`Unknown model "${modelId}" for provider "${provider}"`)
@@ -1271,7 +1271,7 @@ function createTaskRunDependencies(task, params = {}, overrides = {}) {
     projectDir: params.projectDir || task.workspaceDir || runtimeConfig.workspaceDir || process.cwd(),
     apiKey: task.apiKey || params.apiKey || runtimeConfig.apiKey || '',
     defaultProvider: params.defaultProvider || runtimeConfig.providerID || 'anthropic',
-    defaultModel: params.defaultModel || runtimeConfig.modelID || 'claude-sonnet-4-20250514',
+    defaultModel: params.defaultModel || runtimeConfig.modelID || 'claude-sonnet-4-5',
     prompt: createCronPrompt,
     makeSession: true,
     trigger: overrides.trigger || 'scheduled',
@@ -1966,7 +1966,7 @@ createServer((req, res) => {
 
     try {
       const provider = providerID || 'anthropic'
-      const modelId = modelID || 'claude-sonnet-4-20250514'
+      const modelId = modelID || 'claude-sonnet-4-5'
       console.log('[pi-server] Received prompt:', { provider, modelId, contentLen: content?.length })
 
       const effectiveProviderConfig = promptProviderConfig || (providerAPI ? { api: providerAPI } : {}) || runtimeConfig.providerConfig || {}
@@ -2312,7 +2312,7 @@ createServer((req, res) => {
     projectDir: sLoopDir,
     apiKey: process.env.PI_API_KEY || '',
     defaultProvider: 'anthropic',
-    defaultModel: 'claude-sonnet-4-20250514',
+    defaultModel: 'claude-sonnet-4-5',
     prompt: createCronPrompt,
     runtimeConfig,
   })

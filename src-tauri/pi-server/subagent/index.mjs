@@ -133,7 +133,7 @@ export async function runSubagent({
 
   // 2. Resolve model
   const providerID = parentConfig.providerID || 'anthropic'
-  const modelID = def.model || parentConfig.modelID || 'claude-sonnet-4-20250514'
+  const modelID = def.model || parentConfig.modelID || 'claude-sonnet-4-5'
   const providerConfig = parentConfig.providerConfig || {}
   let model
   if (resolveModel) {

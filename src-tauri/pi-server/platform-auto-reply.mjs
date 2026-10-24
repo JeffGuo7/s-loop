@@ -90,7 +90,7 @@ export async function autoReply(msg, platform, runtimeConfig) {
 
     // 4. Resolve model
     const providerID = runtimeConfig.providerID || 'anthropic'
-    const modelID = runtimeConfig.modelID || 'claude-sonnet-4-20250514'
+    const modelID = runtimeConfig.modelID || 'claude-sonnet-4-5'
     const providerConfig = runtimeConfig.providerConfig || {}
     let model = getModel(providerID, modelID)
     if (!model) {

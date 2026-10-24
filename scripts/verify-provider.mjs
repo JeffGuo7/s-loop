@@ -33,7 +33,7 @@ const PORT = 4593
 const BASE = `http://127.0.0.1:${PORT}`
 const TOKEN = 'verify-provider-token'
 
-const model = modelId || 'deepseek-v4-flash'
+const model = modelId || 'deepseek-flash'
 const dataDir = mkdtempSync(join(tmpdir(), 'sloop-verify-'))
 const child = spawn(process.execPath, [join(SERVER_DIR, 'index.mjs')], {
   cwd: SERVER_DIR,

@@ -1,17 +1,15 @@
-// Context compression engine using pi-agent-core AgentHarness compaction utilities.
+// Context compression engine using pi-coding-agent 1.4 compaction utilities.
 
 import {
   calculateContextTokens,
-  estimateContextTokens,
+  estimateTokens,
   shouldCompact,
   DEFAULT_COMPACTION_SETTINGS,
-  prepareCompaction,
   compact,
-  prepareBranchEntries,
   generateBranchSummary,
-  BACKGROUND_CONTEXT,
-} from '@earendil-works/pi-agent-core'
-import { completeSimple } from '@earendil-works/pi-ai/compat'
+  findCutPoint,
+  buildSessionProjection,
+} from '@earendil-works/pi-coding-agent'
 import { resolveContextLength } from './token-utils.mjs'
 import { truncateToolResult as truncateToolResultMessage } from './truncate.mjs'
 import { SUMMARY_PREFIX, SUMMARY_END_MARKER, FALLBACK_COMPACTION_NOTE, IDENTIFIER_PRESERVATION_INSTRUCTIONS } from './prompts.mjs'
@@ -26,6 +24,39 @@ function messagesToEntries(messages) {
     parentId = id
     return entry
   })
+}
+
+function estimateContextTokens(messages) {
+  return { tokens: messages.reduce((sum, m) => sum + estimateTokens(m), 0) }
+}
+
+/** pi-coding-agent 1.4 no longer exports prepareCompaction; rebuild the part
+ *  of it that applies to S-Loop's inputs — a plain message chain with no
+ *  compaction entries inside, so the projection maps 1:1 to the entries. */
+function prepareCompaction(pathEntries, settings) {
+  if (pathEntries.length > 0 && pathEntries[pathEntries.length - 1].type === 'compaction') {
+    return undefined
+  }
+  const projectedMessages = buildSessionProjection(pathEntries).messages
+  if (projectedMessages.length === 0) return undefined
+  const tokensBefore = projectedMessages.reduce((sum, m) => sum + estimateTokens(m), 0)
+  const cutPoint = findCutPoint(pathEntries, 0, pathEntries.length, settings.keepRecentTokens)
+  const firstKeptEntry = pathEntries[cutPoint.firstKeptEntryIndex]
+  if (!firstKeptEntry?.id) return undefined
+  const historyEnd = cutPoint.isSplitTurn ? cutPoint.turnStartIndex : cutPoint.firstKeptEntryIndex
+  const messagesToSummarize = pathEntries
+    .slice(0, historyEnd)
+    .flatMap((e) => (e.type === 'message' ? [e.message] : []))
+  if (messagesToSummarize.length === 0) return undefined
+  return {
+    firstKeptEntryId: firstKeptEntry.id,
+    messagesToSummarize,
+    turnPrefixMessages: [],
+    isSplitTurn: cutPoint.isSplitTurn,
+    tokensBefore,
+    fileOps: { read: new Set(), written: new Set(), edited: new Set() },
+    settings,
+  }
 }
 
 export class ContextEngine {
@@ -87,47 +118,34 @@ export class ContextCompressor extends ContextEngine {
     onStatus?.({ type: 'compacting', message: 'Compacting context…' })
 
     const entries = messagesToEntries(messages)
-    const preparationResult = prepareCompaction(entries, this.settings)
-    if (!preparationResult.ok) {
-      console.warn('[context-engine] prepareCompaction failed:', preparationResult.error)
-      return messages
-    }
-
-    const preparation = preparationResult.value
+    // 1.4 returns the preparation directly (undefined when nothing to compact).
+    const preparation = prepareCompaction(entries, this.settings)
     if (!preparation) {
       return messages
     }
 
-    // 0.85's compaction routes provider calls through a Models registry;
-    // duck-type one so S-Loop's per-call apiKey and abort signal still flow.
-    const summaryModels = {
-      completeSimple: (completionModel, aiContext, requestOptions) =>
-        completeSimple(completionModel, aiContext, { ...requestOptions, apiKey, signal }),
-    }
-
+    // 1.4's compact() takes the apiKey directly — no models-registry adapter.
     let compactResult
     try {
       compactResult = await compact(
         preparation,
-        summaryModels,
         model,
+        apiKey,
+        undefined,
         IDENTIFIER_PRESERVATION_INSTRUCTIONS,
-        undefined,
-        undefined,
-        undefined,
-        BACKGROUND_CONTEXT,
+        signal,
       )
     } catch (err) {
       console.warn('[context-engine] compact failed, falling back to compaction note:', err)
       return this._fallbackCompact(messages, preparation, estimate.tokens, onStatus)
     }
 
-    if (!compactResult.ok) {
-      console.warn('[context-engine] compact failed, falling back to compaction note:', compactResult.error)
+    if (!compactResult?.summary) {
+      console.warn('[context-engine] compact failed, falling back to compaction note:', compactResult?.error)
       return this._fallbackCompact(messages, preparation, estimate.tokens, onStatus)
     }
 
-    const { summary, firstKeptEntryId, tokensBefore } = compactResult.value
+    const { summary, firstKeptEntryId, tokensBefore } = compactResult
     const firstKeptIndex = entries.findIndex((e) => e.id === firstKeptEntryId)
     if (firstKeptIndex < 0) {
       return messages
@@ -141,14 +159,13 @@ export class ContextCompressor extends ContextEngine {
     const keptEntries = entries.slice(0, firstKeptIndex)
     if (keptEntries.length > 2) {
       try {
-        const branchPreparation = prepareBranchEntries(keptEntries)
-        const branchResult = await generateBranchSummary(
-          keptEntries,
-          { models: summaryModels, model },
-          BACKGROUND_CONTEXT,
-        )
-        if (branchResult?.ok && typeof branchResult.value?.summary === 'string') {
-          branchSummary = `\n\n## Branch Activity\n\n${branchResult.value.summary}`
+        const branchResult = await generateBranchSummary(keptEntries, {
+          model,
+          apiKey,
+          signal: signal || new AbortController().signal,
+        })
+        if (typeof branchResult?.summary === 'string' && branchResult.summary) {
+          branchSummary = `\n\n## Branch Activity\n\n${branchResult.summary}`
         }
       } catch {
         // Branch summary is best-effort; fall back to flat summary only.
