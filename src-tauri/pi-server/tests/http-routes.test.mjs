@@ -151,7 +151,9 @@ test('sidecar serves every extracted route group', async (t) => {
   })
 
   await t.test('pptx preview enforces the workspace sandbox through route ctx', async () => {
-    const res = await request('GET', `/preview/pptx?path=${encodeURIComponent('C:\\Windows\\system.ini')}`)
+    // A `..` escape lands outside the workspace on every platform, unlike a
+    // Windows absolute path which Linux would resolve inside the workspace.
+    const res = await request('GET', `/preview/pptx?path=${encodeURIComponent('../escaped-secret.txt')}`)
     assert.equal(res.status, 403)
   })
 
