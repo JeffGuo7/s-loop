@@ -25,7 +25,7 @@ fn protect_bytes(plain: &[u8]) -> Result<Vec<u8>, String> {
     use std::ptr::{null, null_mut};
     use windows_sys::Win32::Foundation::{GetLastError, LocalFree};
     use windows_sys::Win32::Security::Cryptography::{
-        CryptProtectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
 
     let input = CRYPT_INTEGER_BLOB {
@@ -70,7 +70,7 @@ fn unprotect_bytes(protected: &[u8]) -> Result<Vec<u8>, String> {
     use std::ptr::{null, null_mut};
     use windows_sys::Win32::Foundation::{GetLastError, LocalFree};
     use windows_sys::Win32::Security::Cryptography::{
-        CryptUnprotectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
 
     let input = CRYPT_INTEGER_BLOB {
@@ -152,8 +152,7 @@ fn write_vault(app: &tauri::AppHandle, vault: &Map<String, Value>) -> Result<(),
         std::fs::remove_file(&path)
             .map_err(|e| format!("Unable to replace MCP credential vault: {e}"))?;
     }
-    std::fs::rename(&tmp, &path)
-        .map_err(|e| format!("Unable to commit MCP credential vault: {e}"))
+    std::fs::rename(&tmp, &path).map_err(|e| format!("Unable to commit MCP credential vault: {e}"))
 }
 
 fn merge_objects(target: &mut Map<String, Value>, patch: &Map<String, Value>) {
@@ -182,11 +181,7 @@ pub fn mcp_secret_get(app: tauri::AppHandle, name: String) -> Result<Value, Stri
 }
 
 #[tauri::command]
-pub fn mcp_secret_merge(
-    app: tauri::AppHandle,
-    name: String,
-    values: Value,
-) -> Result<(), String> {
+pub fn mcp_secret_merge(app: tauri::AppHandle, name: String, values: Value) -> Result<(), String> {
     if name.is_empty() || name.len() > 256 {
         return Err("MCP credential name must contain 1-256 characters".to_string());
     }
@@ -249,14 +244,20 @@ mod tests {
     fn secret_patch_replaces_values_and_removes_nulls() {
         let mut target = Map::from_iter([
             ("headers".to_string(), json!({"Authorization": "old"})),
-            ("oauth".to_string(), json!({"tokens": {"access_token": "old"}})),
+            (
+                "oauth".to_string(),
+                json!({"tokens": {"access_token": "old"}}),
+            ),
         ]);
         let patch = Map::from_iter([
             ("headers".to_string(), json!({"Authorization": "new"})),
             ("oauth".to_string(), json!(null)),
         ]);
         merge_objects(&mut target, &patch);
-        assert_eq!(target.get("headers"), Some(&json!({"Authorization": "new"})));
+        assert_eq!(
+            target.get("headers"),
+            Some(&json!({"Authorization": "new"}))
+        );
         assert!(!target.contains_key("oauth"));
     }
 }

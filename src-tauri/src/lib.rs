@@ -38,6 +38,10 @@ fn check_server_healthy(port: u16) -> bool {
         Ok(s) => s,
         Err(_) => return false,
     };
+    // A port can be occupied by a process that never responds; without a
+    // timeout the health probe would block startup forever.
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(2)));
+    let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(2)));
     let request =
         format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
     if stream.write_all(request.as_bytes()).is_err() {
@@ -135,10 +139,7 @@ fn do_start_server(
 }
 
 fn resolve_project_dir() -> String {
-    if let Some(dir) = std::env::var("S_LOOP_PROJECT_DIR").ok() {
-        return dir;
-    }
-    if let Some(dir) = std::env::var("SNOTRA_PROJECT_DIR").ok() {
+    if let Ok(dir) = std::env::var("S_LOOP_PROJECT_DIR") {
         return dir;
     }
     let cwd = std::env::current_dir().unwrap_or_default();
@@ -187,6 +188,32 @@ fn resolve_workspace_dir(project_dir: &str, app: &tauri::AppHandle) -> String {
         .app_data_dir()
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_else(|_| project_dir.to_string())
+}
+
+/// The SQLite database file was renamed from snotra.db to sloop.db with the
+/// S-Loop rebrand. Copy the legacy file (if present) so existing installs
+/// keep their sessions and settings. tauri-plugin-sql resolves
+/// "sqlite:<name>.db" against the app config dir; app data dir is checked
+/// too as a fallback for older layouts.
+fn migrate_legacy_database(app: &tauri::AppHandle) {
+    let dirs = [
+        app.path().app_config_dir().ok(),
+        app.path().app_data_dir().ok(),
+    ];
+    for dir in dirs.into_iter().flatten() {
+        let legacy = dir.join("snotra.db");
+        let target = dir.join("sloop.db");
+        if legacy.exists() && !target.exists() {
+            match std::fs::copy(&legacy, &target) {
+                Ok(_) => eprintln!(
+                    "[s-loop] migrated legacy database {} -> {}",
+                    legacy.display(),
+                    target.display()
+                ),
+                Err(e) => eprintln!("[s-loop] failed to migrate legacy database: {e}"),
+            }
+        }
+    }
 }
 
 fn show_main_window(app: &tauri::AppHandle) {
@@ -238,7 +265,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 ..
             } = event
             {
-                toggle_main_window(&tray.app_handle());
+                toggle_main_window(tray.app_handle());
             }
         })
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -620,6 +647,7 @@ pub fn run() {
         ])
         .manage(MCPManager::new())
         .setup(move |app| {
+            migrate_legacy_database(app.handle());
             dictation::initialize(app)?;
             voice::initialize(app)?;
             // Handle close → minimize (hide) behavior: clicking X should
@@ -659,4 +687,80 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    #[test]
+    fn port_from_url_parses_trailing_port() {
+        assert_eq!(port_from_url("http://127.0.0.1:4096"), Some(4096));
+        assert_eq!(port_from_url("http://127.0.0.1:4096/"), Some(4096));
+        assert_eq!(port_from_url("http://127.0.0.1"), None);
+        assert_eq!(port_from_url("not-a-url"), None);
+    }
+
+    #[test]
+    fn find_available_port_skips_occupied_ports() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let occupied = listener.local_addr().unwrap().port();
+        let picked = find_available_port(occupied).unwrap();
+        assert!(picked > occupied);
+        assert!(picked <= occupied + PI_SERVER_PORT_SEARCH_LIMIT);
+    }
+
+    /// Serve one HTTP response crafted by `body` (or close immediately when
+    /// None), then report whether a request was received.
+    fn serve_one_response(body: Option<&'static str>) -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 512];
+            let _ = stream.read(&mut buf);
+            match body {
+                Some(body) => {
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                }
+                None => drop(stream),
+            }
+        });
+        port
+    }
+
+    #[test]
+    fn check_server_healthy_accepts_expected_marker_body() {
+        let port = serve_one_response(Some("{\"healthy\":true,\"service\":\"s-loop-pi-server\"}"));
+        assert!(check_server_healthy(port));
+    }
+
+    #[test]
+    fn check_server_healthy_rejects_missing_service_marker() {
+        let port = serve_one_response(Some("{\"healthy\":true}"));
+        assert!(!check_server_healthy(port));
+    }
+
+    #[test]
+    fn check_server_healthy_rejects_unresponsive_port() {
+        // Bound but silent listener: the read timeout must turn this into a
+        // `false` instead of hanging the startup path forever.
+        let port = serve_one_response(None);
+        assert!(!check_server_healthy(port));
+    }
+
+    #[test]
+    fn check_server_healthy_rejects_closed_port() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        assert!(!check_server_healthy(port));
+    }
 }

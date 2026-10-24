@@ -43,7 +43,9 @@ pub fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
-        let metadata = entry.metadata().map_err(|e| format!("Failed to read metadata: {e}"))?;
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("Failed to read metadata: {e}"))?;
 
         let file_name = entry.file_name().to_string_lossy().to_string();
 
@@ -111,7 +113,12 @@ pub(crate) fn parse_frontmatter(content: &str) -> (HashMap<String, String>, Stri
     (meta, content.to_string())
 }
 
-fn walk_skill_files(dir: &std::path::Path, entries: &mut Vec<SkillFileEntry>, visited: &mut Vec<std::path::PathBuf>, depth: usize) {
+fn walk_skill_files(
+    dir: &std::path::Path,
+    entries: &mut Vec<SkillFileEntry>,
+    visited: &mut Vec<std::path::PathBuf>,
+    depth: usize,
+) {
     const MAX_DEPTH: usize = 32;
     const MAX_FILE_SIZE: u64 = 1_048_576;
 
@@ -154,18 +161,33 @@ fn walk_skill_files(dir: &std::path::Path, entries: &mut Vec<SkillFileEntry>, vi
         // Skip common large directories
         if metadata.is_dir() {
             let lower = name_str.to_lowercase();
-            if lower == "node_modules" || lower == ".git" || lower == "target" || lower == ".kilo" || lower == "__pycache__" || lower == ".next" || lower == "dist" || lower == ".cache" {
+            if lower == "node_modules"
+                || lower == ".git"
+                || lower == "target"
+                || lower == ".kilo"
+                || lower == "__pycache__"
+                || lower == ".next"
+                || lower == "dist"
+                || lower == ".cache"
+            {
                 continue;
             }
         }
 
         if metadata.is_dir() {
             walk_skill_files(&path, entries, visited, depth + 1);
-        } else if metadata.is_file() && metadata.len() <= MAX_FILE_SIZE && name_str.to_lowercase() == "skill.md" {
+        } else if metadata.is_file()
+            && metadata.len() <= MAX_FILE_SIZE
+            && name_str.to_lowercase() == "skill.md"
+        {
             if let Ok(content) = std::fs::read_to_string(&path) {
                 let (meta, body) = parse_frontmatter(&content);
-                let name = meta.get("name").cloned()
-                    .unwrap_or_else(|| path.file_stem().unwrap_or_default().to_string_lossy().to_string());
+                let name = meta.get("name").cloned().unwrap_or_else(|| {
+                    path.file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string()
+                });
                 let description = meta.get("description").cloned().unwrap_or_default();
                 let emoji = meta.get("emoji").cloned().unwrap_or_default();
                 let version = meta.get("version").cloned().unwrap_or_default();
@@ -190,7 +212,10 @@ pub async fn scan_skill_files(paths: Vec<String>) -> Result<Vec<SkillFileEntry>,
         let home = std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
             .unwrap_or_default();
-        let default_skills = std::path::Path::new(&home).join(".pi").join("agent").join("skills");
+        let default_skills = std::path::Path::new(&home)
+            .join(".pi")
+            .join("agent")
+            .join("skills");
 
         let mut results = Vec::new();
         let mut scanned = std::collections::HashSet::new();
@@ -204,10 +229,11 @@ pub async fn scan_skill_files(paths: Vec<String>) -> Result<Vec<SkillFileEntry>,
 
         for path_str in &paths {
             // Expand ~ to home directory
-            let resolved = if path_str.starts_with('~') {
-                std::path::Path::new(&home).join(&path_str[1..].trim_start_matches(|c| c == '/' || c == '\\'))
-            } else {
-                std::path::Path::new(path_str).to_path_buf()
+            let resolved = match path_str.strip_prefix('~') {
+                Some(rest) => {
+                    std::path::Path::new(&home).join(rest.trim_start_matches(['/', '\\']))
+                }
+                None => std::path::Path::new(path_str).to_path_buf(),
             };
 
             if !resolved.is_dir() {
@@ -235,16 +261,23 @@ pub async fn scan_skill_files(paths: Vec<String>) -> Result<Vec<SkillFileEntry>,
 pub fn parse_skill_file(path: String) -> Result<SkillFileEntry, String> {
     let path_buf = std::path::Path::new(&path);
 
-    let metadata = std::fs::metadata(&path).map_err(|e| format!("Failed to read file metadata: {e}"))?;
+    let metadata =
+        std::fs::metadata(&path).map_err(|e| format!("Failed to read file metadata: {e}"))?;
     if metadata.len() > 1_048_576 {
         return Err("File too large (>1MB)".to_string());
     }
 
-    let content = std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {e}"))?;
 
     let (meta, body) = parse_frontmatter(&content);
-    let name = meta.get("name").cloned()
-        .unwrap_or_else(|| path_buf.file_stem().unwrap_or_default().to_string_lossy().to_string());
+    let name = meta.get("name").cloned().unwrap_or_else(|| {
+        path_buf
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string()
+    });
     let description = meta.get("description").cloned().unwrap_or_default();
     let emoji = meta.get("emoji").cloned().unwrap_or_default();
     let version = meta.get("version").cloned().unwrap_or_default();
@@ -261,7 +294,10 @@ pub fn parse_skill_file(path: String) -> Result<SkillFileEntry, String> {
 }
 
 #[tauri::command]
-pub async fn search_remote_skills(source: String, query: Option<String>) -> Result<Vec<RemoteSkillEntry>, String> {
+pub async fn search_remote_skills(
+    source: String,
+    query: Option<String>,
+) -> Result<Vec<RemoteSkillEntry>, String> {
     let source_lower = source.to_lowercase();
     let query = query.unwrap_or_default().trim().to_string();
     let client = reqwest::Client::builder()
@@ -271,7 +307,8 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
 
     if source_lower == "clawhub" {
         let url = if query.is_empty() {
-            "https://clawhub.ai/api/v1/skills?limit=24&sort=stars&nonSuspiciousOnly=true".to_string()
+            "https://clawhub.ai/api/v1/skills?limit=24&sort=stars&nonSuspiciousOnly=true"
+                .to_string()
         } else {
             format!(
                 "https://clawhub.ai/api/v1/search?q={}&limit=24&sort=stars&nonSuspiciousOnly=true",
@@ -315,10 +352,11 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
                     .get("ownerHandle")
                     .and_then(|v| v.as_str())
                     .map(|v| v.to_string());
-                let downloads = item
-                    .get("downloads")
-                    .and_then(|v| v.as_u64())
-                    .or_else(|| item.get("stats").and_then(|stats| stats.get("downloads")).and_then(|v| v.as_u64()));
+                let downloads = item.get("downloads").and_then(|v| v.as_u64()).or_else(|| {
+                    item.get("stats")
+                        .and_then(|stats| stats.get("downloads"))
+                        .and_then(|v| v.as_u64())
+                });
 
                 Some(RemoteSkillEntry {
                     id: slug.clone(),
@@ -335,7 +373,7 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
 
         // Sort by downloads descending (API sort=downloads should handle this,
         // but local sort guarantees consistency regardless of API behavior)
-        results.sort_by(|a, b| b.downloads.unwrap_or(0).cmp(&a.downloads.unwrap_or(0)));
+        results.sort_by_key(|r| std::cmp::Reverse(r.downloads.unwrap_or(0)));
         return Ok(results);
     }
 
@@ -409,7 +447,7 @@ pub async fn search_remote_skills(source: String, query: Option<String>) -> Resu
         })
         .collect::<Vec<_>>();
 
-    results.sort_by(|a, b| b.downloads.unwrap_or(0).cmp(&a.downloads.unwrap_or(0)));
+    results.sort_by_key(|r| std::cmp::Reverse(r.downloads.unwrap_or(0)));
     Ok(results)
 }
 

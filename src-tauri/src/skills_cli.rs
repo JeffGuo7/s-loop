@@ -31,8 +31,7 @@ pub struct SkillInstallResult {
 // ─── Mirror configuration ───
 
 fn get_skills_api_url() -> String {
-    std::env::var("S_LOOP_SKILLS_API_URL")
-        .unwrap_or_else(|_| "https://skills.sh".to_string())
+    std::env::var("S_LOOP_SKILLS_API_URL").unwrap_or_else(|_| "https://skills.sh".to_string())
 }
 
 fn dirs_home() -> PathBuf {
@@ -59,8 +58,9 @@ fn percent_encode(query: &str) -> String {
     let mut result = String::new();
     for byte in query.bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
-            | b'-' | b'_' | b'.' | b'~' => result.push(byte as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                result.push(byte as char)
+            }
             b' ' => result.push_str("%20"),
             _ => result.push_str(&format!("%{:02X}", byte)),
         }
@@ -80,7 +80,11 @@ fn find_npx_cmd() -> Option<PathBuf> {
     };
 
     // 1. Try the system's command locator
-    let locator = if cfg!(target_os = "windows") { "where" } else { "which" };
+    let locator = if cfg!(target_os = "windows") {
+        "where"
+    } else {
+        "which"
+    };
     if let Ok(output) = Command::new(locator).arg(npx_name).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         if let Some(line) = stdout.lines().next() {
@@ -97,7 +101,10 @@ fn find_npx_cmd() -> Option<PathBuf> {
         vec![
             r"C:\Program Files\nodejs\npx.cmd".into(),
             r"C:\Program Files (x86)\nodejs\npx.cmd".into(),
-            home.join("AppData").join("Roaming").join("npm").join("npx.cmd"),
+            home.join("AppData")
+                .join("Roaming")
+                .join("npm")
+                .join("npx.cmd"),
         ]
     } else {
         vec![
@@ -110,7 +117,10 @@ fn find_npx_cmd() -> Option<PathBuf> {
             // Volta (cross-platform version manager)
             home.join(".volta").join("bin").join("npx"),
             // fnm (cross-platform version manager)
-            home.join(".local").join("share").join("fnm").join("node-versions"),
+            home.join(".local")
+                .join("share")
+                .join("fnm")
+                .join("node-versions"),
         ]
     };
 
@@ -121,7 +131,14 @@ fn find_npx_cmd() -> Option<PathBuf> {
     }
 
     // 3. Search for node and derive npx path
-    if let Ok(output) = Command::new(locator).arg(if cfg!(target_os = "windows") { "node.exe" } else { "node" }).output() {
+    if let Ok(output) = Command::new(locator)
+        .arg(if cfg!(target_os = "windows") {
+            "node.exe"
+        } else {
+            "node"
+        })
+        .output()
+    {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             let node_path = PathBuf::from(line.trim());
@@ -174,7 +191,11 @@ pub async fn skills_cli_search(query: String) -> Result<Vec<SkillsSearchResult>,
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
 
-    let res = client.get(&url).send().await.map_err(|e| format!("Search request failed: {e}"))?;
+    let res = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Search request failed: {e}"))?;
 
     if !res.status().is_success() {
         return Err(format!("Search API returned status {}", res.status()));
@@ -186,7 +207,7 @@ pub async fn skills_cli_search(query: String) -> Result<Vec<SkillsSearchResult>,
         .map_err(|e| format!("Failed to parse search response: {e}"))?;
 
     let mut skills = data.skills;
-    skills.sort_by(|a, b| b.installs.cmp(&a.installs));
+    skills.sort_by_key(|s| std::cmp::Reverse(s.installs));
     Ok(skills)
 }
 
@@ -215,15 +236,7 @@ pub async fn skills_cli_update() -> Result<String, String> {
 #[tauri::command]
 pub async fn skills_cli_remove(skill_name: String) -> Result<String, String> {
     let output = npx_command()
-        .args([
-            "skills",
-            "remove",
-            &skill_name,
-            "--agent",
-            "pi",
-            "-g",
-            "-y",
-        ])
+        .args(["skills", "remove", &skill_name, "--agent", "pi", "-g", "-y"])
         .output()
         .map_err(|e| format!("Failed to run npx skills remove: {e}"))?;
 
@@ -241,30 +254,37 @@ pub async fn skills_cli_remove(skill_name: String) -> Result<String, String> {
 /// First tries the skill's actual location (extracted from the stored path),
 /// then falls back to ~/.pi/agent/skills/{name}/.
 #[tauri::command]
-pub fn delete_skill_files(skill_name: String, skill_path: Option<String>) -> Result<String, String> {
+pub fn delete_skill_files(
+    skill_name: String,
+    skill_path: Option<String>,
+) -> Result<String, String> {
     // Try the actual skill path first (from the stored location)
     if let Some(ref loc) = skill_path {
         let loc_path = std::path::Path::new(loc);
         // If loc is a SKILL.md file path, delete its parent directory
-        let dir_to_delete = if loc_path.is_file()
-            || loc_path.extension().map(|e| e == "md").unwrap_or(false)
-        {
-            loc_path.parent().map(|p| p.to_path_buf())
-        } else {
-            Some(loc_path.to_path_buf())
-        };
+        let dir_to_delete =
+            if loc_path.is_file() || loc_path.extension().map(|e| e == "md").unwrap_or(false) {
+                loc_path.parent().map(|p| p.to_path_buf())
+            } else {
+                Some(loc_path.to_path_buf())
+            };
 
         if let Some(dir) = dir_to_delete {
             if dir.exists() {
-                std::fs::remove_dir_all(&dir)
-                    .map_err(|e| format!("Failed to delete skill directory {}: {}", dir.display(), e))?;
+                std::fs::remove_dir_all(&dir).map_err(|e| {
+                    format!("Failed to delete skill directory {}: {}", dir.display(), e)
+                })?;
                 return Ok(format!("Deleted skill directory: {}", dir.display()));
             }
         }
     }
 
     // Fallback: try ~/.pi/agent/skills/{name}/
-    let dir = dirs_home().join(".pi").join("agent").join("skills").join(&skill_name);
+    let dir = dirs_home()
+        .join(".pi")
+        .join("agent")
+        .join("skills")
+        .join(&skill_name);
     if dir.exists() {
         std::fs::remove_dir_all(&dir)
             .map_err(|e| format!("Failed to delete skill directory: {e}"))?;
@@ -277,7 +297,11 @@ pub fn delete_skill_files(skill_name: String, skill_path: Option<String>) -> Res
 /// Write a new SKILL.md file to ~/.pi/agent/skills/{name}/SKILL.md.
 /// Returns the path to the created skill directory.
 #[tauri::command]
-pub fn create_skill_file(name: String, description: String, content: String) -> Result<String, String> {
+pub fn create_skill_file(
+    name: String,
+    description: String,
+    content: String,
+) -> Result<String, String> {
     let safe_name = sanitize_dir_name(&name);
     let skills_dir = dirs_home().join(".pi").join("agent").join("skills");
     let skill_dir = skills_dir.join(&safe_name);
@@ -289,8 +313,7 @@ pub fn create_skill_file(name: String, description: String, content: String) -> 
         name, description, content
     );
     let skill_md = skill_dir.join("SKILL.md");
-    std::fs::write(&skill_md, frontmatter)
-        .map_err(|e| format!("Failed to write SKILL.md: {e}"))?;
+    std::fs::write(&skill_md, frontmatter).map_err(|e| format!("Failed to write SKILL.md: {e}"))?;
 
     Ok(skill_dir.to_string_lossy().to_string())
 }
@@ -335,8 +358,8 @@ pub async fn clawhub_install_skill(
         .to_vec();
 
     let cursor = Cursor::new(bytes.as_slice());
-    let mut archive =
-        zip::ZipArchive::new(cursor).map_err(|e| format!("Downloaded file is not a valid ZIP: {e}"))?;
+    let mut archive = zip::ZipArchive::new(cursor)
+        .map_err(|e| format!("Downloaded file is not a valid ZIP: {e}"))?;
 
     // First pass: find all SKILL.md files and their frontmatter names
     struct FoundSkill {
@@ -375,7 +398,10 @@ pub async fn clawhub_install_skill(
             .map(|p| format!("{}/", p.to_string_lossy()))
             .unwrap_or_default();
 
-        found_skills.push(FoundSkill { base_dir, frontmatter_name });
+        found_skills.push(FoundSkill {
+            base_dir,
+            frontmatter_name,
+        });
     }
 
     if found_skills.is_empty() {

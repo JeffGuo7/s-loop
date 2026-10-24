@@ -221,9 +221,13 @@ pub fn ensure_pi_server_extracted_to(
             .map_err(|e| format!("zip entry {i} read error: {e}"))?;
         let rel = entry.name().to_string();
         // Guard against absolute paths and traversal before joining. This is
-        // reliable even when the destination does not exist yet.
+        // reliable even when the destination does not exist yet. Rooted paths
+        // ("/etc/x" or "\x" on Windows) carry no drive prefix, so is_absolute
+        // misses them — but join() would still escape the staging directory,
+        // so has_root() must be rejected too.
         let rel_path = Path::new(&rel);
         if rel_path.is_absolute()
+            || rel_path.has_root()
             || rel_path
                 .components()
                 .any(|component| matches!(component, Component::ParentDir))
@@ -501,9 +505,8 @@ impl PiServerProcess {
         cmd.arg(&entry);
         configure_sanitized_environment(&mut cmd);
         cmd.env("PI_SERVER_PORT", port.to_string());
-        cmd.env("SNOTRA_API_TOKEN", &api_token);
+        cmd.env("S_LOOP_API_TOKEN", &api_token);
         cmd.env("S_LOOP_PROJECT_DIR", workspace_dir);
-        cmd.env("SNOTRA_PROJECT_DIR", workspace_dir);
         cmd.env("S_LOOP_RUNTIME_DIR", project_dir);
         let working_dir = if Path::new(workspace_dir).is_dir() {
             workspace_dir
@@ -641,5 +644,132 @@ impl Drop for PiServerProcess {
             let _ = child.kill();
             let _ = child.wait();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn temp_base(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "s-loop-test-{}-{}-{}",
+            tag,
+            std::process::id(),
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
+        let file = std::fs::File::create(path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        for (name, data) in entries {
+            writer
+                .start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(data).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+
+    #[test]
+    fn extracts_archive_and_marks_completion() {
+        let base = temp_base("extract-ok");
+        let archive = base.join("pi-server.zip");
+        let node = node_binary_name();
+        write_zip(
+            &archive,
+            &[
+                ("index.mjs", b"console.log('listening on')"),
+                (&node, b"binary"),
+            ],
+        );
+        let target = base.join("runtime");
+
+        let ok = ensure_pi_server_extracted_to(&archive, &target).unwrap();
+        assert!(ok);
+
+        let dir = target.join("pi-server");
+        assert!(dir.join("index.mjs").exists());
+        assert!(dir.join(node).exists());
+        assert!(dir.join(EXTRACT_OK_MARKER).exists());
+        assert!(!base.join(".pi-server.extracting").exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn rejects_zip_traversal_entries() {
+        let base = temp_base("extract-traversal");
+        let archive = base.join("pi-server.zip");
+        write_zip(&archive, &[("../evil.txt", b"escaped")]);
+        let target = base.join("runtime");
+
+        let err = ensure_pi_server_extracted_to(&archive, &target).unwrap_err();
+        assert!(
+            err.contains("escapes pi-server dir"),
+            "unexpected error: {err}"
+        );
+        assert!(!target.join("evil.txt").exists());
+        assert!(!base.join("evil.txt").exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn rejects_absolute_zip_entries() {
+        let base = temp_base("extract-absolute");
+        let archive = base.join("pi-server.zip");
+        write_zip(&archive, &[("/abs/evil.txt", b"escaped")]);
+        let target = base.join("runtime");
+
+        let err = ensure_pi_server_extracted_to(&archive, &target).unwrap_err();
+        assert!(
+            err.contains("escapes pi-server dir"),
+            "unexpected error: {err}"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn reextracts_when_completion_marker_is_missing() {
+        let base = temp_base("reextract");
+        let archive = base.join("pi-server.zip");
+        let node = node_binary_name();
+        write_zip(
+            &archive,
+            &[
+                ("index.mjs", b"console.log('listening on')"),
+                (&node, b"binary"),
+            ],
+        );
+        let target = base.join("runtime");
+        assert!(ensure_pi_server_extracted_to(&archive, &target).unwrap());
+
+        // Simulate a crash mid-extract: partial dir without the marker must
+        // be detected and rebuilt from the archive.
+        let dir = target.join("pi-server");
+        std::fs::remove_file(dir.join(EXTRACT_OK_MARKER)).unwrap();
+        assert!(ensure_pi_server_extracted_to(&archive, &target).unwrap());
+        assert!(dir.join(EXTRACT_OK_MARKER).exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sanitized_environment_drops_inherited_secrets() {
+        let secret = "s-loop-cargo-test-secret-9931";
+        std::env::set_var("S_LOOP_TEST_SECRET", secret);
+        let mut cmd = Command::new("cmd");
+        configure_sanitized_environment(&mut cmd);
+        cmd.args(["/C", "set"]);
+        let output = cmd.output().unwrap();
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            !text.contains(secret),
+            "secret leaked into child environment"
+        );
+        assert!(text.to_uppercase().contains("PATH="));
     }
 }

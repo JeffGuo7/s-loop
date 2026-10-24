@@ -18,16 +18,17 @@ pub fn extract_skill_zip(
     source_path_hint: Option<String>,
 ) -> Result<InstalledSkillInfo, String> {
     // Expand ~ to home directory
-    let target_dir = if target_dir.starts_with('~') {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .unwrap_or_default();
-        std::path::Path::new(&home)
-            .join(&target_dir[1..].trim_start_matches(|c: char| c == '/' || c == '\\'))
-            .to_string_lossy()
-            .to_string()
-    } else {
-        target_dir
+    let target_dir = match target_dir.strip_prefix('~') {
+        Some(rest) => {
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_default();
+            std::path::Path::new(&home)
+                .join(rest.trim_start_matches(['/', '\\']))
+                .to_string_lossy()
+                .to_string()
+        }
+        None => target_dir,
     };
 
     let zip_bytes = base64_decode(&zip_base64)?;
@@ -42,7 +43,9 @@ pub fn extract_skill_zip(
         .map(|hint| hint.replace('\\', "/").to_lowercase());
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
         let file_path = file.name().to_string();
         let lower = file_path.replace('\\', "/").to_lowercase();
 
@@ -80,10 +83,13 @@ pub fn extract_skill_zip(
     let description = meta.get("description").cloned().unwrap_or_default();
 
     let dest_dir = PathBuf::from(&target_dir).join(&name);
-    std::fs::create_dir_all(&dest_dir).map_err(|e| format!("Failed to create skill directory: {}", e))?;
+    std::fs::create_dir_all(&dest_dir)
+        .map_err(|e| format!("Failed to create skill directory: {}", e))?;
 
     for i in 0..archive.len() {
-        let file = archive.by_index(i).map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
+        let file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
         let file_path = file.name().to_string();
 
         if file.name().ends_with('/') {
@@ -91,14 +97,22 @@ pub fn extract_skill_zip(
         }
 
         let rel_path = if let Some(p) = skill_path_in_zip.as_ref() {
-            let skill_dir = std::path::Path::new(p).parent().unwrap_or(std::path::Path::new(""));
+            let skill_dir = std::path::Path::new(p)
+                .parent()
+                .unwrap_or(std::path::Path::new(""));
             if let Ok(rel) = std::path::Path::new(&file_path).strip_prefix(skill_dir) {
                 rel.to_path_buf()
             } else {
-                std::path::Path::new(&file_path).file_name().unwrap_or_default().into()
+                std::path::Path::new(&file_path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .into()
             }
         } else {
-            std::path::Path::new(&file_path).file_name().unwrap_or_default().into()
+            std::path::Path::new(&file_path)
+                .file_name()
+                .unwrap_or_default()
+                .into()
         };
 
         let output_path = dest_dir.join(&rel_path);
