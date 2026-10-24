@@ -1,6 +1,6 @@
 # S-Loop
 
-> AI 桌面助手 — 集对话、Agent 编排、定时任务、桌面宠物于一体的 Tauri 2 应用
+> AI 桌面工作台 — 集多模型对话、Agent 编排、定时任务、平台接入、语音与桌面宠物于一体的 Tauri 2 应用
 
 [English](README.md)
 
@@ -17,6 +17,83 @@
   <a href="https://github.com/JeffGuo7/s-loop/releases/latest"><img src="https://img.shields.io/github/downloads/JeffGuo7/s-loop/total?color=blue" alt="Downloads"></a>
 </p>
 
+## S-Loop 是什么？
+
+S-Loop 是一款本地优先的 Windows AI 工作台。一个应用里集成：39 个内置模型服务商的流式对话
+（DeepSeek、OpenAI、Anthropic、Google、GLM、Moonshot、Qwen 等）、拖拽式 Agent 构建器、
+子代理与自主目标循环（Goal Loop）、Cron 定时任务、消息平台接入、完全离线的语音输入，
+以及一只桌面宠物——底层由成文的安全模型支撑：工作区沙箱、持久化审批、执行审计。
+
+## 功能特性
+
+| 模块 | 说明 |
+|------|------|
+| **AI 对话** | 流式 SSE 输出、推理过程可视化、工具调用日志、Markdown + Shiki 代码高亮、Mermaid / KaTeX 渲染、表格导出，内置 PDF / Word / Excel / Markdown 预览 |
+| **模型接入** | 基于 pi SDK 内置 39 个服务商——DeepSeek、OpenAI、Anthropic、Google、GLM (Z.ai)、Moonshot、Qwen、MiniMax、小米、OpenRouter、xAI、Groq 等——支持自定义 OpenAI 兼容端点；按服务商管理 API Key，模型感知的推理强度控制 |
+| **Agent 构建器** | 自定义 Agent（指令 / 模型 / Skills / MCP / 权限模式）、斜杠命令、拖拽编排、Agent 配置档案 |
+| **子代理与目标循环** | `delegate_task` / 并行 / 链式子代理，带预算与取消；Goal Loop 按计划-执行-检查推进多步任务，独立审批流 |
+| **MCP** | stdio MCP 进程由 Rust 层托管生命周期；远程 Streamable HTTP / SSE 服务支持 OAuth 2.1 + PKCE、按服务器工具过滤、DPAPI 加密凭据保险库 |
+| **Skills 系统** | 本地 `SKILL.md` 扫描、远程搜索安装、ZIP 拖拽安装、CLI 集成 |
+| **定时任务** | Cron / 间隔 / 一次性，绑定 Agent + Skills 快照，可投递到聊天或平台；无人值守运行遇到审批会挂起（`waiting_for_approval`），决策后自动恢复 |
+| **平台消息中心** | Telegram（双向聊天同步）、Email、Webhook、飞书、钉钉、微信、Slack、Discord、QQ Bot——白名单优先的访问控制 + 限速 |
+| **语音** | 完全离线的语音识别（whisper.cpp / sherpa-onnx）、Kokoro TTS 音色、实时语音模式 |
+| **联网搜索** | Bing / Brave / SearXNG / Tavily / Exa 五引擎切换，默认零配置可用 |
+| **PPTX 生成** | 原生 PowerPoint 生成与工作区预览 |
+| **桌面宠物** | SVG 动画宠物、独立透明窗口、多状态切换、多主题包 |
+| **主题系统** | 9 套色系 × 深色/浅色、毛玻璃效果、CSS 变量驱动实时切换 |
+
+## 安全模型
+
+S-Loop 将模型输出视为不可信输入。完整基线见
+[docs/security-model.md](docs/security-model.md)，要点：
+
+- 本地 sidecar 要求**每次启动重新生成的访问令牌**（常量时间校验、经子进程环境变量传递、
+  不落盘），配合 Origin 白名单，只绑定回环地址。
+- 文件工具被限制在**工作区根目录**内，读 / 写权限分离——即使在 `allow` 模式下，
+  写出可写根目录也会被拒绝。
+- Shell 命令经过**两级策略**（硬性禁止 / 需审批）；MCP 工具默认 ask，
+  未标注的未知工具一律 fail-closed。
+- 无人值守运行**在审批处挂起**并可在重启后恢复；每次决策落入可校验的
+  **持久化审计日志**。
+- MCP 凭据经 **Windows DPAPI** 加密；子进程拿到的是净化环境（无 API Key、
+  无 `NODE_OPTIONS`），应用退出时整个进程树一并回收。
+- WebView 强制严格 CSP，所有模型渲染的 HTML 都经过消毒。
+
+## 架构
+
+```
+┌─ Tauri 2 ───────────────────────────────────────────────────────┐
+│                                                                  │
+│  Rust 后端                          Node.js AI 引擎              │
+│  ┌────────────────────┐          ┌─────────────────────────┐    │
+│  │ pi_server.rs       │◄────────►│ pi-server (HTTP + SSE)  │    │
+│  │  sidecar 生命周期   │  token   │  会话与流式输出          │    │
+│  │ mcp_manager.rs     │          │  routes/* (HTTP API)    │    │
+│  │ credential_store   │          │  子代理 / goal-loop     │    │
+│  │ skill_installer    │          │  task-scheduler 定时    │    │
+│  │ skills_cli         │          │  platform-center 平台   │    │
+│  │ voice / dictation  │          │  执行策略引擎            │    │
+│  │ 系统托盘            │          │  审批 / 审计            │    │
+│  └────────────────────┘          └─────────────────────────┘    │
+│                                                                  │
+│  React 前端                                                      │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ ChatView │ AgentBuilder │ TasksPage │ GoalPage │ PetPage │   │
+│  │ SettingsModal │ WorkspacePanel │ MCP │ Skills │ Platforms│   │
+│  │ WebSearch │ Preview │ Voice │ i18n │ Themes              │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- **Rust 层** —— 窗口/托盘生命周期、sidecar 启动（Windows Job Object 进程树回收 +
+  净化子环境变量）、MCP stdio 进程管理、DPAPI 凭据保险库、离线语音
+  （whisper.cpp + sherpa-onnx）与 Kokoro TTS。
+- **pi-server（Node 子进程）** —— 会话与流式输出、HTTP 路由模块（`routes/`）、工具
+  策略引擎、工作区沙箱、子代理、Goal Loop、定时调度、平台中心、持久化审批与审计。
+  以 `pi-server.zip` 形式打包，首次启动由应用解压并配合内置 Node 运行时拉起。
+- **React 前端** —— 全部 UI，经回环 HTTP + SSE 携带每次启动的令牌与 sidecar 通信。
+
 ## 快速开始
 
 ### 开发
@@ -28,7 +105,11 @@ npm install
 npm run tauri:dev
 ```
 
-> 前置要求：Node.js ≥ 18、Rust ≥ 1.85 (MSVC)、npm
+> 前置要求：Node.js ≥ 20、Rust ≥ 1.85 (MSVC)、npm。
+> 首次 Rust 构建会编译内置语音引擎；CI 已缓存 sherpa-onnx 预编译库。
+
+若将 Vite 与 `pi-server` 作为两个独立进程分别启动，请在 `VITE_S_LOOP_API_TOKEN`
+与 `S_LOOP_API_TOKEN` 中设置相同的临时值，前端才能通过 sidecar 鉴权。
 
 ### 下载（Windows）
 
@@ -36,65 +117,45 @@ npm run tauri:dev
 
 | 格式 | 文件 |
 |------|------|
-| 安装版（推荐） | `S-Loop_<version>_x64-setup.exe` |
-| 绿色版 | `S-Loop_<version>_x64_en-US.msi` |
+| 安装版（推荐，按用户安装） | `S-Loop_<version>_x64-setup.exe` |
+| 系统级安装（MSI） | `S-Loop_<version>_x64_en-US.msi` |
 
-## 功能概览
+安装包内嵌 `pi-server.zip`，首次启动时自动解压到安装目录并在 `127.0.0.1:4096`
+拉起 sidecar，无需额外配置——在设置里填入模型服务商的 API Key 即可使用。
 
-| 模块 | 说明 |
-|------|------|
-| **AI 对话** | 流式 SSE 输出、推理过程展示、工具调用日志、Markdown + 代码高亮、Mermaid / LaTeX 渲染 |
-| **Agent 构建器** | 自定义 Agent（指令/模型/Skills/MCP/权限）、斜杠命令、拖拽编排 |
-| **MCP 服务器** | stdio 类型 MCP 进程管理，工具列表自动发现，Rust 后端生命周期控制 |
-| **Skills 系统** | 本地 SKILL.md 扫描、远程搜索安装（ClawHub）、ZIP 拖拽安装 |
-| **定时任务** | Cron / 间隔 / 一次性，绑定 Agent + Skills，交付到聊天或平台 |
-| **平台消息中心** | Telegram（双向同步）、Email、Webhook、飞书、钉钉、企微、Slack、Discord、QQ Bot |
-| **桌面宠物** | SVG 动画宠物，独立透明窗口，多状态切换，多主题包 |
-| **联网搜索** | Bing / Brave / SearXNG / Tavily / Exa，5 引擎可切换 |
-| **主题系统** | 9 套色系 × 深色/浅色，毛玻璃效果，CSS 变量驱动实时切换 |
+## 测试
 
-## 技术栈
+```bash
+npm test                       # 前端（vitest）
+npm run test:server            # pi-server 单测 + HTTP 路由冒烟测试（node:test）
+npm run native:test:speech     # stt crate
+cargo test --manifest-path src-tauri/Cargo.toml   # 原生层
+npx tsc --noEmit               # 类型检查
+```
 
-| 类别 | 技术 |
-|------|------|
-| 桌面框架 | Tauri 2 |
-| 前端 | React 19 + TypeScript + Vite |
-| 样式 | Tailwind CSS 4 + HeroUI v3 |
-| 状态管理 | Zustand |
-| 动效 | Framer Motion |
-| 图标 | Lucide React |
-| 代码高亮 | Shiki |
-| AI 引擎 | `@earendil-works/pi-agent-core` + `pi-ai` + `pi-coding-agent` |
-| AI 服务 | pi-server（Node.js 子进程，HTTP + SSE） |
-| 数据库 | SQLite（tauri-plugin-sql） |
-| 国际化 | i18next（中文 / English） |
+CI（`.github/workflows/ci.yml`）执行类型检查与两套 Node 测试，并对 Rust 层追加
+`cargo fmt --check`、`cargo clippy -D warnings` 和 `cargo test` 三个质量门。
 
-## 架构
+## 构建与发布
+
+```bash
+npm run tauri:build            # NSIS + MSI 安装包输出到 src-tauri/target/release/bundle
+node scripts/publish-release.mjs --dry-run   # 校验、构建并定位产物
+node scripts/publish-release.mjs             # 构建 + 创建 GitHub Release
+```
+
+## 项目结构
 
 ```
-┌─ Tauri 2 ───────────────────────────────────────────────────┐
-│                                                               │
-│  Rust 后端                    Node.js AI 引擎                 │
-│  ┌──────────────────┐        ┌──────────────────────────┐   │
-│  │ pi_server.rs     │◄──────►│ pi-server (HTTP + SSE)    │   │
-│  │ mcp_manager.rs   │        │   Agent 会话管理           │   │
-│  │ commands.rs      │        │   delegate_task / 子智能体  │   │
-│  │ skill_installer  │        │   Goal Loop 自主执行       │   │
-│  │ skills_cli.rs    │        │   task-scheduler 定时任务   │   │
-│  │ system_tray      │        │   platform-center 消息中心  │   │
-│  │                  │        │   telegram-monitor 轮询    │   │
-│  └──────────────────┘        └──────────────────────────┘   │
-│                                                               │
-│  React 前端                                                   │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │ ChatView │ AgentBuilder │ TasksPage │ PetPage         │   │
-│  │ SettingsModal │ FileTree │ WorkspacePanel │ Sidebar   │   │
-│  │ MCP │ Skills │ Platforms │ WebSearch │ i18n           │   │
-│  └───────────────────────────────────────────────────────┘   │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
+src/                    React 前端（组件、状态、i18n、主题）
+src-tauri/src/          Rust 层：sidecar 生命周期、MCP 管理、凭据、语音
+src-tauri/pi-server/    Node AI 引擎：index.mjs + routes/ + 策略/审批/审计存储
+stt/                    Rust 语音引擎（whisper.cpp、sherpa-onnx、Kokoro TTS）
+docs/                   安全模型与设计文档
+tests/                  前端 vitest 测试
+scripts/                打包与发布脚本
 ```
 
 ## License
 
-MIT
+[MIT](LICENSE)
