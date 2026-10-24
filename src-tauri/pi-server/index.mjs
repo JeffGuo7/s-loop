@@ -115,6 +115,12 @@ import {
 } from './audit-store.mjs'
 import { assembleRuntimeSystemPrompt } from './runtime-prompt.mjs'
 import { filterRemoteMcpTools } from './mcp-scope.mjs'
+import { readJsonBody, readRawJsonBody } from './http-body.mjs'
+import { handleGovernanceRoutes } from './routes/governance-routes.mjs'
+import { handleExtensionRoutes } from './routes/extension-routes.mjs'
+import { handleMcpRoutes } from './routes/mcp-routes.mjs'
+import { handleSubagentRoutes } from './routes/subagent-routes.mjs'
+import { handleModelCatalogRoutes, resolveModel } from './routes/model-catalog-routes.mjs'
 
 // Force UTF-8 for all child processes spawned by tools (bash, python, etc.)
 // On Windows Git Bash, the default codepage is GBK which causes
@@ -127,8 +133,8 @@ process.env.PYTHONUTF8 = '1';
 process.env.PYTHONIOENCODING = 'utf-8';
 
 const PORT = parseInt(process.env.PI_SERVER_PORT || '4096')
-const API_TOKEN = process.env.SNOTRA_API_TOKEN || ''
-const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+const API_TOKEN = process.env.S_LOOP_API_TOKEN || ''
+const DATA_DIR = process.env.S_LOOP_PROJECT_DIR || process.cwd()
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url))
 const sessionRepo = createSessionRepo(DATA_DIR)
 const sessions = new Map()
@@ -154,57 +160,6 @@ function runtimeRemoteMcpScope(config = {}) {
   return {
     serverNames: hasServerScope ? config.agentMcpServers : [],
     tools: hasToolScope ? config.agentMcpTools : [],
-  }
-}
-
-function createCustomModel(providerID, modelID, providerConfig = {}) {
-  const api = providerConfig.api || 'openai-completions'
-  const baseUrl = providerConfig.baseUrl || ''
-  const reasoningConfig = resolveCustomReasoningConfig(providerID, modelID, providerConfig)
-  // Custom models can declare vision support via providerConfig.supportsVision
-  const supportsVision = providerConfig.supportsVision === true
-  return {
-    id: modelID,
-    name: modelID,
-    api,
-    provider: providerID,
-    baseUrl,
-    reasoning: reasoningConfig.reasoning,
-    thinkingLevelMap: reasoningConfig.thinkingLevelMap,
-    input: supportsVision ? ['text', 'image'] : ['text'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128000,
-    contextLength: 128000,
-    // Reasoning models routinely spend thousands of tokens thinking before
-    // any visible content; a small cap leaves them truncated with empty
-    // replies. Aligned with the largest catalog default (glm-5.3-flash).
-    maxTokens: 131072,
-    ...(reasoningConfig.compat ? { compat: reasoningConfig.compat } : {}),
-  }
-}
-
-function resolveModel(providerID, modelID, providerConfig = {}) {
-  const builtIn = getModel(providerID, modelID)
-  if (builtIn) return builtIn
-  if (providerConfig?.api || providerConfig?.baseUrl) {
-    return createCustomModel(providerID, modelID, providerConfig)
-  }
-  return null
-}
-
-async function fetchOpenAiCompatibleModels(baseUrl, apiKey) {
-  const url = new URL('/models', baseUrl.replace(/\/$/, ''))
-  const headers = {}
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
-  try {
-    const res = await fetch(url.toString(), { headers })
-    if (!res.ok) return []
-    const data = await res.json()
-    const models = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
-    return models.map((m) => ({ id: m.id, name: m.id })).filter((m) => m.id)
-  } catch (err) {
-    console.warn('[pi-server] failed to fetch custom provider models:', err)
-    return []
   }
 }
 
@@ -311,65 +266,6 @@ function getTools(dir, webSearchConfig, remoteMcpScope) {
   }
 
   return tools
-}
-
-// ── PPTX preview + builtin skill seeding ─────────────────
-
-async function handlePptxPreview(req, res, rawPath) {
-  if (!rawPath.trim()) {
-    res.writeHead(400, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: 'Missing "path"' }))
-    return
-  }
-  let absPath
-  try {
-    const check = checkWorkspacePath(
-      rawPath,
-      runtimeConfig.workspaceDir || DATA_DIR,
-      Array.isArray(runtimeConfig.workspaceRoots) ? runtimeConfig.workspaceRoots : [],
-      'read',
-    )
-    if (!check.allowed) {
-      res.writeHead(403, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: check.reason || 'Path is outside the workspace sandbox' }))
-      return
-    }
-    absPath = check.resolvedPath
-  } catch (err) {
-    res.writeHead(500, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: err?.message || String(err) }))
-    return
-  }
-  if (!fs.existsSync(absPath)) {
-    res.writeHead(404, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: `File not found: ${absPath}` }))
-    return
-  }
-
-  // Render into the OS temp dir: SERVER_DIR can be read-only (Program Files
-  // installs), and the preview output has no module-resolution constraint.
-  const tmpOut = path.join(os.tmpdir(), `sloop-pptx-preview-${randomUUID()}.html`)
-  const controller = new AbortController()
-  req.on('close', () => controller.abort())
-  try {
-    await renderPptxHtml(absPath, tmpOut, {}, controller.signal)
-    if (controller.signal.aborted) return
-    const html = await fs.promises.readFile(tmpOut, 'utf8')
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-    res.end(html)
-  } catch (err) {
-    if (controller.signal.aborted) {
-      try { res.destroy() } catch { /* socket already gone */ }
-      return
-    }
-    const status = err?.unavailable ? 503 : 500
-    try {
-      res.writeHead(status, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: err?.message || String(err) }))
-    } catch { /* headers already sent */ }
-  } finally {
-    fs.rm(tmpOut, { force: true }, () => {})
-  }
 }
 
 // Copy bundled SKILL.md folders into ~/.pi/agent/skills on first run so they
@@ -621,26 +517,12 @@ function createDelegateChainTool({ runtimeConfig, resolveModel, getTools, projec
   }
 }
 
-function getSubagentList(projectDir) {
-  const { agents, builtinDir, userDir } = discoverAgents(projectDir)
-  return agents.map((a) => ({
-    name: a.name,
-    description: a.description,
-    model: a.model,
-    tools: a.tools,
-    source: a.source,
-    maxTurns: a.maxTurns,
-    maxTokens: a.maxTokens,
-    thinkingLevel: a.thinkingLevel,
-    permissionMode: a.permissionMode,
-    systemPromptPreview: a.systemPrompt.slice(0, 200),
-  }))
-}
-
 // ── Server ───────────────────────────────────────────────
 
 process.on('uncaughtException', (err) => console.error('[pi-server] UNCAUGHT:', err))
 process.on('unhandledRejection', (err) => console.error('[pi-server] UNHANDLED:', err))
+// Registered once at module scope — a per-request registration would leak listeners.
+process.on('exit', () => { disconnectAllSseMcp() })
 
 function extractAssistantText(last) {
   let text = ''
@@ -873,58 +755,6 @@ async function authorizeToolCall(wrapper, toolCall, config, {
   if (!approved) return { block: true, reason: 'User rejected or approval timed out' }
   toolAudit?.started(toolCall)
   return undefined
-}
-
-async function readJsonBody(req) {
-  return await new Promise((resolve, reject) => {
-    let body = ''
-    req.on('data', c => body += c)
-    req.on('end', () => {
-      try {
-        resolve(body ? JSON.parse(body) : {})
-      } catch (err) {
-        reject(err)
-      }
-    })
-    req.on('error', reject)
-  })
-}
-
-async function readRawJsonBody(req, { maxBytes = 64 * 1024, timeoutMs = 5000 } = {}) {
-  return await new Promise((resolve, reject) => {
-    let body = ''
-    let size = 0
-    const timer = setTimeout(() => {
-      req.destroy()
-      reject(new Error('Request body timeout'))
-    }, timeoutMs)
-
-    req.on('data', (chunk) => {
-      size += chunk.length
-      if (size > maxBytes) {
-        clearTimeout(timer)
-        req.destroy()
-        reject(new Error('Request body too large'))
-        return
-      }
-      body += chunk
-    })
-    req.on('end', () => {
-      clearTimeout(timer)
-      try {
-        resolve({
-          raw: body,
-          data: body ? JSON.parse(body) : {},
-        })
-      } catch (err) {
-        reject(err)
-      }
-    })
-    req.on('error', (err) => {
-      clearTimeout(timer)
-      reject(err)
-    })
-  })
 }
 
 function normalizePlatformInbound(platformId, payload) {
@@ -1260,7 +1090,7 @@ async function processPlatformInbound(platformId, incoming, options = {}) {
   // Session id doubles as part of a session filename, so it must be
   // filesystem-safe. Colons (from platform:conversation:thread) are
   // illegal in Windows filenames — replace any unsafe char with '_'.
-  const sessionId = `${platformId}:${incoming.conversationId}`.replace(/[:<>"/\\|?* -]/g, '_')
+  const sessionId = `${platformId}:${incoming.conversationId}`.replace(/[:<>"/\\|?*\x00-\x1f]/g, '_')
   const existingRun = findPlatformRun(platformId, incoming.messageId)
   if (existingRun) {
     return {
@@ -1565,164 +1395,26 @@ createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   if (!guardSidecarRequest(req, res, url, API_TOKEN)) return
 
-  if (req.method === 'POST' && url.pathname === '/runtime/config') {
-    readJsonBody(req).then((data) => {
-      runtimeConfig.providerID = data.providerID || runtimeConfig.providerID
-      runtimeConfig.modelID = data.modelID || runtimeConfig.modelID
-      runtimeConfig.apiKey = data.apiKey ?? runtimeConfig.apiKey
-      runtimeConfig.providerApiKeys = data.providerApiKeys && typeof data.providerApiKeys === 'object'
-        ? { ...data.providerApiKeys }
-        : runtimeConfig.providerApiKeys
-      runtimeConfig.workspaceDir = data.workspaceDir || undefined
-      runtimeConfig.thinkingLevel = data.thinkingLevel || runtimeConfig.thinkingLevel
-      if (data.providerConfig) runtimeConfig.providerConfig = data.providerConfig
-      if (data.webSearchConfig) runtimeConfig.webSearchConfig = data.webSearchConfig
-      // Active-agent config for autonomous flows (platform replies, cron)
-      runtimeConfig.agentSystemPrompt = data.agentSystemPrompt || undefined
-      runtimeConfig.agentSkillsBlock = data.agentSkillsBlock || undefined
-      runtimeConfig.agentModel = data.agentModel || undefined
-      runtimeConfig.agentMcpServers = Array.isArray(data.agentMcpServers)
-        ? [...data.agentMcpServers]
-        : undefined
-      runtimeConfig.agentMcpTools = Array.isArray(data.agentMcpTools)
-        ? data.agentMcpTools.map((tool) => ({ ...tool }))
-        : undefined
-      runtimeConfig.permissionMode = data.permissionMode || undefined
-      runtimeConfig.permissionRules = data.permissionRules || undefined
-      runtimeConfig.workspaceRoots = Array.isArray(data.workspaceRoots) ? data.workspaceRoots : []
-      // Keep accepting version 0 clients during a rolling upgrade.
-      runtimeConfig.accessiblePaths = Array.isArray(data.accessiblePaths) ? data.accessiblePaths : []
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ ok: true }))
-    }).catch((e) => {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    })
-    return
+  const routeCtx = {
+    runtimeConfig,
+    DATA_DIR,
+    resolveApproval,
+    getTask,
+    runTask,
+    createTaskRunDependencies,
+    updateTask,
+    getGoal,
+    executeGoalRun,
+    updateGoal,
+    getPlatformRun,
+    executePlatformRun,
+    updatePlatformRun,
   }
-
-  if (req.method === 'GET' && url.pathname === '/approvals') {
-    const requestedStatus = url.searchParams.getAll('status')
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(listApprovals({
-      status: requestedStatus.length > 0 ? requestedStatus : undefined,
-    })))
-    return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/audit/events') {
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(listAuditEvents({
-      limit: url.searchParams.get('limit') || undefined,
-      surface: url.searchParams.get('surface') || undefined,
-      runId: url.searchParams.get('runId') || undefined,
-    })))
-    return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/audit/verify') {
-    const result = verifyAuditTrail()
-    res.writeHead(result.valid ? 200 : 409, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(result))
-    return
-  }
-
-  const approvalDecisionMatch = url.pathname.match(/^\/approvals\/([^/]+)\/decision$/)
-  if (req.method === 'POST' && approvalDecisionMatch) {
-    readJsonBody(req).then((data) => {
-      const result = resolveApproval(
-        approvalDecisionMatch[1],
-        data.decision,
-        'local-user',
-      )
-      if (!result) {
-        res.writeHead(404, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Approval request not found' }))
-        return
-      }
-
-      const record = result.record
-      const shouldResume = (
-        data.decision === 'approve'
-        && !result.delivered
-        && record.status === 'approved'
-      )
-      if ((result.changed || shouldResume) && !result.delivered && record.surface === 'task') {
-        const task = getTask(record.surfaceId)
-        if (shouldResume && task) {
-          void runTask(task, createTaskRunDependencies(task, {}, {
-            trigger: 'manual',
-            resumeApprovalId: record.id,
-          })).catch((error) => {
-            console.error('[approvals] failed to resume task:', error?.message)
-          })
-        } else if (data.decision === 'deny' && task?.pendingApprovalId === record.id) {
-          updateTask(task.id, {
-            lastStatus: 'failed',
-            lastError: `Approval denied for ${record.toolName}`,
-            lastFinishedAt: Date.now(),
-            pendingApprovalId: undefined,
-          })
-        }
-      }
-      if ((result.changed || shouldResume) && !result.delivered && record.surface === 'goal') {
-        const goal = getGoal(record.surfaceId)
-        if (
-          shouldResume
-          && goal?.status === 'waiting_for_approval'
-          && goal.pendingApprovalId === record.id
-        ) {
-          void executeGoalRun(goal.id, {
-            resumeApprovalId: record.id,
-            runId: record.runId || randomUUID(),
-          }).catch((error) => {
-            updateGoal(goal.id, {
-              status: 'failed',
-              finalResult: error?.message || String(error),
-              pendingApprovalId: undefined,
-            })
-            console.error('[approvals] failed to resume goal:', error?.message)
-          })
-        } else if (data.decision === 'deny' && goal?.pendingApprovalId === record.id) {
-          updateGoal(goal.id, {
-            status: 'failed',
-            finalResult: `Approval denied for ${record.toolName}`,
-            pendingApprovalId: undefined,
-          })
-        }
-      }
-      if ((result.changed || shouldResume) && !result.delivered && record.surface === 'platform') {
-        const platformRun = getPlatformRun(record.surfaceId)
-        if (
-          shouldResume
-          && platformRun?.status === 'waiting_for_approval'
-          && platformRun.pendingApprovalId === record.id
-        ) {
-          void executePlatformRun(platformRun, {
-            resumeApprovalId: record.id,
-          }).catch((error) => {
-            console.error('[approvals] failed to resume platform run:', error?.message)
-          })
-        } else if (
-          data.decision === 'deny'
-          && platformRun?.pendingApprovalId === record.id
-        ) {
-          updatePlatformRun(platformRun.id, {
-            status: 'failed',
-            error: `Approval denied for ${record.toolName}`,
-            pendingApprovalId: undefined,
-          })
-        }
-      }
-
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(result.record))
-    }).catch((error) => {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: error.message }))
-    })
-    return
-  }
+  if (handleGovernanceRoutes(req, res, url, routeCtx)) return
+  if (handleExtensionRoutes(req, res, url)) return
+  if (handleMcpRoutes(req, res, url, routeCtx)) return
+  if (handleSubagentRoutes(req, res, url, routeCtx)) return
+  if (handleModelCatalogRoutes(req, res, url)) return
 
   if (req.method === 'GET' && url.pathname === '/platforms/chat-sync') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -2144,354 +1836,11 @@ createServer((req, res) => {
   // ── Extension Management endpoints ──
 
   // GET /extensions — list installed/loaded extensions
-  if (req.method === 'GET' && url.pathname === '/extensions') {
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(listExtensions()))
-    return
-  }
-
-  // POST /extensions/install — install a pi.dev package
-  if (req.method === 'POST' && url.pathname === '/extensions/install') {
-    readJsonBody(req).then(async (data) => {
-      try {
-        const pkg = data.package || data.name
-        if (!pkg) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "package" field' })); return }
-        const result = await installExtension(pkg)
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify(result))
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: e.message }))
-      }
-    }).catch((e) => {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    })
-    return
-  }
-
-  // POST /extensions/remove — uninstall a pi.dev package
-  if (req.method === 'POST' && url.pathname === '/extensions/remove') {
-    readJsonBody(req).then(async (data) => {
-      try {
-        const pkg = data.package || data.name
-        if (!pkg) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "package" field' })); return }
-        const result = await removeExtension(pkg)
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify(result))
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: e.message }))
-      }
-    }).catch((e) => {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    })
-    return
-  }
-
-  // POST /extensions/reload — reload all extensions
-  if (req.method === 'POST' && url.pathname === '/extensions/reload') {
-    reloadAll().then(() => {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ ok: true }))
-    }).catch((e) => {
-      res.writeHead(500, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    })
-    return
-  }
-
-  // ── SSE MCP Endpoints ──
-
-  // GET /mcp-sse/status — list connected SSE MCP servers and their tools
-  const oauthCallbackMatch = url.pathname.match(/^\/mcp-oauth\/callback\/([^/]+)$/)
-  if (req.method === 'GET' && oauthCallbackMatch) {
-    const name = decodeURIComponent(oauthCallbackMatch[1])
-    const code = url.searchParams.get('code')
-    const state = url.searchParams.get('state')
-    if (!code || !state) {
-      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end('<h1>Snotra OAuth failed</h1><p>The authorization response is missing code or state.</p>')
-      return
-    }
-    completeSseMcpOAuth(name, code, state).then(() => {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end('<h1>Authorization complete</h1><p>You can close this window and return to Snotra.</p>')
-    }).catch((error) => {
-      const message = String(error?.message || error).replace(/[<>&"']/g, '')
-      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(`<h1>Snotra OAuth failed</h1><p>${message}</p>`)
-    })
-    return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/mcp-oauth/credentials') {
-    const name = url.searchParams.get('name')
-    if (!name) {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Missing "name"' }))
-      return
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(getSseMcpOAuthCredentials(name)))
-    return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/mcp-sse/status') {
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(getSseMcpStatus()))
-    return
-  }
-
-  // GET /preview/pptx?path=... — render a workspace .pptx to high-fidelity
-  // HTML via officecli for the frontend preview panel. Falls back to the
-  // frontend's text extraction when this errors.
-  if (req.method === 'GET' && url.pathname === '/preview/pptx') {
-    const rawPath = url.searchParams.get('path') || ''
-    handlePptxPreview(req, res, rawPath)
-    return
-  }
-
-  // POST /mcp-sse/connect — connect to an SSE MCP server
-  if (req.method === 'POST' && url.pathname === '/mcp-sse/connect') {
-    readJsonBody(req).then(async (data) => {
-      try {
-        const { name, url, headers, transport, auth, toolFilter } = data
-        if (!name || !url) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name" or "url"' })); return }
-        const result = await connectSseMcpServer(
-          name,
-          url,
-          headers || {},
-          transport || 'http',
-          auth || {},
-          toolFilter || {},
-        )
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ ok: true, ...result }))
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: e.message }))
-      }
-    }).catch((e) => {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    })
-    return
-  }
-
-  // POST /mcp-sse/disconnect — disconnect from an SSE MCP server
-  if (req.method === 'POST' && url.pathname === '/mcp-sse/disconnect') {
-    readJsonBody(req).then(async (data) => {
-      try {
-        const { name } = data
-        if (!name) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name"' })); return }
-        await disconnectSseMcpServer(name)
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ ok: true }))
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: e.message }))
-      }
-    }).catch((e) => {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    })
-    return
-  }
-
-  // POST /mcp-sse/call — call a tool on an SSE MCP server
-  if (req.method === 'POST' && url.pathname === '/mcp-sse/call') {
-    readJsonBody(req).then(async (data) => {
-      try {
-        const { serverName, toolName, arguments: args } = data
-        if (!serverName || !toolName) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "serverName" or "toolName"' })); return }
-        const result = await callSseMcpTool(serverName, toolName, args || {})
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify(result))
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: e.message }))
-      }
-    }).catch((e) => {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    })
-    return
-  }
-
-  // Clean up SSE MCP connections on server shutdown
-  process.on('exit', () => { disconnectAllSseMcp() })
-
   // ── Existing endpoints ──
 
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ healthy: true, service: 's-loop-pi-server', port: PORT })); return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/subagents') {
-    const projectDir = url.searchParams.get('projectDir') || runtimeConfig.workspaceDir || DATA_DIR
-    const list = getSubagentList(projectDir)
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(list))
-    return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/subagents/runs') {
-    const limit = Number(url.searchParams.get('limit')) || 50
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(listSubagentRuns(limit)))
-    return
-  }
-
-  const subagentCancelMatch = url.pathname.match(/^\/subagents\/runs\/([^/]+)\/cancel$/)
-  if (req.method === 'POST' && subagentCancelMatch) {
-    const cancelled = cancelSubagentRun(decodeURIComponent(subagentCancelMatch[1]))
-    res.writeHead(cancelled ? 200 : 409, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ ok: cancelled }))
-    return
-  }
-
-  // POST /subagents/:name — create or update a user sub-agent .md file
-  const subagentSaveMatch = url.pathname.match(/^\/subagents\/([^/]+)$/)
-  if (req.method === 'POST' && subagentSaveMatch) {
-    const agentName = decodeURIComponent(subagentSaveMatch[1])
-    readJsonBody(req).then((data) => {
-      try {
-        const projectDir = data.projectDir || runtimeConfig.workspaceDir || DATA_DIR
-        const agentsDir = path.join(projectDir, '.s-loop', 'agents')
-        if (!fs.existsSync(agentsDir)) {
-          fs.mkdirSync(agentsDir, { recursive: true })
-        }
-
-        // Build .md content from frontmatter + body
-        const frontmatter = [
-          '---',
-          `name: ${data.name || agentName}`,
-          `description: ${data.description || ''}`,
-          data.model ? `model: ${data.model}` : '',
-          data.tools && data.tools.length > 0 ? 'tools:' : '',
-          ...(data.tools || []).map((t) => `  - ${t}`),
-          data.thinkingLevel ? `thinkingLevel: ${data.thinkingLevel}` : '',
-          data.maxTurns ? `maxTurns: ${data.maxTurns}` : '',
-          data.maxTokens ? `maxTokens: ${data.maxTokens}` : '',
-          data.permissionMode ? `permissionMode: ${data.permissionMode}` : '',
-          '---',
-        ].filter((l) => l !== '').join('\n')
-
-        const md = `${frontmatter}\n\n${data.systemPrompt || ''}`
-        const safeName = agentName.replace(/[^\w.-]+/g, '_')
-        const filePath = path.join(agentsDir, `${safeName}.md`)
-        fs.writeFileSync(filePath, md, 'utf-8')
-
-        // Reload so the new agent is available immediately
-        const def = loadAgentDefinition(safeName, projectDir)
-
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ ok: true, path: filePath, agent: def }))
-      } catch (e) {
-        res.writeHead(400, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: e.message }))
-      }
-    }).catch((e) => {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    })
-    return
-  }
-
-  // DELETE /subagents/:name — delete a user sub-agent .md file
-  if (req.method === 'DELETE' && subagentSaveMatch) {
-    const agentName = decodeURIComponent(subagentSaveMatch[1])
-    const projectDir = url.searchParams.get('projectDir') || runtimeConfig.workspaceDir || DATA_DIR
-    const agentsDir = path.join(projectDir, '.s-loop', 'agents')
-    const safeName = agentName.replace(/[^\w.-]+/g, '_')
-    const filePath = path.join(agentsDir, `${safeName}.md`)
-
-    try {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath)
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ ok: true }))
-      } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Agent not found' }))
-      }
-    } catch (e) {
-      res.writeHead(500, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: e.message }))
-    }
-    return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/models') {
-    (async () => {
-      const provider = url.searchParams.get('provider') || 'anthropic'
-      const apiKey = url.searchParams.get('apiKey') || ''
-      const baseUrl = url.searchParams.get('baseUrl') || ''
-      const providerConfig = {
-        api: url.searchParams.get('api') || undefined,
-        baseUrl,
-        reasoningSupport: url.searchParams.get('reasoningSupport') || 'auto',
-        thinkingFormat: url.searchParams.get('thinkingFormat') || 'auto',
-      }
-      let list = []
-      try {
-        const builtIn = getModels(provider).map(describeModel)
-        if (builtIn.length > 0) {
-          list = builtIn
-        } else if (baseUrl) {
-          const remoteModels = await fetchOpenAiCompatibleModels(baseUrl, apiKey)
-          list = remoteModels.map(({ id }) => describeModel(createCustomModel(provider, id, providerConfig)))
-        }
-      } catch { }
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(list))
-    })().catch((e) => {
-      console.error('[pi-server] /models error:', e)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify([]))
-    })
-    return
-  }
-
-  // GET /providers — full builtin provider catalog from the pi SDK, so the
-  // frontend picker tracks the SDK instead of a hardcoded list.
-  if (req.method === 'GET' && url.pathname === '/providers') {
-    (async () => {
-      const list = getProviders()
-        .map((id) => {
-          const models = getModels(id)
-          return { id, models: models.length, baseUrl: models[0]?.baseUrl || '', api: models[0]?.api || '' }
-        })
-        .filter((p) => p.models > 0)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(list))
-    })().catch((e) => {
-      console.error('[pi-server] /providers error:', e)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify([]))
-    })
-    return
-  }
-
-  if (req.method === 'GET' && url.pathname === '/model-capabilities') {
-    const provider = url.searchParams.get('provider') || 'anthropic'
-    const modelID = url.searchParams.get('model') || ''
-    const providerConfig = {
-      api: url.searchParams.get('api') || undefined,
-      baseUrl: url.searchParams.get('baseUrl') || '',
-      reasoningSupport: url.searchParams.get('reasoningSupport') || 'auto',
-      thinkingFormat: url.searchParams.get('thinkingFormat') || 'auto',
-    }
-    const model = resolveModel(provider, modelID, providerConfig)
-    const capabilities = model
-      ? describeReasoningCapabilities(model)
-      : describeReasoningCapabilities({ reasoning: false })
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(capabilities))
-    return
   }
 
   if (req.method === 'POST' && url.pathname === '/session') {
@@ -2937,7 +2286,7 @@ createServer((req, res) => {
     try { res.end() } catch {}
   })
 }).listen(PORT, '127.0.0.1', () => {
-  const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+  const sLoopDir = process.env.S_LOOP_PROJECT_DIR || process.cwd()
   initAuditStore(sLoopDir)
   initApprovalStore(sLoopDir)
   seedBuiltinSkills(SERVER_DIR)
