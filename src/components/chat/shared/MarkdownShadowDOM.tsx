@@ -1,6 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-
 interface ShadowDOMProps {
   children: ReactNode
 }
@@ -60,11 +59,4 @@ export function MarkdownShadowDOM({ children }: ShadowDOMProps) {
   }, [])
 
   return <div ref={hostRef} />
-}
-
-export function StyleWrapper({ children, html }: { children?: ReactNode; html?: string }) {
-  if (html) {
-    return <MarkdownShadowDOM><div dangerouslySetInnerHTML={{ __html: html }} /></MarkdownShadowDOM>
-  }
-  return <MarkdownShadowDOM>{children}</MarkdownShadowDOM>
 }

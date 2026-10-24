@@ -7,6 +7,7 @@ import remarkMath from 'remark-math'
 import remarkCjkFriendly from 'remark-cjk-friendly'
 import remarkAlert from 'remark-github-blockquote-alert'
 import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import rehypeKatex from 'rehype-katex'
 // MathJax alternative: import rehypeMathjax from 'rehype-mathjax'
 import 'katex/dist/katex.min.css'
@@ -23,6 +24,7 @@ import { FileChip, parseFileLink } from './FileChip'
 import { highlightInWorker } from './shikiWorker'
 import * as XLSX from 'xlsx'
 import { rehypeHeadingIds, remarkDisableConstructs, rehypeScalableSvg } from './plugins'
+import { markdownSanitizeSchema } from './markdownSchema'
 
 const MAX_COLLAPSED_HEIGHT = 400
 
@@ -418,7 +420,10 @@ function MarkdownInner({ children, className = '', variant = 'default' }: Markdo
   ], [])
 
   const rehypePlugins = useMemo<PluggableList>(() => [
+    // Model output can contain arbitrary HTML — sanitize it right after the
+    // raw pass and before KaTeX/SVG post-processors run.
     rehypeRaw,
+    [rehypeSanitize, markdownSanitizeSchema],
     rehypeKatex,
     rehypeScalableSvg,
     [rehypeHeadingIds, { prefix: `h-${Math.random().toString(36).slice(2, 8)}-` }],

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import DOMPurify from 'dompurify'
 
 interface DocxPreviewProps {
   filePath: string
@@ -42,10 +43,14 @@ export function DocxPreview({ filePath, onLoaded, onError }: DocxPreviewProps) {
 
   if (html === null) return null
 
+  // Mammoth output is document-derived, not trusted: sanitize before it
+  // touches the DOM (base64 <img> data URIs from the document are kept).
+  const safeHtml = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+
   return (
     <div
       className="h-full overflow-auto px-6 py-5 prose prose-sm dark:prose-invert max-w-none"
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: safeHtml }}
     />
   )
 }

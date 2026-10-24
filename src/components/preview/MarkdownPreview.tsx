@@ -3,8 +3,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { markdownSanitizeSchema } from '../chat/shared/markdownSchema'
 
 interface MarkdownPreviewProps {
   filePath: string
@@ -43,7 +45,7 @@ export function MarkdownPreview({ filePath, onLoaded, onError }: MarkdownPreview
     <div className="h-full overflow-auto px-6 py-5 prose prose-sm dark:prose-invert max-w-none prose-pre:bg-surface-secondary prose-pre:rounded-xl prose-code:text-accent">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeRaw, rehypeKatex]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeKatex]}
       >
         {content}
       </ReactMarkdown>
