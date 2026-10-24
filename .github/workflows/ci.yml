@@ -65,6 +65,21 @@ jobs:
         shell: pwsh
         run: New-Item -ItemType File -Path src-tauri/pi-server.zip -Force
 
+      - run: node scripts/with-native-build-env.mjs cargo fmt --manifest-path src-tauri/Cargo.toml --check
+        name: Check Rust formatting
+        env:
+          SHERPA_ONNX_ARCHIVE_DIR: ${{ github.workspace }}\stt\target\sherpa-onnx-prebuilt
+
+      - run: node scripts/with-native-build-env.mjs cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+        name: Lint Tauri native layer
+        env:
+          SHERPA_ONNX_ARCHIVE_DIR: ${{ github.workspace }}\stt\target\sherpa-onnx-prebuilt
+
+      - run: node scripts/with-native-build-env.mjs cargo test --manifest-path src-tauri/Cargo.toml
+        name: Test Tauri native layer
+        env:
+          SHERPA_ONNX_ARCHIVE_DIR: ${{ github.workspace }}\stt\target\sherpa-onnx-prebuilt
+
       - run: node scripts/with-native-build-env.mjs cargo check --manifest-path src-tauri/Cargo.toml
         name: Check Tauri native layer
         env:
