@@ -16,7 +16,7 @@ import {
 } from '../task-scheduler.mjs'
 
 test('a task can park for approval and resume without reserving another schedule', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-task-approval-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-task-approval-'))
   try {
     init(root)
     const task = createTask({

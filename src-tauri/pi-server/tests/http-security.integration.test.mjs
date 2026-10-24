@@ -66,7 +66,7 @@ async function waitUntilReady(process, timeoutMs = 60_000) {
 }
 
 before(async () => {
-  dataDir = await mkdtemp(join(tmpdir(), 'snotra-auth-'))
+  dataDir = await mkdtemp(join(tmpdir(), 's-loop-auth-'))
   const port = await freePort()
   baseUrl = `http://127.0.0.1:${port}`
   child = spawn(process.execPath, ['index.mjs'], {
@@ -74,7 +74,7 @@ before(async () => {
     env: {
       ...process.env,
       PI_SERVER_PORT: String(port),
-      SNOTRA_API_TOKEN: TOKEN,
+      S_LOOP_API_TOKEN: TOKEN,
       S_LOOP_PROJECT_DIR: dataDir,
     },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -100,7 +100,7 @@ test('full sidecar enforces token and browser origin while keeping health public
 
   const badOrigin = await fetch(`${baseUrl}/tasks`, {
     headers: {
-      'X-Snotra-Token': TOKEN,
+      'X-S-Loop-Token': TOKEN,
       Origin: 'https://evil.example',
     },
   })
@@ -108,7 +108,7 @@ test('full sidecar enforces token and browser origin while keeping health public
 
   const authorized = await fetch(`${baseUrl}/tasks`, {
     headers: {
-      'X-Snotra-Token': TOKEN,
+      'X-S-Loop-Token': TOKEN,
       Origin: 'tauri://localhost',
     },
   })
@@ -117,7 +117,7 @@ test('full sidecar enforces token and browser origin while keeping health public
 
   const approvals = await fetch(`${baseUrl}/approvals?status=pending`, {
     headers: {
-      'X-Snotra-Token': TOKEN,
+      'X-S-Loop-Token': TOKEN,
       Origin: 'tauri://localhost',
     },
   })

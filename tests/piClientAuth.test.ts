@@ -28,7 +28,7 @@ describe('pi-server fetch authentication', () => {
 
     const localInit = nativeFetch.mock.calls[0][1] as RequestInit
     const localHeaders = new Headers(localInit.headers)
-    expect(localHeaders.get('X-Snotra-Token')).toBe('launch-secret')
+    expect(localHeaders.get('X-S-Loop-Token')).toBe('launch-secret')
     expect(localHeaders.get('Content-Type')).toBe('application/json')
 
     const externalInit = nativeFetch.mock.calls[1][1] as RequestInit | undefined

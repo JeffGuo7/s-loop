@@ -21,7 +21,7 @@ i18n
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
-      lookupLocalStorage: 'snotra-locale',
+      lookupLocalStorage: 's-loop-locale',
     },
   })
 

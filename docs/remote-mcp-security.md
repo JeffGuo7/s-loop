@@ -1,6 +1,6 @@
 # Remote MCP security and authorization
 
-Snotra supports remote MCP servers through modern Streamable HTTP with legacy
+S-Loop supports remote MCP servers through modern Streamable HTTP with legacy
 HTTP+SSE fallback. Remote tools remain `external` and require approval by default.
 
 ## Configuration layers
@@ -10,7 +10,7 @@ client ID/scopes, and tool filters. It may be persisted in the WebView store.
 
 Secret configuration contains HTTP headers, stdio environment values, OAuth client
 secrets, access/refresh tokens, client registration data, and discovery state. On
-Windows it is encrypted with DPAPI for the current user and stored under the Snotra
+Windows it is encrypted with DPAPI for the current user and stored under the S-Loop
 application-data directory. Secret values are resolved only when a connection starts.
 
 Legacy configurations containing `headers` or `env` are migrated on hydration and

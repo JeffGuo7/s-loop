@@ -61,7 +61,7 @@ export function filterMcpTools(tools, filter = {}) {
   })
 }
 
-class SnotraOAuthProvider {
+class SLoopOAuthProvider {
   constructor(config = {}) {
     const credentials = config.credentials || {}
     this._redirectUrl = config.redirectUrl
@@ -82,7 +82,7 @@ class SnotraOAuthProvider {
 
   get clientMetadata() {
     return {
-      client_name: 'Snotra Desktop',
+      client_name: 'S-Loop Desktop',
       redirect_uris: [String(this._redirectUrl)],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
@@ -311,7 +311,7 @@ export async function connectSseMcpServer(
   await disconnectSseMcpServer(name)
   const safeHeaders = normalizeHeaders(headers)
   const authProvider = auth?.type === 'oauth'
-    ? new SnotraOAuthProvider(auth)
+    ? new SLoopOAuthProvider(auth)
     : null
   const options = {
     url,
@@ -351,7 +351,7 @@ export async function connectSseMcpServer(
   }
 
   try {
-    const fallbackProvider = auth?.type === 'oauth' ? new SnotraOAuthProvider(auth) : null
+    const fallbackProvider = auth?.type === 'oauth' ? new SLoopOAuthProvider(auth) : null
     const connection = await connectWithTransport(
       name,
       makeSseTransport(url, safeHeaders, fallbackProvider),

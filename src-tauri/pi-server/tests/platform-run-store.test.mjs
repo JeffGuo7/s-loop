@@ -12,7 +12,7 @@ import {
 } from '../platform-run-store.mjs'
 
 test('platform runs deduplicate inbound messages and preserve approval waits', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-platform-run-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-platform-run-'))
   try {
     initPlatformRunStore(root)
     const input = {
@@ -43,7 +43,7 @@ test('platform runs deduplicate inbound messages and preserve approval waits', (
 })
 
 test('platform runs never auto-replay execution interrupted by restart', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-platform-interrupt-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-platform-interrupt-'))
   try {
     initPlatformRunStore(root)
     const created = createPlatformRun({

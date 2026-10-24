@@ -1,7 +1,7 @@
 # Durable Unattended Approvals
 
 Scheduled tasks, Goal Loop runs, and platform auto-replies use durable approvals.
-When an unattended surface reaches an `approval-required` policy decision, Snotra:
+When an unattended surface reaches an `approval-required` policy decision, S-Loop:
 
 1. persists a redacted approval request under the application data directory;
 2. marks the task, goal, or platform run as `waiting_for_approval`;

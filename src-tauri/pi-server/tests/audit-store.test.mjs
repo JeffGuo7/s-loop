@@ -20,7 +20,7 @@ import {
 } from '../approval-store.mjs'
 
 test('audit events are redacted, filterable, and hash chained', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-audit-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-audit-'))
   try {
     const file = initAuditStore(root)
     appendAuditEvent('approval.requested', {
@@ -55,7 +55,7 @@ test('audit events are redacted, filterable, and hash chained', () => {
 })
 
 test('audit verification detects a modified event', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-audit-tamper-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-audit-tamper-'))
   try {
     const file = initAuditStore(root)
     appendAuditEvent('approval.requested', {
@@ -74,7 +74,7 @@ test('audit verification detects a modified event', () => {
 })
 
 test('durable approval lifecycle emits linked audit events', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-audit-approval-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-audit-approval-'))
   try {
     initAuditStore(root)
     initApprovalStore(root)
@@ -114,7 +114,7 @@ test('durable approval lifecycle emits linked audit events', () => {
 })
 
 test('tool audit tracks policy and execution without persisting result content', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-audit-tool-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-audit-tool-'))
   try {
     initAuditStore(root)
     const tracker = createToolAuditTracker({

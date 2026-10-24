@@ -2,9 +2,9 @@ import type { PermissionAction, PermissionRule, WorkspaceRoot } from '../types/a
 
 const DEFAULT_BASE = 'http://127.0.0.1:4096'
 let _base = DEFAULT_BASE
-let _apiToken = import.meta.env.VITE_SNOTRA_API_TOKEN || ''
+let _apiToken = import.meta.env.VITE_S_LOOP_API_TOKEN || ''
 let _fetchInterceptorInstalled = false
-const API_TOKEN_HEADER = 'X-Snotra-Token'
+const API_TOKEN_HEADER = 'X-S-Loop-Token'
 
 export function setBaseUrl(url: string) {
   _base = url.replace(/\/s+$/, '')

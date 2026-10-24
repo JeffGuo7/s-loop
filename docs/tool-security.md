@@ -1,6 +1,6 @@
 # Tool Security Metadata
 
-Every executable tool must resolve to security metadata before Snotra runs it.
+Every executable tool must resolve to security metadata before S-Loop runs it.
 Built-in tools are covered by the exact-name registry in `tool-security.mjs`. MCP
 tools are always treated as external actions and default to approval.
 

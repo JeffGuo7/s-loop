@@ -16,7 +16,7 @@ import {
 } from '../approval-store.mjs'
 
 test('approval requests persist, redact secrets, and resume a live waiter', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-approvals-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-approvals-'))
   try {
     initApprovalStore(root)
     const request = createApprovalRequest({
@@ -44,7 +44,7 @@ test('approval requests persist, redact secrets, and resume a live waiter', asyn
 })
 
 test('an approval survives restart and can be consumed only by the exact call', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-approvals-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-approvals-'))
   try {
     initApprovalStore(root)
     const request = createApprovalRequest({
@@ -80,7 +80,7 @@ test('an approval survives restart and can be consumed only by the exact call', 
 })
 
 test('denied approvals release waiters without executing', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-approvals-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-approvals-'))
   try {
     initApprovalStore(root)
     const request = createApprovalRequest({

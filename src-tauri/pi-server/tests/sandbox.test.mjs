@@ -8,7 +8,7 @@ import { evaluateToolCall } from '../execution-policy.mjs'
 import { checkWorkspacePath, sanitizeChildEnvironment } from '../sandbox.mjs'
 
 test('workspace sandbox allows descendants and rejects traversal', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-sandbox-'))
   try {
     assert.equal(checkWorkspacePath('src/file.ts', root).allowed, true)
     assert.equal(checkWorkspacePath('../outside.txt', root).allowed, false)
@@ -18,7 +18,7 @@ test('workspace sandbox allows descendants and rejects traversal', () => {
 })
 
 test('explicit accessible paths extend the workspace sandbox', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-sandbox-'))
   const workspace = path.join(base, 'workspace')
   const shared = path.join(base, 'shared')
   fs.mkdirSync(workspace)
@@ -31,7 +31,7 @@ test('explicit accessible paths extend the workspace sandbox', () => {
 })
 
 test('workspace roots enforce read-only and read-write grants', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-sandbox-'))
   const workspace = path.join(base, 'workspace')
   const readOnly = path.join(base, 'read-only')
   const writable = path.join(base, 'writable')
@@ -52,7 +52,7 @@ test('workspace roots enforce read-only and read-write grants', () => {
 })
 
 test('read-only roots block writes before agent permission mode is evaluated', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-sandbox-'))
   const workspace = path.join(base, 'workspace')
   const shared = path.join(base, 'shared')
   fs.mkdirSync(workspace)
@@ -80,7 +80,7 @@ test('read-only roots block writes before agent permission mode is evaluated', (
 })
 
 test('legacy string roots retain read-write behavior', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-sandbox-'))
   const workspace = path.join(base, 'workspace')
   const shared = path.join(base, 'shared')
   fs.mkdirSync(workspace)
@@ -101,7 +101,7 @@ test('legacy string roots retain read-write behavior', () => {
 })
 
 test('workspace sandbox resolves symlinks before checking the boundary', (t) => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-sandbox-'))
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-sandbox-'))
   const workspace = path.join(base, 'workspace')
   const outside = path.join(base, 'outside')
   const link = path.join(workspace, 'linked')

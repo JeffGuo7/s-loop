@@ -25,7 +25,7 @@ import {
 } from '../task-scheduler.mjs'
 
 test('startup marks uncertain task, goal, and platform executions interrupted', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-run-recovery-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-run-recovery-'))
   try {
     initAuditStore(root)
 

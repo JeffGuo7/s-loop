@@ -1,6 +1,6 @@
 # Execution Audit Trail
 
-Snotra writes security-sensitive execution events to:
+S-Loop writes security-sensitive execution events to:
 
 `{application-data}/audit/events.jsonl`
 
@@ -37,7 +37,7 @@ remote archival can be added later when that stronger threat model is required.
 ## Restart recovery
 
 At startup, persisted task, Goal, or platform runs still marked `running` or
-`resuming` are treated as uncertain executions. Snotra marks them failed/interrupted,
+`resuming` are treated as uncertain executions. S-Loop marks them failed/interrupted,
 emits `run.interrupted`, and never replays them automatically. Runs parked at
 `waiting_for_approval` remain resumable because their side-effecting tool call has
 not started. Approval records already in `resuming` follow the same conservative

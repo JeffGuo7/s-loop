@@ -26,7 +26,7 @@ import { getActiveTokens } from './themes'
 export type Page = 'chat' | 'tasks' | 'platforms' | 'pet' | 'goal' | 'extensions'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-const APP_STORAGE_KEY = 'snotra-storage'
+const APP_STORAGE_KEY = 's-loop-storage'
 
 function App() {
   const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, providerList, workspaceDir, kokoroSpeakerId } = useAppStore()

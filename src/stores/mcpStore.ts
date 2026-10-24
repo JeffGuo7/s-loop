@@ -533,7 +533,7 @@ export const useMCPStore = create<MCPState>()(
       },
     }),
     {
-      name: 'snotra-mcp-storage',
+      name: 's-loop-mcp-storage',
       partialize: (state) => ({
         servers: redactMCPServersForPersistence(state.servers),
       }),

@@ -83,13 +83,13 @@ export function buildToolSecurityIndex(tools = []) {
     if (!tool || typeof tool.name !== 'string') continue
     let resolved = null
     if (tool._sandboxCategory === 'mcp' || tool._mcpServer) {
-      resolved = validateToolSecurityMetadata(tool._snotraSecurity || tool.security, 'mcp')
+      resolved = validateToolSecurityMetadata(tool._sloopSecurity || tool.security, 'mcp')
         || MCP_DEFAULT_SECURITY
     } else if (tool._extension) {
-      resolved = validateToolSecurityMetadata(tool._snotraSecurity || tool.security, 'extension')
+      resolved = validateToolSecurityMetadata(tool._sloopSecurity || tool.security, 'extension')
         || UNKNOWN_TOOL_SECURITY
     } else {
-      resolved = validateToolSecurityMetadata(tool._snotraSecurity || tool.security)
+      resolved = validateToolSecurityMetadata(tool._sloopSecurity || tool.security)
         || getBuiltinToolSecurity(tool.name)
     }
     if (resolved) index.set(tool.name, resolved)

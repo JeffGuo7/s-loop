@@ -31,7 +31,7 @@ npm run tauri:dev
 > Prerequisites: Node.js ≥ 18, Rust ≥ 1.85 (MSVC), npm
 
 When running Vite and `pi-server` as separate development processes, set the same
-temporary value in `VITE_SNOTRA_API_TOKEN` and `SNOTRA_API_TOKEN`.
+temporary value in `VITE_S_LOOP_API_TOKEN` and `S_LOOP_API_TOKEN`.
 
 ### Download (Windows)
 

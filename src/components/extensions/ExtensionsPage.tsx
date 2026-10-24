@@ -10,7 +10,7 @@ interface ExtensionEntry {
 
 function getBaseUrl() {
   try {
-    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('snotra-storage') : null
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('s-loop-storage') : null
     if (stored) {
       const parsed = JSON.parse(stored)
       return parsed?.state?.baseUrl || 'http://127.0.0.1:4096'

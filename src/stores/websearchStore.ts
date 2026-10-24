@@ -122,7 +122,7 @@ export const useWebSearchStore = create<WebSearchState>()(
       },
     }),
     {
-      name: 'snotra-websearch-storage',
+      name: 's-loop-websearch-storage',
       partialize: (state) => ({
         activeProvider: state.activeProvider,
         providers: redactWebSearchProviders(state.providers),

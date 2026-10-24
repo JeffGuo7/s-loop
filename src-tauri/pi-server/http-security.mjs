@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 
-export const API_TOKEN_HEADER = 'x-snotra-token'
+export const API_TOKEN_HEADER = 'x-s-loop-token'
 
 const ALLOWED_ORIGIN = /^(?:tauri:\/\/localhost|https?:\/\/tauri\.localhost|https?:\/\/localhost(?::\d+)?|https?:\/\/127\.0\.0\.1(?::\d+)?)$/
 const PLATFORM_INBOUND = /^\/platforms\/inbound\/[a-z0-9_-]+$/
@@ -60,7 +60,7 @@ export function guardSidecarRequest(req, res, url, expectedToken) {
     res.setHeader('Vary', 'Origin')
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Snotra-Token')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-S-Loop-Token')
 
   if (decision.preflight) {
     res.writeHead(204)

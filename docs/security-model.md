@@ -1,4 +1,4 @@
-# Snotra Security Model
+# S-Loop Security Model
 
 Status: accepted baseline for the security/runtime roadmap  
 Scope: desktop app, `pi-server`, tools, MCP, scheduled tasks, platform replies,
@@ -6,7 +6,7 @@ Goal Loop, and sub-agents
 
 ## 1. Purpose
 
-Snotra is a local desktop agent that can read files, modify a workspace, execute
+S-Loop is a local desktop agent that can read files, modify a workspace, execute
 commands, call MCP tools, and send data to external services. This document defines
 the security rules that every execution surface must share.
 
@@ -55,7 +55,7 @@ These rules take precedence over agent configuration and model instructions:
 
 ## 4. Permission and interaction are separate dimensions
 
-Snotra keeps its three user-facing permission modes:
+S-Loop keeps its three user-facing permission modes:
 
 | Mode | Read | Local write | Shell | External/MCP side effect |
 |---|---|---|---|---|
@@ -191,7 +191,7 @@ running -> waiting_for_approval -> resuming -> completed | failed
                               \-> denied
 ```
 
-No tool is executed before approval. On restart, Snotra resumes from the unanswered
+No tool is executed before approval. On restart, S-Loop resumes from the unanswered
 tool call and must not repeat calls already recorded as completed.
 
 Standing approvals are owned by one task or automation and have the form
@@ -218,9 +218,22 @@ The sidecar must:
 - limit body/frame sizes and request rates;
 - bind only to loopback.
 
+Known trade-offs of this boundary:
+
+- A request without an `Origin` header (curl, other local processes, most webhook
+  senders) cannot be matched against the origin allowlist, so it passes the origin
+  check. Public routes (health, MCP OAuth callback, platform inbound) therefore rely
+  on their business-layer authentication: platform inbound verifies the per-platform
+  webhook signature and applies whitelist + rate limiting before the AI is triggered.
+  Every non-public route still requires the per-launch token.
+- The webview CSP is enforced in `tauri.conf.json` (`csp` for production, a looser
+  `devCsp` for the Vite dev server). Model-rendered HTML is additionally sanitized
+  in the renderer (`markdownSchema.ts`, DOMPurify for document previews) so that a
+  CSP regression cannot directly turn model output into script execution.
+
 ## 11. Secrets and child processes
 
-Snotra retains its sanitized child environment and Windows Job Object behavior.
+S-Loop retains its sanitized child environment and Windows Job Object behavior.
 Only an explicit environment allowlist plus per-server MCP configuration reaches child
 processes. API keys, tokens, `NODE_OPTIONS`, `NODE_PATH`, and unrelated parent variables
 are excluded.
@@ -262,18 +275,42 @@ MCP) must run against the same matrix:
 
 ## 14. Current gaps and roadmap mapping
 
-The baseline review identified these implementation gaps:
+Status of the baseline review's implementation gaps:
 
-- `pi-server` currently allows wildcard CORS and has no per-launch API token: phase 1.
-- `accessiblePaths` does not distinguish read-only and writable roots: phase 2.
-- third-party tool risk still relies on name/category inference: phase 3.
-- non-interactive approvals are blocked rather than parked: phase 4.
-- tool policy and execution do not yet share a durable audit store: phase 5.
+- ~~`pi-server` allows wildcard CORS and has no per-launch API token~~: phase 1
+  complete. The sidecar enforces an origin allowlist plus a per-launch token
+  (`http-security.mjs`), and the token is generated per launch and passed through
+  the child environment (`pi_server.rs`).
+- ~~`accessiblePaths` does not distinguish read-only and writable roots~~: phase 2
+  complete. `workspaceRoots` carries `read`/`read-write` access and primary flags
+  (`sandbox.mjs`); legacy string `accessiblePaths` entries are still accepted for
+  rolling upgrades and keep their historical read-write meaning.
+- ~~third-party tool risk relies on name/category inference~~: phase 3 complete.
+  Tools resolve structured security metadata (`tool-security.mjs`); MCP tools
+  default to `external` + `ask`, unknown tools fail closed, and name inference
+  survives only as a compatibility fallback for vetted built-ins.
+- ~~non-interactive approvals are blocked rather than parked~~: phase 4 complete.
+  Unattended runs park in `waiting_for_approval` and resume from the recorded
+  tool call after a decision (`task-scheduler.mjs`, durable approval store).
+- ~~tool policy and execution do not share a durable audit store~~: phase 5
+  complete. Policy decisions and run outcomes append to the durable audit store
+  with redaction, exposed via `/audit/events` and verifiable via `/audit/verify`.
 - remote MCP uses layered config, DPAPI-backed secret references, tool filters, and
   OAuth 2.1/PKCE: phase 6 complete.
 - delegation derives a formal least-authority envelope and includes a fixed Explorer
   contract: phase 7 complete.
-- approved shell commands are not OS-isolated: phase 8.
+- approved shell commands are not OS-isolated: phase 8 remains open. An approved
+  command still runs with the host user's privileges; the policy engine and
+  environment sanitization limit exposure but do not contain it.
 
-Security changes should be implemented in this order so later features depend on one
-policy decision model rather than adding surface-specific exceptions.
+Remaining known limitations:
+
+- OS-protected credential storage exists on Windows only (DPAPI). On other
+  platforms the vault refuses to operate instead of falling back to plaintext.
+- The webview CSP and renderer-side sanitization (see §10) bound the
+  model-HTML attack surface, but both must stay in place; removing either
+  reopens script execution from model output.
+
+Security changes should continue to follow the phase order so later features
+depend on one policy decision model rather than adding surface-specific
+exceptions.

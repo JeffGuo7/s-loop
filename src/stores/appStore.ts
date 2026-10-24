@@ -573,7 +573,7 @@ export const useAppStore = create<AppState>()(
       setCompanion: (companion) => set({ companion }),
     }),
     {
-      name: 'snotra-storage',
+      name: 's-loop-storage',
       partialize: (state) => ({
         sessions: state.sessions,
         activeProvider: state.activeProvider,

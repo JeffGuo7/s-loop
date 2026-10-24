@@ -323,7 +323,7 @@ export const useSkillStore = create<SkillState>()(
       clearScanError: () => set({ scanError: null }),
     }),
     {
-      name: 'snotra-skill-storage',
+      name: 's-loop-skill-storage',
       partialize: (state) => ({
         paths: state.paths,
         skillPrefs: state.skillPrefs,

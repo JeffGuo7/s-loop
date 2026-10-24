@@ -38,7 +38,7 @@ function getJiti() {
 // ── Config ────────────────────────────────────────────────────
 
 function resolveExtensionsDir() {
-  const base = process.env.S_LOOP_PROJECT_DIR || process.env.SNOTRA_PROJECT_DIR || process.cwd()
+  const base = process.env.S_LOOP_PROJECT_DIR || process.env.S_LOOP_PROJECT_DIR || process.cwd()
   // Dev mode: pi-server lives under src-tauri/pi-server/
   const devCandidate = path.resolve(base, 'src-tauri', 'pi-server')
   if (fs.existsSync(path.join(devCandidate, 'index.mjs'))) {

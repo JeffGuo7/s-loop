@@ -330,7 +330,7 @@ export const usePetStore = create<PetStore>()(
       }
     },
     {
-      name: 'snotra-pet',
+      name: 's-loop-pet',
       partialize: (s) => ({
         pet: s.pet ? { ...s.pet, state: 'idle' as const } : null,
         showPet: s.showPet,

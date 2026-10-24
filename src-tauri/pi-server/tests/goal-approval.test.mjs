@@ -21,7 +21,7 @@ const decision = {
 }
 
 test('goal approval parks, resumes, and completes the exact live tool call', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-goal-approval-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-goal-approval-'))
   try {
     initApprovalStore(root)
     const goalState = {
@@ -60,7 +60,7 @@ test('goal approval parks, resumes, and completes the exact live tool call', asy
 })
 
 test('goal approval consumes a post-restart grant only for the matching call', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-goal-resume-'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-goal-resume-'))
   try {
     initApprovalStore(root)
     const approval = createApprovalRequest({

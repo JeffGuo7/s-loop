@@ -47,7 +47,7 @@ describe('goal-loop persistence', () => {
 
   before(async () => {
     // Set DATA_DIR to test dir
-    process.env.SNOTRA_PROJECT_DIR = TEST_DIR
+    process.env.S_LOOP_PROJECT_DIR = TEST_DIR
     persistence = await import('./persistence.mjs')
     persistence.initGoalPersistence(TEST_DIR)
   })

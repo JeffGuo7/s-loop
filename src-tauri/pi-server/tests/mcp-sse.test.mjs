@@ -245,7 +245,7 @@ test('completes MCP OAuth discovery, PKCE redirect and code exchange', async (t)
     'http',
     {
       type: 'oauth',
-      clientId: 'snotra-test-client',
+      clientId: 's-loop-test-client',
       redirectUrl: 'http://127.0.0.1:4096/mcp-oauth/callback/oauth-test',
     },
   )

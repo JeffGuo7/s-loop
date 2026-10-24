@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 export async function initDatabase(): Promise<Database> {
   if (db) return db
-  db = await Database.load('sqlite:snotra.db')
+  db = await Database.load('sqlite:sloop.db')
   await db.execute(SCHEMA)
   const sessionColumns = await db.select<{ name: string }[]>('PRAGMA table_info(sessions)')
   if (!sessionColumns.some((column) => column.name === 'pi_id')) {

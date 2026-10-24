@@ -306,7 +306,7 @@ export const useAgentStore = create<AgentStore>()(
       },
     }),
     {
-      name: 'snotra-agents',
+      name: 's-loop-agents',
       version: 3,
       migrate: (persisted) =>
         migrateAgentProfileState(migrateAgentStoreState(persisted)),
