@@ -55,6 +55,22 @@ async function walk(dir, zip, relBase) {
   }
 }
 
+// node.exe was removed from git to keep clones light. Download the pinned
+// version so a fresh checkout can still produce a self-contained installer.
+const BUNDLED_NODE_VERSION = "v24.15.0";
+
+async function downloadBundledNode(destPath) {
+  const url = `https://nodejs.org/dist/${BUNDLED_NODE_VERSION}/win-x64/node.exe`;
+  console.log(`[pack-pi-server] downloading bundled Node.js ${BUNDLED_NODE_VERSION} from ${url}`);
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`failed to download bundled Node.js: ${res.status} ${res.statusText}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  await writeFile(destPath, buf);
+  console.log(`[pack-pi-server] wrote ${(buf.length / 1048576).toFixed(1)} MB -> ${destPath}`);
+}
+
 async function main() {
   const t0 = Date.now();
   try {
@@ -66,14 +82,14 @@ async function main() {
 
   // A production Windows bundle must be self-contained. Failing the build
   // here is much clearer than producing an installer that silently depends on
-  // a user's global Node.js installation.
+  // a user's global Node.js installation. node.exe is not committed to git
+  // (it bloated every clone), so fetch the pinned version on demand.
   if (process.platform === "win32") {
     const bundledNode = join(srcDir, "node.exe");
     try {
       await stat(bundledNode);
     } catch {
-      console.error(`[pack-pi-server] bundled Node.js missing: ${bundledNode}`);
-      process.exit(1);
+      await downloadBundledNode(bundledNode);
     }
   }
   console.log(`[pack-pi-server] packing ${srcDir} -> ${outZip}`);
