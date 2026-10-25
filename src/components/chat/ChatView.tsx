@@ -230,12 +230,12 @@ export function ChatView() {
       }
 
       // SSE/HTTP MCP tools are handled directly by pi-server (injected into getTools()).
-      // List them here so the agent sees the correct tool names (prefixed with mcp_sse_).
+      // List them here so the agent sees the correct tool names (mcp__server__tool).
       const sseMcpTools: { serverName: string; toolName: string }[] = []
       for (const [name, status] of Object.entries(mcpStore.serverStatuses)) {
         if (status.status === 'connected' && status.tools) {
           const server = mcpServers.find(s => s.name === name)
-          if (server && (server.type === 'sse' || server.type === 'http')) {
+          if (server) {
             for (const tool of status.tools) {
               if (isAgentMcpToolAllowed(activeAgent, name, tool.name)) {
                 sseMcpTools.push({ serverName: name, toolName: tool.name })

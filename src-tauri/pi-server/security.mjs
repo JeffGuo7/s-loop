@@ -15,8 +15,9 @@
 // ── Tier 1: Hardline blocked (never allowed) ────────────────────────
 
 const HARDLINE_PATTERNS = [
-  // rm -rf / or rm -rf with critical paths
-  { pattern: /\brm\s+(?:-[a-z]*r[a-z]*f[a-z]*\s+|-[a-z]*f[a-z]*r[a-z]*\s+).*\/\b/, label: 'rm -rf on root' },
+  // rm -rf / or rm -rf with critical paths. The trailing (?:\b|$) also
+  // catches a bare `rm -rf /` where the string ends right after the slash.
+  { pattern: /\brm\s+(?:-[a-z]*r[a-z]*f[a-z]*\s+|-[a-z]*f[a-z]*r[a-z]*\s+).*\/(?:\b|$)/, label: 'rm -rf on root' },
   { pattern: /\brm\s+(?:-[a-z]*rf?\s+|-[a-z]*fr?\s+).*\/etc\b/, label: 'rm destructive on /etc' },
   { pattern: /\brm\s+(?:-[a-z]*rf?\s+|-[a-z]*fr?\s+).*\/boot\b/, label: 'rm destructive on /boot' },
 
@@ -40,6 +41,10 @@ const HARDLINE_PATTERNS = [
 
   // Recursive chown/chmod on system roots
   { pattern: /\bch(?:own|mod)\s+(?:-[a-z]*R[a-z]*\s+).*\/(?:etc|usr|bin|sbin|lib|boot)\b/, label: 'recursive chown/chmod on system dir' },
+
+  // Windows disk wipe (PowerShell equivalents of format/diskpart)
+  { pattern: /\bFormat-Volume\b/i, label: 'Format-Volume (format a volume)' },
+  { pattern: /\bClear-Disk\b/i, label: 'Clear-Disk (wipe a disk)' },
 ]
 
 // ── Tier 2: Dangerous (needs approval in ask/deny mode) ─────────────
@@ -49,6 +54,12 @@ const DANGEROUS_PATTERNS = [
   { pattern: /\brm\s+-[a-z]*r[a-z]*\b/, label: 'recursive rm' },
   { pattern: /\bchmod\s+(?:[-+]\s*)?777\b/, label: 'chmod 777' },
   { pattern: /\bchown\s+-R\b/, label: 'recursive chown' },
+
+  // Windows cmd / PowerShell recursive deletes (rm -rf equivalents)
+  { pattern: /\brd\s+\/[a-z]*s/i, label: 'rd /s (recursive delete)' },
+  { pattern: /\bdel\s+[^&|]*\/s\b/i, label: 'del /s (delete in subdirectories)' },
+  { pattern: /\bRemove-Item\b[^|;&]*-Recurse\b/i, label: 'Remove-Item -Recurse' },
+  { pattern: /\bRemove-Item\b[^|;&]*-Force\b/i, label: 'Remove-Item -Force' },
 
   // Pipe to shell
   { pattern: /\|\s*(?:ba)?sh\b/, label: 'pipe to shell' },

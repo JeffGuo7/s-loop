@@ -19,6 +19,6 @@ describe('agent MCP runtime selection', () => {
 
   it('keeps global mode unrestricted and matches sidecar remote names', () => {
     expect(isAgentMcpToolAllowed(null, 'any', 'tool')).toBe(true)
-    expect(remoteMcpToolName('modern-test', 'echo')).toBe('mcp_sse_modern_test_echo')
+    expect(remoteMcpToolName('modern-test', 'echo')).toBe('mcp__modern-test__echo')
   })
 })

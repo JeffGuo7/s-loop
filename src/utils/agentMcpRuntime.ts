@@ -15,6 +15,6 @@ export function isAgentMcpToolAllowed(
 }
 
 export function remoteMcpToolName(serverName: string, toolName: string): string {
-  const safeServerName = serverName.replace(/[^a-zA-Z0-9]/g, '_')
-  return `mcp_sse_${safeServerName}_${toolName}`
+  // Matches pi 1.4's MCP naming used by the sidecar runtime (mcp-runtime.mjs).
+  return `mcp__${serverName}__${toolName}`
 }
