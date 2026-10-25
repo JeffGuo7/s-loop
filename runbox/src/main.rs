@@ -107,24 +107,35 @@ unsafe fn app_container_sid() -> Result<PSID, String> {
     let moniker = wide(PROFILE_MONIKER);
     let display = wide("S-Loop Runbox");
     let desc = wide("Execution sandbox for S-Loop approved shell commands");
-    let mut sid: PSID = std::ptr::null_mut();
-    let hr = CreateAppContainerProfile(
-        moniker.as_ptr(),
-        display.as_ptr(),
-        desc.as_ptr(),
-        std::ptr::null(),
-        0,
-        &mut sid,
-    );
-    if hr == 0 {
-        return Ok(sid);
+    let mut last_hr: i32 = 0;
+    // First use on a fresh machine races when several runbox processes start
+    // at once: one is still creating the profile while the others see
+    // ERROR_ACCESS_DENIED or a not-yet-derivable SID. Retry create/derive
+    // briefly instead of failing the command.
+    for _attempt in 0..40 {
+        let mut sid: PSID = std::ptr::null_mut();
+        let hr = CreateAppContainerProfile(
+            moniker.as_ptr(),
+            display.as_ptr(),
+            desc.as_ptr(),
+            std::ptr::null(),
+            0,
+            &mut sid,
+        );
+        if hr == 0 && !sid.is_null() {
+            return Ok(sid);
+        }
+        last_hr = hr;
+        if DeriveAppContainerSidFromAppContainerName(moniker.as_ptr(), &mut sid) == 0
+            && !sid.is_null()
+        {
+            return Ok(sid);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
-    // ERROR_ALREADY_EXISTS arrives as HRESULT 0x800700B7 — derive instead.
-    if DeriveAppContainerSidFromAppContainerName(moniker.as_ptr(), &mut sid) == 0 && !sid.is_null()
-    {
-        return Ok(sid);
-    }
-    Err(format!("CreateAppContainerProfile failed: hr=0x{hr:08X}"))
+    Err(format!(
+        "CreateAppContainerProfile failed after retries: hr=0x{last_hr:08X}"
+    ))
 }
 
 /// Add an allow-ACE for the AppContainer SID on `directory`, merging into the
