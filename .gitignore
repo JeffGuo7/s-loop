@@ -79,3 +79,9 @@ src-tauri/pi-server/extensions-manifest.json
 # pi-server bundled node binary
 src-tauri/pi-server/node.exe
 src-tauri/pi-server/pptx-jobs/
+
+# runbox exec-sandbox helper (built by scripts/pack-pi-server.mjs)
+/src-tauri/pi-server/bin/sloop-runbox.exe
+
+# runbox crate build output
+/runbox/target/

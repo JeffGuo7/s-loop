@@ -61,6 +61,15 @@ jobs:
       - run: node scripts/with-native-build-env.mjs cargo test --manifest-path stt/Cargo.toml --lib
         name: Test local speech engine
 
+      - run: cargo fmt --manifest-path runbox/Cargo.toml --check
+        name: Check exec-sandbox helper formatting
+
+      - run: cargo clippy --manifest-path runbox/Cargo.toml -- -D warnings
+        name: Lint exec-sandbox helper
+
+      - run: cargo test --manifest-path runbox/Cargo.toml
+        name: Test exec-sandbox helper (real AppContainer spawns)
+
       - name: Create generated resource placeholder
         shell: pwsh
         run: New-Item -ItemType File -Path src-tauri/pi-server.zip -Force

@@ -1,0 +1,24 @@
+[package]
+name = "runbox"
+version = "0.1.0"
+edition = "2021"
+description = "Run a command inside a Windows AppContainer with explicit directory grants (OS-level exec sandbox for S-Loop)"
+
+[[bin]]
+name = "sloop-runbox"
+path = "src/main.rs"
+
+[dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Isolation",
+  "Win32_Storage_FileSystem",
+  "Win32_Security_Authorization",
+  "Win32_System_Threading",
+  "Win32_System_Memory",
+  "Win32_System_Console",
+] }
+
+[profile.release]
+strip = true

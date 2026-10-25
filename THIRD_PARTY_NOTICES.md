@@ -47,3 +47,13 @@ OfficeCLI, Copyright 2026 OfficeCLI (https://OfficeCLI.AI), created and maintain
 
 Licensed under the Apache License 2.0. Per its NOTICE, redistribution with or without
 modification must retain this notice. See <https://github.com/iOfficeAI/OfficeCLI>.
+
+## busybox-w32
+
+The sandboxed shell runtime bundled at `src-tauri/pi-server/bin/busybox.exe` is busybox-w32.
+
+Copyright (C) 1998-2024 Erik Andersen, Rob Landley, Denys Vlasenko and others.
+Portions Copyright (C) 2001 Manuel Novoa III, 2000-2003 Glenn McGrath, 2008 Vladimir Dronnikov.
+
+Licensed under the GNU General Public License version 2. Source code for this build is available at
+<https://frippery.org/busybox/> and <https://git.busybox.net/busybox/>.

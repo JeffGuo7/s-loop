@@ -68,6 +68,7 @@ import { authorizeInbound } from './platforms/access-control.mjs'
 import { ToolGuard } from './tool-guardrails.mjs'
 import { evaluateToolCall } from './execution-policy.mjs'
 import { checkWorkspacePath, sanitizeChildEnvironment } from './sandbox.mjs'
+import { createSandboxedBashOperations } from './exec-sandbox.mjs'
 import { createPptxTools, renderPptxHtml } from './pptx-tools.mjs'
 import { seedBuiltinSkills } from './builtin-skills.mjs'
 import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
@@ -142,6 +143,9 @@ const runtimeConfig = {
   workspaceDir: undefined,
   workspaceRoots: [],
   providerConfig: {},
+  // OS-level sandbox for bash: every command starts in a zero-capability
+  // AppContainer (no network; filesystem limited to the workspace + temp).
+  execSandbox: true,
 }
 
 function runtimeRemoteMcpScope(config = {}) {
@@ -166,6 +170,27 @@ function getTools(dir, webSearchConfig, remoteMcpScope) {
       cwd: toolRoot,
       env: sanitizeChildEnvironment(env, toolRoot),
     }),
+  }
+  // OS-level containment for approved shell commands: read-write workspace
+  // roots and the primary workspace are writable inside the AppContainer,
+  // read-only roots are mounted read/execute. Falls back to policy-only exec
+  // when the helper is unavailable (documented in docs/security-model.md).
+  if (runtimeConfig.execSandbox !== false) {
+    const roots = Array.isArray(runtimeConfig.workspaceRoots) ? runtimeConfig.workspaceRoots : []
+    const sandboxed = createSandboxedBashOperations({
+      workspaceDir: toolRoot,
+      writableRoots: roots
+        .filter((root) => root && root.access === 'read-write' && typeof root.path === 'string')
+        .map((root) => root.path),
+      readonlyRoots: roots
+        .filter((root) => root && root.access === 'read' && typeof root.path === 'string')
+        .map((root) => root.path),
+    })
+    if (sandboxed) {
+      bashOptions.operations = sandboxed
+    } else {
+      console.warn('[pi-server] exec sandbox unavailable (sloop-runbox helper missing); bash runs with policy-only containment')
+    }
   }
   const all = [
     ...createCodingTools(toolRoot, { bash: bashOptions }),

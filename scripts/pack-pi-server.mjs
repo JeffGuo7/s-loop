@@ -71,6 +71,33 @@ async function downloadBundledNode(destPath) {
   console.log(`[pack-pi-server] wrote ${(buf.length / 1048576).toFixed(1)} MB -> ${destPath}`);
 }
 
+// The AppContainer exec-sandbox helper (runbox crate) is built for release
+// and shipped inside pi-server/bin so the sidecar can find it at runtime.
+async function buildRunboxHelper() {
+  const runboxManifest = join(root, "runbox", "Cargo.toml");
+  try {
+    await stat(runboxManifest);
+  } catch {
+    console.warn(`[pack-pi-server] runbox crate not found at ${runboxManifest}; exec sandbox will be unavailable`);
+    return;
+  }
+  const { spawnSync } = await import("node:child_process");
+  console.log("[pack-pi-server] building runbox exec-sandbox helper (release)");
+  const build = spawnSync(
+    process.execPath,
+    [join(root, "scripts", "with-native-build-env.mjs"), "cargo", "build", "--release", "--manifest-path", runboxManifest],
+    { cwd: root, stdio: "inherit" },
+  );
+  if (build.status !== 0) {
+    console.warn("[pack-pi-server] runbox build failed; exec sandbox will be unavailable");
+    return;
+  }
+  const built = join(root, "runbox", "target", "release", "sloop-runbox.exe");
+  await mkdir(join(srcDir, "bin"), { recursive: true });
+  await import("node:fs/promises").then(({ copyFile }) => copyFile(built, join(srcDir, "bin", "sloop-runbox.exe")));
+  console.log("[pack-pi-server] bundled sloop-runbox.exe into pi-server/bin");
+}
+
 async function main() {
   const t0 = Date.now();
   try {
@@ -78,6 +105,10 @@ async function main() {
   } catch {
     console.error(`[pack-pi-server] source dir not found: ${srcDir}`);
     process.exit(1);
+  }
+
+  if (process.platform === "win32") {
+    await buildRunboxHelper();
   }
 
   // A production Windows bundle must be self-contained. Failing the build

@@ -76,6 +76,9 @@ S-Loop 将模型输出视为不可信输入。完整基线见
   写出可写根目录也会被拒绝。
 - Shell 命令经过**两级策略**（硬性禁止 / 需审批）；MCP 工具默认 ask，
   未标注的未知工具一律 fail-closed。
+- 获批的 Shell 命令在 Windows 上运行于 **OS 级 AppContainer 沙箱**（零 capability：
+  无网络，文件系统仅限工作区）——不只是策略检查。Git/MSYS 工具无法在容器内运行，
+  需要时可按会话关闭（`execSandbox: false`）。
 - 无人值守运行**在审批处挂起**并可在重启后恢复；每次决策落入可校验的
   **持久化审计日志**。
 - MCP 凭据经 **Windows DPAPI** 加密；子进程拿到的是净化环境（无 API Key、

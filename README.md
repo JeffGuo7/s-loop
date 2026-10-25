@@ -78,6 +78,10 @@ S-Loop treats model output as untrusted input. The full baseline lives in
   outside a writable root are refused even in `allow` mode.
 - Shell commands pass a **two-tier policy** (hardline-blocked vs. approval-required);
   MCP tools default to ask, unknown tools fail closed.
+- Approved shell commands run inside an **OS-level AppContainer sandbox** on Windows
+  (zero capabilities: no network, filesystem limited to the workspace) — not just a
+  policy check. Git/MSYS tools cannot run inside the container; disable per session
+  with `execSandbox: false` when needed.
 - Unattended runs **park on approval** and survive restarts; every decision lands in a
   durable, verifiable **audit trail**.
 - MCP credentials are encrypted with **Windows DPAPI**; child processes get a sanitized

@@ -10,9 +10,10 @@ S-Loop is a local desktop agent that can read files, modify a workspace, execute
 commands, call MCP tools, and send data to external services. This document defines
 the security rules that every execution surface must share.
 
-This is an application-level policy boundary. It is not an operating-system sandbox:
-an approved shell command still runs with the host user's privileges. Strong process
-isolation is a separate runtime option evaluated in roadmap phase 8.
+This is an application-level policy boundary plus, on Windows, an OS-level
+containment layer for shell execution: approved commands run inside a
+zero-capability AppContainer (see §14, phase 8). Other surfaces (file tools, MCP
+transports) remain policy-bounded rather than OS-bounded.
 
 ## 2. Trust boundaries
 
@@ -153,8 +154,9 @@ Rules:
   add roots directly;
 - changing roots updates the running session immediately and is audited.
 
-Shell approval is not proof of path isolation. The shell remains a high-risk host
-capability until an OS-level sandbox exists.
+Shell approval is not proof of path isolation. On Windows approved commands are
+additionally confined by an OS-level AppContainer sandbox (see §14, phase 8);
+elsewhere the shell remains a high-risk host capability under policy control only.
 
 ## 8. Delegation
 
@@ -299,9 +301,16 @@ Status of the baseline review's implementation gaps:
   OAuth 2.1/PKCE: phase 6 complete.
 - delegation derives a formal least-authority envelope and includes a fixed Explorer
   contract: phase 7 complete.
-- approved shell commands are not OS-isolated: phase 8 remains open. An approved
-  command still runs with the host user's privileges; the policy engine and
-  environment sanitization limit exposure but do not contain it.
+- ~~approved shell commands are not OS-isolated~~: phase 8 **partially shipped**.
+  On Windows every bash command runs through `sloop-runbox` (runbox crate) in a
+  zero-capability AppContainer: no network at all, and filesystem access limited
+  to the workspace, explicitly granted roots, a private temp directory and the
+  bundled busybox runtime. Containment is enforced by the OS, not the policy
+  engine. Known limits: Git/MSYS binaries cannot run inside an AppContainer (the
+  MSYS runtime needs `\BaseNamedObjects` shared memory), so `git` is unavailable
+  inside the sandbox; disabling it per session (`execSandbox: false`) restores
+  full shell capability at the cost of containment. Non-Windows platforms still
+  have policy-only containment.
 
 Remaining known limitations:
 
