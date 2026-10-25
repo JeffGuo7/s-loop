@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send, Square, X, File, Paperclip, Mic, LoaderCircle, AudioLines, PhoneCall } from 'lucide-react'
+import { AttachmentChips } from './AttachmentChips'
+import { Send, Square, Paperclip, Mic, LoaderCircle, AudioLines, PhoneCall } from 'lucide-react'
 import { TextField, TextArea } from "@heroui/react"
 import { Button, Card } from '../ui'
 import {
@@ -620,27 +621,7 @@ export function ChatInput({
           )}
 
           <div className="flex flex-col">
-            {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1 animate-fade-in">
-                {attachments.map((att, idx) => (
-                  <div
-                    key={idx}
-                    className="group/att inline-flex items-center gap-2 rounded-lg border border-border bg-surface-secondary/70 pl-3 pr-2 py-2 text-[12px] transition-colors hover:border-accent/50 hover:bg-surface-secondary"
-                    title={att.path}
-                  >
-                    <File size={14} className="text-accent" />
-                    <span className="max-w-[180px] truncate text-text-secondary font-bold tracking-tight">{att.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(idx)}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary hover:bg-red-500/10 hover:text-red-500 transition-all opacity-40 group-hover/att:opacity-100"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <AttachmentChips attachments={attachments} onRemove={removeAttachment} />
 
             {dictation?.recording && (
               <div className="mx-3 mt-3 flex items-center gap-3 rounded-lg border border-red-500/15 bg-red-500/5 px-3 py-2.5 text-red-500">
