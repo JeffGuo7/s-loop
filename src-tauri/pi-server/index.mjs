@@ -71,16 +71,7 @@ import { checkWorkspacePath, sanitizeChildEnvironment } from './sandbox.mjs'
 import { createPptxTools, renderPptxHtml } from './pptx-tools.mjs'
 import { seedBuiltinSkills } from './builtin-skills.mjs'
 import { init as initExtensions, listExtensions, installExtension, removeExtension, reloadAll, getExtensionTools, fireExtensionEvent, createContext } from './extension-runtime.mjs'
-import {
-  callSseMcpTool,
-  completeSseMcpOAuth,
-  connectSseMcpServer,
-  disconnectAllSseMcp,
-  disconnectSseMcpServer,
-  getAllSseMcpTools,
-  getSseMcpOAuthCredentials,
-  getSseMcpStatus,
-} from './mcp-sse.mjs'
+import { disconnectAllMcp, getAllMcpTools } from './mcp-runtime.mjs'
 import { guardSidecarRequest } from './http-security.mjs'
 import { buildToolSecurityIndex } from './tool-security.mjs'
 import {
@@ -189,7 +180,7 @@ function getTools(dir, webSearchConfig, remoteMcpScope) {
   }
 
   // Merge tools from connected SSE MCP servers
-  const sseMcpTools = filterRemoteMcpTools(getAllSseMcpTools(), remoteMcpScope)
+  const sseMcpTools = filterRemoteMcpTools(getAllMcpTools(), remoteMcpScope)
   if (sseMcpTools.length > 0) {
     console.log(`[pi-server] adding ${sseMcpTools.length} SSE MCP tool(s)`)
     all.push(...sseMcpTools)
@@ -550,7 +541,7 @@ async function getOrCreateWrapper(sessionId, autoCreate = false) {
   if (metadata) {
     const session = await sessionRepo.open(metadata)
     const contextSnapshot = await loadContextSnapshot(DATA_DIR, sessionId)
-    wrapper = { session, agent: null, emit: null, contextEngine: null, contextSnapshot, persistedMessageCount: 0, apiKey: '', config: {}, mcpToolRequests: new Map() }
+    wrapper = { session, agent: null, emit: null, contextEngine: null, contextSnapshot, persistedMessageCount: 0, apiKey: '', config: {} }
     sessions.set(sessionId, wrapper)
     fireExtensionEvent('session_start', { sessionId }, { sessionId })
     return wrapper
@@ -559,7 +550,7 @@ async function getOrCreateWrapper(sessionId, autoCreate = false) {
   if (!autoCreate) return null
 
   const session = await sessionRepo.create({ cwd: DATA_DIR, id: sessionId })
-  wrapper = { session, agent: null, emit: null, contextEngine: null, contextSnapshot: null, persistedMessageCount: 0, apiKey: '', config: {}, mcpToolRequests: new Map() }
+  wrapper = { session, agent: null, emit: null, contextEngine: null, contextSnapshot: null, persistedMessageCount: 0, apiKey: '', config: {} }
   sessions.set(sessionId, wrapper)
   fireExtensionEvent('session_start', { sessionId }, { sessionId })
   return wrapper
@@ -576,18 +567,6 @@ async function persistAgentMessages(wrapper) {
   wrapper.previousMessageCount = wrapper.agent.state.messages.length
 }
 
-function createMcpToolDefinition(tool, wrapper, sessionId) {
-  return {
-    name: tool.name,
-    label: `${tool.serverName}/${tool.name}`,
-    description: tool.description || `MCP tool ${tool.name}`,
-    parameters: tool.inputSchema || { type: 'object', properties: {} },
-    _sandboxCategory: 'mcp',
-    executionMode: 'parallel',
-    execute: async (_toolCallId, params, signal) => callMcpTool(wrapper, sessionId, tool.serverName, tool.name, params, signal),
-  }
-}
-
 function createChatToolBundle({
   wrapper,
   sessionId,
@@ -598,7 +577,6 @@ function createChatToolBundle({
   providerConfig,
   workspaceDir,
   webSearchConfig,
-  mcpTools,
   allowedSseMcpToolNames,
 }) {
   const cwd = workspaceDir || process.cwd()
@@ -609,9 +587,6 @@ function createChatToolBundle({
       ? undefined
       : { toolNames: allowedSseMcpToolNames },
   )
-  const mcpToolDefs = Array.isArray(mcpTools)
-    ? mcpTools.map((tool) => createMcpToolDefinition(tool, wrapper, sessionId))
-    : []
   const delegateRuntimeConfig = {
     ...runtimeConfig,
     providerID: provider,
@@ -635,63 +610,8 @@ function createChatToolBundle({
 
   return {
     baseTools,
-    mcpToolDefs,
     delegationTools,
-    tools: [...baseTools, ...mcpToolDefs, ...delegationTools],
-  }
-}
-
-function rejectPendingMcpRequests(wrapper, reason) {
-  if (!wrapper?.mcpToolRequests) return
-  for (const [requestId, resolver] of wrapper.mcpToolRequests.entries()) {
-    resolver(undefined, reason || 'Session ended')
-  }
-  wrapper.mcpToolRequests.clear()
-}
-
-async function callMcpTool(wrapper, sessionId, serverName, toolName, args, signal) {
-  if (!wrapper.mcpToolRequests) wrapper.mcpToolRequests = new Map()
-  const requestId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  let resolve, reject
-  const promise = new Promise((res, rej) => { resolve = res; reject = rej })
-  const timeout = setTimeout(() => {
-    wrapper.mcpToolRequests.delete(requestId)
-    reject(new Error(`MCP tool call timed out: ${serverName}/${toolName}`))
-  }, 60_000)
-  let onAbort
-  if (signal) {
-    onAbort = () => {
-      wrapper.mcpToolRequests.delete(requestId)
-      clearTimeout(timeout)
-      reject(new Error('aborted'))
-    }
-    if (signal.aborted) {
-      onAbort()
-      return promise
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-  }
-  wrapper.mcpToolRequests.set(requestId, (result, error) => {
-    if (signal) signal.removeEventListener('abort', onAbort)
-    clearTimeout(timeout)
-    wrapper.mcpToolRequests.delete(requestId)
-    if (error) reject(new Error(error))
-    else resolve(result)
-  })
-  try {
-    const emit = wrapper.emit
-    if (!emit) throw new Error('No active stream to forward MCP tool request')
-    emit('mcp_tool_request', { requestId, serverName, toolName, arguments: args })
-  } catch (err) {
-    if (signal) signal.removeEventListener('abort', onAbort)
-    wrapper.mcpToolRequests.delete(requestId)
-    clearTimeout(timeout)
-    throw err
-  }
-  const result = await promise
-  return {
-    content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result) }],
-    details: result,
+    tools: [...baseTools, ...delegationTools],
   }
 }
 
@@ -1848,7 +1768,7 @@ createServer((req, res) => {
       const id = randomUUID()
       const session = await sessionRepo.create({ cwd: DATA_DIR, id })
       const metadata = await session.getMetadata()
-      sessions.set(metadata.id, { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {}, mcpToolRequests: new Map() })
+      sessions.set(metadata.id, { session, agent: null, emit: null, contextEngine: null, apiKey: '', config: {} })
       fireExtensionEvent('session_start', { sessionId: metadata.id }, { sessionId: metadata.id })
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ id: metadata.id }))
@@ -1927,7 +1847,6 @@ createServer((req, res) => {
         const wrapper = sessions.get(deleteSid)
           if (wrapper) {
             if (wrapper.agent) { try { wrapper.agent.abort() } catch {} }
-            rejectPendingMcpRequests(wrapper, 'session deleted')
             rejectPendingToolApprovals(wrapper)
             fireExtensionEvent('session_shutdown', { sessionId: deleteSid }, { sessionId: deleteSid })
             sessions.delete(deleteSid)
@@ -1958,7 +1877,7 @@ createServer((req, res) => {
   req.on('end', async () => {
     const wrapper = await getOrCreateWrapper(sessionId)
     if (!wrapper) { res.writeHead(404); res.end('Session not found'); return }
-    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, workspaceRoots, accessiblePaths, webSearchConfig, tools: mcpTools, allowedSseMcpToolNames, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
+    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, workspaceRoots, accessiblePaths, webSearchConfig, allowedSseMcpToolNames, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
     console.log('[pi-server] session message — permissionMode:', permissionMode, 'permissionRules:', JSON.stringify(permissionRules))
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
@@ -1981,7 +1900,7 @@ createServer((req, res) => {
       const initialMessages = restoreContextFromSnapshot(fullInitialMessages, wrapper.contextSnapshot)
       wrapper.persistedMessageCount = fullInitialMessages.length
       if (!wrapper.agent) {
-        const { mcpToolDefs, tools } = createChatToolBundle({
+        const { tools } = createChatToolBundle({
           wrapper,
           sessionId,
           provider,
@@ -1991,7 +1910,6 @@ createServer((req, res) => {
           providerConfig: effectiveProviderConfig,
           workspaceDir,
           webSearchConfig,
-          mcpTools,
           allowedSseMcpToolNames,
         })
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
@@ -2121,7 +2039,7 @@ createServer((req, res) => {
           permissionMode,
           permissionRules,
           providerConfig: effectiveProviderConfig,
-          mcpToolNames: new Set(mcpToolDefs.map((tool) => tool.name)),
+          mcpToolNames: new Set(baseTools.filter((tool) => tool._sandboxCategory === 'mcp').map((tool) => tool.name)),
           toolSecurity: buildToolSecurityIndex(tools),
         }
         sessions.set(sessionId, wrapper)
@@ -2138,7 +2056,7 @@ createServer((req, res) => {
             lastTotalTokens: wrapper.contextEngine?.lastTotalTokens || wrapper.contextSnapshot?.tokensAfter || 0,
           })
         }
-        const { mcpToolDefs, tools } = createChatToolBundle({
+        const { tools } = createChatToolBundle({
           wrapper,
           sessionId,
           provider,
@@ -2148,7 +2066,6 @@ createServer((req, res) => {
           providerConfig: effectiveProviderConfig,
           workspaceDir,
           webSearchConfig,
-          mcpTools,
           allowedSseMcpToolNames,
         })
         wrapper.agent.state.tools = tools
@@ -2162,7 +2079,7 @@ createServer((req, res) => {
           permissionMode,
           permissionRules,
           providerConfig: effectiveProviderConfig,
-          mcpToolNames: new Set(mcpToolDefs.map((tool) => tool.name)),
+          mcpToolNames: new Set(tools.filter((tool) => tool._sandboxCategory === 'mcp').map((tool) => tool.name)),
           toolSecurity: buildToolSecurityIndex(tools),
         }
       }

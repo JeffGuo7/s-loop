@@ -34,7 +34,7 @@ execution audit trail.
 | **Model Providers** | 39 built-in providers via the pi SDK — DeepSeek, OpenAI, Anthropic, Google, GLM (Z.ai), Moonshot, Qwen, MiniMax, Xiaomi, OpenRouter, xAI, Groq and more — plus custom OpenAI-compatible endpoints; per-provider API keys, model-aware reasoning controls |
 | **Agent Builder** | Custom agents (instructions / model / skills / MCP / permission mode), slash commands, drag-and-drop assembly, agent profiles |
 | **Sub-agents & Goal Loop** | `delegate_task` / parallel / chained sub-agents with budgets and cancellation; goal loop plans, executes and checks multi-step work with its own approval flow |
-| **MCP** | stdio MCP processes managed by the Rust layer; remote Streamable HTTP / SSE servers with OAuth 2.1 + PKCE, per-server tool filters, DPAPI-encrypted credential vault |
+| **MCP** | Built on pi 1.4's own MCP client — Streamable HTTP and stdio transports, OAuth 2.1 + PKCE sign-in against a loopback callback, per-server tool filters, DPAPI-encrypted static secrets, `mcp__<server>__<tool>` naming |
 | **Skills** | Local `SKILL.md` scanning, remote search & install, ZIP drag-and-drop, CLI integration |
 | **Scheduled Tasks** | Cron / interval / one-shot, bound to an agent + skills snapshot, deliver to chat or a platform; unattended runs park on `waiting_for_approval` and resume after a decision |
 | **Platform Hub** | Telegram (bidirectional chat sync), Email, Webhook, Feishu, DingTalk, WeChat, Slack, Discord, QQ Bot — whitelist-first access control with rate limiting |
@@ -93,12 +93,11 @@ S-Loop treats model output as untrusted input. The full baseline lives in
 │  ┌────────────────────┐          ┌─────────────────────────┐    │
 │  │ pi_server.rs       │◄────────►│ pi-server (HTTP + SSE)  │    │
 │  │  sidecar lifecycle │  token   │  sessions & streaming   │    │
-│  │ mcp_manager.rs     │          │  routes/* (HTTP API)    │    │
-│  │ credential_store   │          │  subagents / goal-loop  │    │
-│  │ skill_installer    │          │  task-scheduler (cron)  │    │
-│  │ skills_cli         │          │  platform-center (hub)  │    │
-│  │ voice / dictation  │          │  execution policy       │    │
-│  │ system tray        │          │  approvals / audit      │    │
+│  │ credential_store   │          │  mcp-runtime (pi-mcp)   │    │
+│  │ skill_installer    │          │  subagents / goal-loop  │    │
+│  │ skills_cli         │          │  task-scheduler (cron)  │    │
+│  │ voice / dictation  │          │  platform-center (hub)  │    │
+│  │ system tray        │          │  policy / audit         │    │
 │  └────────────────────┘          └─────────────────────────┘    │
 │                                                                  │
 │  React Frontend                                                  │
@@ -112,8 +111,9 @@ S-Loop treats model output as untrusted input. The full baseline lives in
 ```
 
 - **Rust layer** — window/tray lifecycle, sidecar spawn with Windows Job Object
-  containment and a sanitized child environment, MCP stdio process management, DPAPI
-  credential vault, offline speech (whisper.cpp + sherpa-onnx) and Kokoro TTS.
+  containment and a sanitized child environment, the DPAPI credential
+  vault for MCP static secrets, offline speech (whisper.cpp + sherpa-onnx)
+  and Kokoro TTS.
 - **pi-server (Node sidecar)** — sessions and streaming, the HTTP route modules
   (`routes/`), tool policy engine, workspace sandbox, sub-agents, goal loop, task
   scheduler, platform hub, durable approvals and the audit store. Packaged as

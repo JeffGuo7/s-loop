@@ -2,13 +2,11 @@ mod agent_profiles;
 mod commands;
 mod credential_store;
 mod dictation;
-mod mcp_manager;
 mod pi_server;
 mod skill_installer;
 mod skills_cli;
 mod voice;
 
-use crate::mcp_manager::MCPManager;
 use crate::pi_server::{ensure_pi_server_extracted, PiServerProcess, PiServerState};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -513,65 +511,6 @@ fn runtime_diagnostics(app: tauri::AppHandle) -> serde_json::Value {
     })
 }
 
-// ---- MCP Commands ----
-
-#[tauri::command]
-fn mcp_connect(
-    state: tauri::State<MCPManager>,
-    name: String,
-    command: String,
-    args: Vec<String>,
-    env: std::collections::HashMap<String, String>,
-) -> Result<mcp_manager::MCPServerStatus, String> {
-    state.connect(&name, &command, &args, &env)
-}
-
-#[tauri::command]
-fn mcp_disconnect(state: tauri::State<MCPManager>, name: String) -> Result<(), String> {
-    state.disconnect(&name)
-}
-
-#[tauri::command]
-fn mcp_refresh_tools(
-    state: tauri::State<MCPManager>,
-    name: String,
-) -> Result<Vec<mcp_manager::MCPTool>, String> {
-    state.refresh_tools(&name)
-}
-
-#[tauri::command]
-fn mcp_list_tools(
-    state: tauri::State<MCPManager>,
-    name: String,
-) -> Result<Vec<mcp_manager::MCPTool>, String> {
-    state.list_tools(&name)
-}
-
-#[tauri::command]
-fn mcp_call_tool(
-    state: tauri::State<MCPManager>,
-    name: String,
-    tool_name: String,
-    arguments: serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    state.call_tool(&name, &tool_name, arguments)
-}
-
-#[tauri::command]
-fn mcp_list_servers(
-    state: tauri::State<MCPManager>,
-) -> Result<Vec<mcp_manager::MCPServerStatus>, String> {
-    state.list_servers()
-}
-
-#[tauri::command]
-fn mcp_get_status(
-    state: tauri::State<MCPManager>,
-    name: String,
-) -> Result<mcp_manager::MCPServerStatus, String> {
-    state.get_status(&name)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let server_state_arc = Arc::new(Mutex::new(None::<PiServerProcess>));
@@ -618,13 +557,6 @@ pub fn run() {
             skills_cli::create_skill_file,
             skills_cli::skills_mirror_config,
             skill_installer::extract_skill_zip,
-            mcp_connect,
-            mcp_disconnect,
-            mcp_refresh_tools,
-            mcp_list_tools,
-            mcp_call_tool,
-            mcp_list_servers,
-            mcp_get_status,
             dictation::get_dictation_status,
             dictation::start_dictation,
             dictation::stop_dictation,
@@ -645,7 +577,6 @@ pub fn run() {
             voice::stop_realtime_voice,
             voice::cancel_realtime_voice,
         ])
-        .manage(MCPManager::new())
         .setup(move |app| {
             migrate_legacy_database(app.handle());
             dictation::initialize(app)?;

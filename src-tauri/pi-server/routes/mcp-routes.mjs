@@ -5,13 +5,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import {
-  callSseMcpTool,
-  completeSseMcpOAuth,
-  connectSseMcpServer,
-  disconnectSseMcpServer,
-  getSseMcpOAuthCredentials,
-  getSseMcpStatus,
-} from '../mcp-sse.mjs'
+  callMcpTool,
+  connectMcpServer,
+  disconnectMcpServer,
+  getMcpOAuthCredentials,
+  getMcpStatus,
+  startMcpSignIn,
+} from '../mcp-runtime.mjs'
 import { checkWorkspacePath } from '../sandbox.mjs'
 import { renderPptxHtml } from '../pptx-tools.mjs'
 import { readJsonBody } from '../http-body.mjs'
@@ -19,25 +19,13 @@ import { readJsonBody } from '../http-body.mjs'
 export function handleMcpRoutes(req, res, url, ctx) {
   const { runtimeConfig, DATA_DIR } = ctx
 
-  // GET /mcp-oauth/callback/:name — browser redirect target for SSE MCP OAuth
+  // GET /mcp-oauth/callback/:name — legacy redirect target. OAuth now runs
+  // through pi's loopback callback (POST /mcp-sse/oauth-start); kept as a
+  // public route only to tell stale bookmarks what changed.
   const oauthCallbackMatch = url.pathname.match(/^\/mcp-oauth\/callback\/([^/]+)$/)
   if (req.method === 'GET' && oauthCallbackMatch) {
-    const name = decodeURIComponent(oauthCallbackMatch[1])
-    const code = url.searchParams.get('code')
-    const state = url.searchParams.get('state')
-    if (!code || !state) {
-      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end('<h1>S-Loop OAuth failed</h1><p>The authorization response is missing code or state.</p>')
-      return true
-    }
-    completeSseMcpOAuth(name, code, state).then(() => {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end('<h1>Authorization complete</h1><p>You can close this window and return to S-Loop.</p>')
-    }).catch((error) => {
-      const message = String(error?.message || error).replace(/[<>&"']/g, '')
-      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(`<h1>S-Loop OAuth failed</h1><p>${message}</p>`)
-    })
+    res.writeHead(410, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.end('<h1>S-Loop OAuth</h1><p>This callback is no longer used. Start the sign-in again from Settings.</p>')
     return true
   }
 
@@ -49,13 +37,13 @@ export function handleMcpRoutes(req, res, url, ctx) {
       return true
     }
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(getSseMcpOAuthCredentials(name)))
+    res.end(JSON.stringify(getMcpOAuthCredentials(name)))
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/mcp-sse/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(getSseMcpStatus()))
+    res.end(JSON.stringify(getMcpStatus()))
     return true
   }
 
@@ -68,20 +56,47 @@ export function handleMcpRoutes(req, res, url, ctx) {
     return true
   }
 
-  // POST /mcp-sse/connect — connect to an SSE MCP server
+  // POST /mcp-sse/connect — connect an MCP server (streamable HTTP or stdio).
+  // Body: pi's mcpServers shape {url, headers} | {command, args, env, cwd}
+  // plus optional {auth, toolFilter}.
   if (req.method === 'POST' && url.pathname === '/mcp-sse/connect') {
     readJsonBody(req).then(async (data) => {
       try {
-        const { name, url: serverUrl, headers, transport, auth, toolFilter } = data
-        if (!name || !serverUrl) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name" or "url"' })); return }
-        const result = await connectSseMcpServer(
-          name,
-          serverUrl,
-          headers || {},
-          transport || 'http',
-          auth || {},
-          toolFilter || {},
-        )
+        const { name, url: serverUrl, headers, transport, auth, toolFilter, command, args, env, cwd } = data
+        if (!name || (!serverUrl && !command)) {
+          res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name" and one of "url"/"command"' })); return
+        }
+        void transport
+        const result = await connectMcpServer(name, {
+          ...(serverUrl ? { url: serverUrl } : {}),
+          ...(headers ? { headers } : {}),
+          ...(command ? { command, args, env, cwd } : {}),
+          ...(auth ? { auth } : {}),
+          ...(toolFilter ? { toolFilter } : {}),
+        })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, ...result }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+    }).catch((e) => {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message }))
+    })
+    return true
+  }
+
+  // POST /mcp-sse/oauth-start — run pi's OAuth 2.1 flow (PKCE, loopback
+  // callback) for a server configured with auth.type === 'oauth'. Resolves
+  // once the sign-in completed and the server reconnected; the authorization
+  // URL is reported through /mcp-sse/status while the flow waits.
+  if (req.method === 'POST' && url.pathname === '/mcp-sse/oauth-start') {
+    readJsonBody(req).then(async (data) => {
+      try {
+        const { name } = data
+        if (!name) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name"' })); return }
+        const result = await startMcpSignIn(name)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, ...result }))
       } catch (e) {
@@ -101,7 +116,7 @@ export function handleMcpRoutes(req, res, url, ctx) {
       try {
         const { name } = data
         if (!name) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "name"' })); return }
-        await disconnectSseMcpServer(name)
+        await disconnectMcpServer(name)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true }))
       } catch (e) {
@@ -121,7 +136,7 @@ export function handleMcpRoutes(req, res, url, ctx) {
       try {
         const { serverName, toolName, arguments: args } = data
         if (!serverName || !toolName) { res.writeHead(400); res.end(JSON.stringify({ error: 'Missing "serverName" or "toolName"' })); return }
-        const result = await callSseMcpTool(serverName, toolName, args || {})
+        const result = await callMcpTool(serverName, toolName, args || {})
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(result))
       } catch (e) {

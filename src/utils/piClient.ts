@@ -54,12 +54,7 @@ export function installPiServerFetchInterceptor() {
   }) as typeof window.fetch
 }
 
-export interface McpToolRequest {
-  requestId: string
-  serverName: string
-  toolName: string
-  arguments: Record<string, unknown>
-}
+
 
 export interface ToolApprovalRequest {
   requestId: string
@@ -83,7 +78,6 @@ export interface PiStreamCallbacks {
   onToolCall: (id: string, name: string, args: any) => void
   onToolResult: (id: string, name: string, result: any) => void
   onToolUpdate?: (id: string, name: string, partialResult: any) => void
-  onMcpToolRequest?: (request: McpToolRequest) => void
   onToolApproval?: (request: ToolApprovalRequest) => void
   onStatus?: (status: ContextStatus) => void
   onDone: () => void
@@ -387,8 +381,6 @@ export async function prompt(
                 case 'tool_execution_update':
                   cb?.onToolUpdate?.(data.id, data.name, data.partialResult)
                   break
-                case 'mcp_tool_request':
-                  cb?.onMcpToolRequest?.(data)
                   break
                 case 'tool_approval_request':
                   cb?.onToolApproval?.(data)
@@ -451,19 +443,6 @@ export function abortSession(sessionId?: string): void {
   } else {
     _streams.delete(sessionId)
   }
-}
-
-export async function sendMcpToolResponse(
-  sessionId: string,
-  requestId: string,
-  result?: unknown,
-  error?: string,
-): Promise<void> {
-  await fetch(`${_base}/session/${sessionId}/mcp-response`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requestId, result, error }),
-  })
 }
 
 export async function sendToolApproval(

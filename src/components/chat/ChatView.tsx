@@ -110,18 +110,6 @@ export function ChatView() {
           sessionID: sid, messageID: sm.messageID,
         } as any)
       },
-      onMcpToolRequest: async (request) => {
-        try {
-          const result = await invoke('mcp_call_tool', {
-            name: request.serverName,
-            tool_name: request.toolName,
-            arguments: request.arguments,
-          })
-          await Pi.sendMcpToolResponse(piSessionId, request.requestId, result)
-        } catch (err) {
-          await Pi.sendMcpToolResponse(piSessionId, request.requestId, null, err instanceof Error ? err.message : String(err))
-        }
-      },
       onToolApproval: (request) => {
         setPendingApproval({ ...request, piSessionId })
       },

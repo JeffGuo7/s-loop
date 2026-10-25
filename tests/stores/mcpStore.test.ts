@@ -1,18 +1,48 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { useMCPStore } from '../../src/stores/mcpStore'
 
-// The alias in vitest.config.ts resolves @tauri-apps/api/core to
-// tests/mocks/tauri-api-core.ts, which exports a vi.fn() `invoke`.
-// Re-import it here so we can configure its return values for each test.
+// All MCP transports now connect through the pi-server sidecar over HTTP.
+// These tests mock global fetch for the sidecar endpoints; `invoke` (the
+// DPAPI secret vault) stays mocked through the @tauri-apps/api/core alias.
 import { invoke } from '@tauri-apps/api/core'
 
+const fetchMock = vi.fn()
+
+function mockSidecar({ health = true, connect, status } = {}) {
+  fetchMock.mockImplementation(async (input: any) => {
+    const url = String(input)
+    if (url.endsWith('/health')) {
+      return { ok: health } as Response
+    }
+    if (url.endsWith('/mcp-sse/connect')) {
+      if (connect instanceof Error) throw connect
+      return {
+        ok: !connect?.error,
+        json: async () => connect ?? { ok: true },
+      } as Response
+    }
+    if (url.endsWith('/mcp-sse/status')) {
+      return { ok: true, json: async () => status ?? [] } as Response
+    }
+    if (url.endsWith('/mcp-sse/disconnect')) {
+      return { ok: true, json: async () => ({ ok: true }) } as Response
+    }
+    return { ok: false, json: async () => ({}) } as Response
+  })
+}
+
 beforeEach(() => {
-  // Reset the store to defaults for each test
   useMCPStore.setState({
     servers: [],
     serverStatuses: {},
   })
   vi.clearAllMocks()
+  vi.stubGlobal('fetch', fetchMock)
+  mockSidecar()
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 describe('mcpStore', () => {
@@ -50,7 +80,7 @@ describe('mcpStore', () => {
     expect(servers[0].args).toEqual(['new.mjs'])
   })
 
-  it('removes a server and disconnects via Tauri', () => {
+  it('removes a server and disconnects through the sidecar', async () => {
     useMCPStore.getState().addServer({
       name: 'my-server',
       type: 'stdio',
@@ -64,21 +94,22 @@ describe('mcpStore', () => {
     })
 
     useMCPStore.getState().removeServer('my-server')
+    // The disconnect is fire-and-forget; give it a tick.
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     const state = useMCPStore.getState()
     expect(state.servers).toHaveLength(0)
-    // Status should have been cleaned up
     expect(state.serverStatuses['my-server']).toBeUndefined()
-    // Should have called invoke('mcp_disconnect', ...)
-    expect(invoke).toHaveBeenCalledWith('mcp_disconnect', { name: 'my-server' })
+    const disconnectCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/mcp-sse/disconnect'))
+    expect(disconnectCall).toBeTruthy()
+    expect(JSON.parse(disconnectCall![1].body)).toEqual({ name: 'my-server' })
+    // Static secrets are still dropped from the DPAPI vault.
+    expect(invoke).toHaveBeenCalledWith('mcp_secret_delete', { name: 'my-server' })
   })
 
-  it('connects a server via Tauri and updates status', async () => {
-    invoke.mockResolvedValueOnce({
-      name: 'my-server',
-      status: 'connected',
-      error: null,
-      tools: [],
+  it('connects a stdio server through the sidecar and updates status', async () => {
+    mockSidecar({
+      connect: { ok: true, status: 'connected', transport: 'stdio', tools: [{ name: 'hello', description: 'Greet', inputSchema: {} }], resources: [] },
     })
 
     useMCPStore.getState().addServer({
@@ -90,7 +121,9 @@ describe('mcpStore', () => {
 
     await useMCPStore.getState().connectServer('my-server')
 
-    expect(invoke).toHaveBeenCalledWith('mcp_connect', {
+    const connectCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/mcp-sse/connect'))
+    expect(connectCall).toBeTruthy()
+    expect(JSON.parse(connectCall![1].body)).toMatchObject({
       name: 'my-server',
       command: 'node',
       args: ['server.mjs'],
@@ -98,10 +131,11 @@ describe('mcpStore', () => {
 
     const status = useMCPStore.getState().serverStatuses['my-server']
     expect(status?.status).toBe('connected')
+    expect(status?.tools).toHaveLength(1)
   })
 
   it('tracks status changes when connecting fails', async () => {
-    invoke.mockRejectedValueOnce(new Error('Connection refused'))
+    mockSidecar({ connect: { error: 'Connection refused' } })
 
     useMCPStore.getState().addServer({
       name: 'faulty',
@@ -126,43 +160,43 @@ describe('mcpStore', () => {
       disabled: true,
     })
 
-    // Toggle to enable — should call connectServer internally (which calls invoke)
+    // Toggle to enable — should call connectServer internally (which hits the
+    // sidecar connect endpoint).
     useMCPStore.getState().toggleServer('my-server')
 
     const server = useMCPStore.getState().servers[0]
     expect(server.disabled).toBeFalsy()
-    // connectServer was called (via the store's internal logic), which triggers invoke
   })
 
-  it('disconnects and cleans statuses for all servers on refreshAllServers', async () => {
-    invoke.mockResolvedValueOnce([]) // mcp_list_servers returns empty
+  it('refreshes statuses for all servers from the sidecar', async () => {
+    mockSidecar({
+      status: [{ name: 's1', status: 'connected', transport: 'stdio', tools: [], resources: [] }],
+    })
 
-    useMCPStore.getState().addServer({
-      name: 's1', type: 'stdio', command: 'node', args: [],
-    })
-    useMCPStore.getState().addServer({
-      name: 's2', type: 'stdio', command: 'node', args: [],
-    })
+    useMCPStore.getState().addServer({ name: 's1', type: 'stdio', command: 'node', args: [] })
+    useMCPStore.getState().addServer({ name: 's2', type: 'stdio', command: 'node', args: [] })
 
     await useMCPStore.getState().refreshAllServers()
 
-    // mcp_list_servers was called
-    expect(invoke).toHaveBeenCalledWith('mcp_list_servers')
+    const statuses = useMCPStore.getState().serverStatuses
+    expect(statuses['s1']?.status).toBe('connected')
+    // s2 is enabled but not connected on the sidecar — the store starts a
+    // connection for it, so it should not be marked disabled.
+    expect(statuses['s2']?.status).not.toBe('disabled')
   })
 
-  it('refreshes a single enabled server', async () => {
-    invoke.mockResolvedValueOnce({
-      name: 'my-server',
-      status: 'connected',
-      error: null,
-      tools: [{ name: 'read', description: 'Read file', input_schema: {} }],
+  it('refreshes a single enabled server from the sidecar', async () => {
+    mockSidecar({
+      status: [{
+        name: 'my-server',
+        status: 'connected',
+        transport: 'streamable-http',
+        tools: [{ name: 'read', description: 'Read file', inputSchema: {} }],
+        resources: [],
+      }],
     })
-    // Second call is mcp_refresh_tools
-    invoke.mockResolvedValueOnce([{ name: 'read', description: 'Read file', input_schema: {} }])
 
-    useMCPStore.getState().addServer({
-      name: 'my-server', type: 'stdio', command: 'node', args: [],
-    })
+    useMCPStore.getState().addServer({ name: 'my-server', type: 'http', url: 'https://example.com/mcp' })
 
     await useMCPStore.getState().refreshServer('my-server')
 

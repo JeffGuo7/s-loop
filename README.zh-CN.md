@@ -32,7 +32,7 @@ S-Loop 是一款本地优先的 Windows AI 工作台。一个应用里集成：3
 | **模型接入** | 基于 pi SDK 内置 39 个服务商——DeepSeek、OpenAI、Anthropic、Google、GLM (Z.ai)、Moonshot、Qwen、MiniMax、小米、OpenRouter、xAI、Groq 等——支持自定义 OpenAI 兼容端点；按服务商管理 API Key，模型感知的推理强度控制 |
 | **Agent 构建器** | 自定义 Agent（指令 / 模型 / Skills / MCP / 权限模式）、斜杠命令、拖拽编排、Agent 配置档案 |
 | **子代理与目标循环** | `delegate_task` / 并行 / 链式子代理，带预算与取消；Goal Loop 按计划-执行-检查推进多步任务，独立审批流 |
-| **MCP** | stdio MCP 进程由 Rust 层托管生命周期；远程 Streamable HTTP / SSE 服务支持 OAuth 2.1 + PKCE、按服务器工具过滤、DPAPI 加密凭据保险库 |
+| **MCP** | 基于 pi 1.4 内置的 MCP 客户端——Streamable HTTP 与 stdio 传输、OAuth 2.1 + PKCE 回环签名、按服务器工具过滤、DPAPI 加密静态密钥、`mcp__<server>__<tool>` 命名 |
 | **Skills 系统** | 本地 `SKILL.md` 扫描、远程搜索安装、ZIP 拖拽安装、CLI 集成 |
 | **定时任务** | Cron / 间隔 / 一次性，绑定 Agent + Skills 快照，可投递到聊天或平台；无人值守运行遇到审批会挂起（`waiting_for_approval`），决策后自动恢复 |
 | **平台消息中心** | Telegram（双向聊天同步）、Email、Webhook、飞书、钉钉、微信、Slack、Discord、QQ Bot——白名单优先的访问控制 + 限速 |
@@ -91,12 +91,11 @@ S-Loop 将模型输出视为不可信输入。完整基线见
 │  ┌────────────────────┐          ┌─────────────────────────┐    │
 │  │ pi_server.rs       │◄────────►│ pi-server (HTTP + SSE)  │    │
 │  │  sidecar 生命周期   │  token   │  会话与流式输出          │    │
-│  │ mcp_manager.rs     │          │  routes/* (HTTP API)    │    │
-│  │ credential_store   │          │  子代理 / goal-loop     │    │
-│  │ skill_installer    │          │  task-scheduler 定时    │    │
-│  │ skills_cli         │          │  platform-center 平台   │    │
-│  │ voice / dictation  │          │  执行策略引擎            │    │
-│  │ 系统托盘            │          │  审批 / 审计            │    │
+│  │ credential_store   │          │  mcp-runtime (pi-mcp)   │    │
+│  │ skill_installer    │          │  子代理 / goal-loop     │    │
+│  │ skills_cli         │          │  task-scheduler 定时    │    │
+│  │ voice / dictation  │          │  platform-center 平台   │    │
+│  │ 系统托盘            │          │  策略 / 审计            │    │
 │  └────────────────────┘          └─────────────────────────┘    │
 │                                                                  │
 │  React 前端                                                      │
@@ -110,7 +109,7 @@ S-Loop 将模型输出视为不可信输入。完整基线见
 ```
 
 - **Rust 层** —— 窗口/托盘生命周期、sidecar 启动（Windows Job Object 进程树回收 +
-  净化子环境变量）、MCP stdio 进程管理、DPAPI 凭据保险库、离线语音
+  净化子环境变量）、MCP 静态密钥的 DPAPI 凭据保险库、离线语音
   （whisper.cpp + sherpa-onnx）与 Kokoro TTS。
 - **pi-server（Node 子进程）** —— 会话与流式输出、HTTP 路由模块（`routes/`）、工具
   策略引擎、工作区沙箱、子代理、Goal Loop、定时调度、平台中心、持久化审批与审计。
