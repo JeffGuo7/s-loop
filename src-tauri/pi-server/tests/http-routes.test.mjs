@@ -157,6 +157,19 @@ test('sidecar serves every extracted route group', async (t) => {
     assert.equal(res.status, 403)
   })
 
+  await t.test('prompting a missing session auto-creates it instead of 404', async () => {
+    const res = await request('POST', '/session/missing-sidecar-session/message', {
+      body: {
+        content: 'hi',
+        providerID: 'anthropic',
+        modelID: 'definitely-not-a-model',
+      },
+    })
+    assert.equal(res.status, 200)
+    const text = await res.text()
+    assert.match(text, /Unknown model/)
+  })
+
   await t.test('unknown routes still 404', async () => {
     const res = await request('GET', '/definitely-not-a-route')
     assert.equal(res.status, 404)

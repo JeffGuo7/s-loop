@@ -29,7 +29,7 @@ const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const APP_STORAGE_KEY = 's-loop-storage'
 
 function App() {
-  const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, providerList, workspaceDir, kokoroSpeakerId } = useAppStore()
+  const { theme, colorScheme, sidebarCollapsed, toggleSidebar, activeProvider, providerConfigs, providerList, workspaceDir, filesystemAccess, kokoroSpeakerId } = useAppStore()
   const activeAgentId = useAgentStore((s) => s.activeAgentId)
   const agents = useAgentStore((s) => s.agents)
   const userProfile = useAgentStore((s) => s.userProfile)
@@ -145,6 +145,7 @@ function App() {
           .map(([providerId, providerConfig]) => [providerId, providerConfig.apiKey]),
       ),
       workspaceDir: workspaceDir ?? undefined,
+      filesystemAccess,
       thinkingLevel: config.reasoningEfforts?.[config.model] || 'medium',
       providerConfig: {
         api: providerList.find((provider) => provider.id === activeProvider)?.api,
@@ -159,7 +160,7 @@ function App() {
     }).catch((err) => {
       console.warn('[app] failed to sync runtime config:', err)
     })
-  }, [activeProvider, providerConfigs, providerList, workspaceDir, activeAgentId, agents, skills])
+  }, [activeProvider, providerConfigs, providerList, workspaceDir, filesystemAccess, activeAgentId, agents, skills])
 
   useEffect(() => {
     if (!inTauri) return

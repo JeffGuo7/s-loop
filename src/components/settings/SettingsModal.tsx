@@ -21,8 +21,11 @@ interface SettingsModalProps {
 }
 
 const BUILT_IN_PROVIDERS: ProviderInfo[] = [
-  { id: 'opencode', name: 'OpenCode (Anthropic)', env: 'OPENCODE_API_KEY', source: 'https://api.opencode.ai/v1' },
-  { id: 'opencode-go', name: 'OpenCode Go (OpenAI)', env: 'OPENCODE_GO_API_KEY', source: 'https://opencode.ai/zen/go/v1' },
+  // pi ships these two catalogs and selects the gateway per API family
+  // (Anthropic vs OpenAI/Gemini). A single saved base URL breaks that, so the
+  // settings UI must not fill one in for them.
+  { id: 'opencode', name: 'OpenCode Zen', env: 'OPENCODE_API_KEY', source: 'https://opencode.ai/inference' },
+  { id: 'opencode-go', name: 'OpenCode Go', env: 'OPENCODE_API_KEY', source: 'https://opencode.ai/inference/go' },
   { id: 'anthropic', name: 'Anthropic', env: 'ANTHROPIC_API_KEY', source: 'https://api.anthropic.com' },
   { id: 'openai', name: 'OpenAI', env: 'OPENAI_API_KEY', source: 'https://api.openai.com/v1' },
   { id: 'gemini', name: 'Google Gemini', env: 'GEMINI_API_KEY', source: 'https://generativelanguage.googleapis.com' },
@@ -49,6 +52,18 @@ const BUILT_IN_PROVIDERS: ProviderInfo[] = [
   { id: 'lmstudio', name: 'LM Studio (Local)', env: 'LMSTUDIO_API_KEY', source: 'http://localhost:1234/v1' },
   { id: 'custom', name: 'Custom Provider', env: '', source: '' },
 ]
+
+// Curated providers that pi does not ship a catalog for. They are the only
+// ones that need the user-visible gateway filled in; everything else already
+// has a per-model base URL in the bundled SDK.
+const GATEWAY_ONLY_PROVIDERS = new Set([
+  'ollama',
+  'lmstudio',
+  'perplexity',
+  'hyperbolic',
+  'jina',
+  'voyageai',
+])
 
 // Friendly names for pi-catalog providers that have no curated entry above.
 const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
@@ -142,7 +157,8 @@ export function SettingsModal({ onClose, initialTab = 'provider' }: SettingsModa
     if (!expandedProvider) return
     const info = providerList.find(p => p.id === expandedProvider)
     const cfg = localConfigs[expandedProvider]
-    if (info?.source && (!cfg || !cfg.baseUrl)) {
+    const needsGateway = info?.isCustom || (info ? GATEWAY_ONLY_PROVIDERS.has(info.id) : false)
+    if (needsGateway && info?.source && (!cfg || !cfg.baseUrl)) {
       handleConfigChange(expandedProvider, 'baseUrl', info.source)
     }
     if (info?.isCustom) {

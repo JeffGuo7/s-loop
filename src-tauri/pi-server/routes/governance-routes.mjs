@@ -25,6 +25,9 @@ export function handleGovernanceRoutes(req, res, url, ctx) {
         ? { ...data.providerApiKeys }
         : runtimeConfig.providerApiKeys
       runtimeConfig.workspaceDir = data.workspaceDir || undefined
+      if (data.filesystemAccess === 'workspace' || data.filesystemAccess === 'full') {
+        runtimeConfig.filesystemAccess = data.filesystemAccess
+      }
       runtimeConfig.thinkingLevel = data.thinkingLevel || runtimeConfig.thinkingLevel
       if (data.providerConfig) runtimeConfig.providerConfig = data.providerConfig
       if (data.webSearchConfig) runtimeConfig.webSearchConfig = data.webSearchConfig

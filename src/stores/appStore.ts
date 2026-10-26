@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import i18n from '../i18n'
-import type { Session, ProviderConfig, Companion, ProviderInfo, KiloMessage, MessagePart, MessageInfo } from '../types'
+import type { Session, ProviderConfig, Companion, ProviderInfo, KiloMessage, MessagePart, MessageInfo, FilesystemAccess } from '../types'
 import * as db from '../utils/database'
 import { enrichSession } from '../utils/sessionMeta'
 import { DEFAULT_COLOR_SCHEME } from '../themes'
@@ -15,6 +15,7 @@ import {
   redactProviderConfigs,
   saveProviderApiKey,
 } from '../utils/credentialVault'
+import { clearLegacyOpenCodeGateways } from '../utils/providerMigration'
 
 interface AppState {
   // Sessions (cached from DB)
@@ -44,6 +45,7 @@ interface AppState {
   leftPanelMode: 'sessions' | 'files'
   workspaceCollapsed: boolean
   workspaceDir: string | null
+  filesystemAccess: FilesystemAccess
   fileTreeVersion: number
   kokoroSpeakerId: KokoroSpeakerId
 
@@ -100,6 +102,7 @@ interface AppState {
   toggleLeftPanelMode: () => void
   toggleWorkspace: () => void
   setWorkspaceDir: (dir: string | null) => void
+  setFilesystemAccess: (access: FilesystemAccess) => void
   incrementFileTreeVersion: () => void
   setKokoroSpeakerId: (speakerId: KokoroSpeakerId) => void
 
@@ -140,6 +143,7 @@ export const useAppStore = create<AppState>()(
       leftPanelMode: 'sessions',
       workspaceCollapsed: false,
       workspaceDir: null,
+      filesystemAccess: 'workspace',
       fileTreeVersion: 0,
       kokoroSpeakerId: DEFAULT_KOKORO_SPEAKER_ID,
       githubMirror: 'https://mirror.ghproxy.com/https://github.com/',
@@ -563,6 +567,7 @@ export const useAppStore = create<AppState>()(
       })),
       toggleWorkspace: () => set((state) => ({ workspaceCollapsed: !state.workspaceCollapsed })),
       setWorkspaceDir: (dir) => set({ workspaceDir: dir }),
+      setFilesystemAccess: (access) => set({ filesystemAccess: access }),
       incrementFileTreeVersion: () => set((state) => ({ fileTreeVersion: state.fileTreeVersion + 1 })),
       setKokoroSpeakerId: (speakerId) => set({
         kokoroSpeakerId: normalizeKokoroSpeakerId(speakerId),
@@ -585,11 +590,12 @@ export const useAppStore = create<AppState>()(
         companion: state.companion,
         leftPanelMode: state.leftPanelMode,
         workspaceDir: state.workspaceDir,
+        filesystemAccess: state.filesystemAccess,
         githubMirror: state.githubMirror,
         npmRegistryMirror: state.npmRegistryMirror,
         kokoroSpeakerId: state.kokoroSpeakerId,
       }),
-      version: 6,
+      version: 7,
       migrate: (persistedState, version) => {
         let nextState = persistedState as any
         if (version < 4) {
@@ -611,6 +617,12 @@ export const useAppStore = create<AppState>()(
           nextState = {
             ...nextState,
             kokoroSpeakerId: normalizeKokoroSpeakerId(nextState.kokoroSpeakerId),
+          }
+        }
+        if (version < 7 && nextState?.providerConfigs) {
+          nextState = {
+            ...nextState,
+            providerConfigs: clearLegacyOpenCodeGateways(nextState.providerConfigs),
           }
         }
         return nextState

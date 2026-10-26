@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 
 import { evaluateToolCall } from '../execution-policy.mjs'
@@ -124,4 +126,32 @@ test('allow rules cannot elevate ask-mode write authority', () => {
 
   assert.equal(decision.outcome, 'approval-required')
   assert.equal(decision.risk, 'write-local')
+})
+
+test('full filesystem access bypasses the workspace root', () => {
+  const outside = path.join(os.tmpdir(), `sloop-outside-${process.pid}.txt`)
+
+  const denied = evaluateToolCall(
+    { name: 'read', arguments: { path: outside } },
+    { workspaceDir: process.cwd(), permissionMode: 'ask' },
+  )
+  assert.equal(denied.allowed, false)
+  assert.match(denied.reason, /outside the workspace/)
+
+  const allowed = evaluateToolCall(
+    { name: 'read', arguments: { path: outside } },
+    { workspaceDir: process.cwd(), permissionMode: 'ask', filesystemAccess: 'full' },
+  )
+  assert.equal(allowed.allowed, true)
+})
+
+test('full access still blocks sensitive host writes', () => {
+  const sensitive = path.join(os.homedir(), '.ssh', 'config')
+  const decision = evaluateToolCall(
+    { name: 'write', arguments: { path: sensitive, content: 'x' } },
+    { workspaceDir: process.cwd(), permissionMode: 'allow', filesystemAccess: 'full' },
+  )
+
+  assert.equal(decision.allowed, false)
+  assert.equal(decision.matchedRule, 'sensitive-host-path')
 })

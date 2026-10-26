@@ -70,6 +70,10 @@ export function calculateTrailingTokens(messages, fromIndex) {
 
 /** Resolve context length for a model object or fallback default. */
 export function resolveContextLength(model, fallback = 200_000) {
+  // pi 1.4 models expose `contextWindow`; older objects used `contextLength`.
+  // The real field must win over the family guesses below: a modern DeepSeek
+  // model has a 1M window, not the 64k the heuristic was written for.
+  if (model?.contextWindow) return model.contextWindow
   if (model?.contextLength) return model.contextLength
   // Common model family defaults
   const id = (model?.id || '').toLowerCase()

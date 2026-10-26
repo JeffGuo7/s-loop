@@ -158,6 +158,29 @@ Shell approval is not proof of path isolation. On Windows approved commands are
 additionally confined by an OS-level AppContainer sandbox (see §14, phase 8);
 elsewhere the shell remains a high-risk host capability under policy control only.
 
+### Full filesystem access (explicit opt-in)
+
+The workspace bar exposes an access-scope selector:
+
+- `workspace` (default): the rules above apply.
+- `full`: the workspace-root check is skipped for file tools and the shell runs
+  outside the AppContainer. This is for trusted local automations that need to
+  read/write arbitrary user paths.
+
+Even in `full` mode:
+
+- hardline commands (disk formatting, `rm -rf /`, …) remain blocked;
+- file-tool writes to system and credential paths (`%WINDIR%`,
+  `C:\Program Files`, `~/.ssh`, browser profiles, …) remain blocked by
+  `checkSensitivePath`;
+- the shell is **not** AppContainer-isolated, so an approved shell command can
+  write outside those file-tool guards; the UI shows this warning whenever
+  `full` is selected;
+- tool approval (`ask`/`allow`/`deny`) still applies independently.
+
+The choice is persisted locally and sent to the sidecar per prompt
+(`filesystemAccess`) and through `/runtime/config` for autonomous runs.
+
 ## 8. Delegation
 
 The effective child policy is the intersection of:

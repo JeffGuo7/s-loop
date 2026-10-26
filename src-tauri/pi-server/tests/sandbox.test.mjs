@@ -157,3 +157,18 @@ test('child environment removes inherited credentials and Node injection flags',
   assert.equal(env.NODE_OPTIONS, undefined)
   assert.equal(env.S_LOOP_SANDBOX, 'workspace')
 })
+
+test('full filesystem access marks the child environment as unsandboxed', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's-loop-sandbox-'))
+  try {
+    const full = sanitizeChildEnvironment({ PATH: 'bin' }, root, { fullAccess: true })
+    assert.equal(full.S_LOOP_SANDBOX, 'full')
+    assert.equal(full.S_LOOP_ALLOWED_ROOT, undefined)
+
+    const workspace = sanitizeChildEnvironment({ PATH: 'bin' }, root)
+    assert.equal(workspace.S_LOOP_SANDBOX, 'workspace')
+    assert.equal(workspace.S_LOOP_ALLOWED_ROOT, path.resolve(root))
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})

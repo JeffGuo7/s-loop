@@ -168,6 +168,13 @@ export type ReasoningLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xh
 export type ReasoningSupport = 'auto' | 'enabled' | 'disabled'
 export type ThinkingFormat = 'auto' | 'openai' | 'openrouter' | 'deepseek' | 'qwen' | 'together' | 'zai'
 
+/**
+ * Filesystem scope for tool execution.
+ * - workspace: only the selected workspace and explicitly granted roots
+ * - full: any user path; system/credential writes and hardline commands stay blocked
+ */
+export type FilesystemAccess = 'workspace' | 'full'
+
 export interface ProviderConfig {
   apiKey: string
   model: string

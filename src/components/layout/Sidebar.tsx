@@ -27,6 +27,7 @@ import { useAppStore } from '../../stores'
 import { MagicButton } from '../ui'
 import { FileTree } from '../workspace/FileTree'
 import type { Page } from '../../App'
+import type { FilesystemAccess } from '../../types'
 
 interface SidebarProps {
   onSettingsOpen: () => void
@@ -55,6 +56,8 @@ export function Sidebar({
   const setLeftPanelMode = useAppStore((s) => s.setLeftPanelMode)
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const setWorkspaceDir = useAppStore((s) => s.setWorkspaceDir)
+  const filesystemAccess = useAppStore((s) => s.filesystemAccess)
+  const setFilesystemAccess = useAppStore((s) => s.setFilesystemAccess)
   const fileTreeVersion = useAppStore((s) => s.fileTreeVersion)
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
@@ -113,19 +116,19 @@ export function Sidebar({
     return () => window.removeEventListener('keydown', onKey)
   }, [confirmDeleteSessionId, confirmClearAll])
 
-  const applyWorkspaceDir = useCallback((dir: string) => {
+  const applyWorkspaceDir = useCallback((dir: string, switchToFiles = true) => {
     setWorkspaceDir(dir)
-    setLeftPanelMode('files')
+    if (switchToFiles) setLeftPanelMode('files')
   }, [setLeftPanelMode, setWorkspaceDir])
 
-  const handleSelectDir = useCallback(async () => {
+  const handleSelectDir = useCallback(async (switchToFiles = true) => {
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
       try {
         const { open } = await import('@tauri-apps/plugin-dialog')
         const selected = await open({ directory: true, multiple: false })
         if (!selected) return
         const dir = typeof selected === 'string' ? selected : (selected as { path?: string }).path || ''
-        if (dir) applyWorkspaceDir(dir)
+        if (dir) applyWorkspaceDir(dir, switchToFiles)
         return
       } catch {
         return
@@ -135,7 +138,7 @@ export function Sidebar({
     try {
       const handle = await (window as Window & { showDirectoryPicker?: () => Promise<{ name: string }> }).showDirectoryPicker?.()
       if (handle?.name) {
-        applyWorkspaceDir(`selected://${handle.name}`)
+        applyWorkspaceDir(`selected://${handle.name}`, switchToFiles)
         return
       }
     } catch (err: unknown) {
@@ -205,6 +208,57 @@ export function Sidebar({
                   </span>
                 </button>
               </div>
+
+              {!isFilesMode && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1 rounded-xl border border-border-light/60 bg-white/55 px-2.5 py-1.5 shadow-xs backdrop-blur-sm dark:bg-white/[0.04]">
+                    <FolderOpen size={11} strokeWidth={2.2} className="shrink-0 text-accent/60" />
+                    <button
+                      type="button"
+                      onClick={() => handleSelectDir(false)}
+                      className="min-w-0 flex-1 truncate text-left text-[11px] font-medium tracking-tight text-text-secondary hover:text-text"
+                      title={`${t('sidebar.currentWorkspace')}: ${workspaceDir || t('sidebar.noWorkspace')}`}
+                    >
+                      {workspaceDir
+                        ? (workspaceDir.split(/[/\\]/).filter(Boolean).pop() || workspaceDir)
+                        : t('sidebar.noWorkspace')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectDir(false)}
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-text-quaternary transition-all duration-200 hover:bg-accent/10 hover:text-accent"
+                      title={workspaceDir ? t('sidebar.switchWorkspace') : t('sidebar.pickWorkspace')}
+                    >
+                      <RefreshCw size={11} strokeWidth={2.2} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-text-quaternary">
+                      {t('sidebar.filesystemAccess')}
+                    </span>
+                    <select
+                      value={filesystemAccess}
+                      onChange={(event) => setFilesystemAccess(event.target.value as FilesystemAccess)}
+                      className={`h-6 rounded-md border bg-surface px-1.5 text-[10px] font-semibold outline-none ${
+                        filesystemAccess === 'full'
+                          ? 'border-amber-500/50 text-amber-600'
+                          : 'border-border text-text-secondary'
+                      }`}
+                      title={filesystemAccess === 'full'
+                        ? t('sidebar.filesystemAccessFullHint')
+                        : t('sidebar.filesystemAccessWorkspaceHint')}
+                    >
+                      <option value="workspace">{t('sidebar.filesystemAccessWorkspace')}</option>
+                      <option value="full">{t('sidebar.filesystemAccessFull')}</option>
+                    </select>
+                  </div>
+                  {filesystemAccess === 'full' && (
+                    <p className="px-1 text-[10px] leading-relaxed text-amber-600/90">
+                      {t('sidebar.filesystemAccessFullHint')}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center justify-between px-1">
                 <div>
@@ -460,7 +514,7 @@ export function Sidebar({
                 </button>
                 {/* Switch workspace */}
                 <button
-                  onClick={handleSelectDir}
+                  onClick={() => handleSelectDir(true)}
                   className="flex h-6 w-6 items-center justify-center rounded-md text-text-quaternary transition-all duration-200 hover:bg-accent/10 hover:text-accent"
                   title={t('sidebar.switchWorkspace')}
                 >
@@ -495,7 +549,7 @@ export function Sidebar({
                   {t('sidebar.filesEmptyDesc')}
                 </p>
                 <button
-                  onClick={handleSelectDir}
+                  onClick={() => handleSelectDir(true)}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[11px] font-semibold text-white"
                 >
                   <FolderOpen size={13} strokeWidth={2.2} />

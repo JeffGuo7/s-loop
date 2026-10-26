@@ -198,20 +198,171 @@ fn migrate_legacy_database(app: &tauri::AppHandle) {
         app.path().app_config_dir().ok(),
         app.path().app_data_dir().ok(),
     ];
+    let mut seen = std::collections::HashSet::new();
     for dir in dirs.into_iter().flatten() {
+        if !seen.insert(dir.clone()) {
+            continue;
+        }
         let legacy = dir.join("snotra.db");
         let target = dir.join("sloop.db");
-        if legacy.exists() && !target.exists() {
-            match std::fs::copy(&legacy, &target) {
-                Ok(_) => eprintln!(
-                    "[s-loop] migrated legacy database {} -> {}",
-                    legacy.display(),
-                    target.display()
-                ),
-                Err(e) => eprintln!("[s-loop] failed to migrate legacy database: {e}"),
-            }
+        if !legacy.exists() {
+            continue;
+        }
+        match migrate_legacy_database_file(&legacy, &target) {
+            Ok(MigrationOutcome::Copied) => eprintln!(
+                "[s-loop] migrated legacy database {} -> {}",
+                legacy.display(),
+                target.display()
+            ),
+            Ok(MigrationOutcome::Merged { sessions, messages }) => eprintln!(
+                "[s-loop] imported {sessions} sessions and {messages} messages from {} into {}",
+                legacy.display(),
+                target.display()
+            ),
+            Ok(MigrationOutcome::Skipped) => {}
+            Err(e) => eprintln!("[s-loop] failed to migrate legacy database: {e}"),
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+enum MigrationOutcome {
+    Copied,
+    Merged { sessions: i64, messages: i64 },
+    Skipped,
+}
+
+fn sqlite_sidecar(path: &std::path::Path, suffix: &str) -> std::path::PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(suffix);
+    std::path::PathBuf::from(name)
+}
+
+/// Copy a SQLite database into a path that does not have a usable database
+/// yet.
+///
+/// With `journal_mode=WAL`, recent commits live in `<db>-wal` until SQLite
+/// checkpoints them. Copying only the main file silently drops those rows,
+/// so the WAL travels with the database. The stale `-shm` lookup table is
+/// deliberately left behind; SQLite rebuilds it on open.
+fn copy_sqlite_database(source: &std::path::Path, target: &std::path::Path) -> std::io::Result<()> {
+    let temp = sqlite_sidecar(target, ".migrating");
+    let temp_wal = sqlite_sidecar(&temp, "-wal");
+    let source_wal = sqlite_sidecar(source, "-wal");
+    let has_wal = source_wal.exists();
+
+    std::fs::copy(source, &temp)?;
+    if has_wal {
+        if let Err(e) = std::fs::copy(&source_wal, &temp_wal) {
+            let _ = std::fs::remove_file(&temp);
+            return Err(e);
+        }
+    }
+
+    for suffix in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(sqlite_sidecar(target, suffix));
+    }
+    if target.exists() {
+        std::fs::remove_file(target)?;
+    }
+    std::fs::rename(&temp, target)?;
+    if has_wal {
+        std::fs::rename(&temp_wal, sqlite_sidecar(target, "-wal"))?;
+    }
+    Ok(())
+}
+
+/// Merge a legacy database into the current one.
+///
+/// Older builds copied only `snotra.db`, so installations whose recent rows
+/// were still in the WAL ended up with an empty `sloop.db`. Merging rather
+/// than replacing also preserves sessions created after the rebrand, and
+/// `INSERT OR IGNORE` makes the operation idempotent.
+fn migrate_legacy_database_file(
+    legacy: &std::path::Path,
+    target: &std::path::Path,
+) -> Result<MigrationOutcome, String> {
+    if !legacy.exists() {
+        return Ok(MigrationOutcome::Skipped);
+    }
+    if !target.exists() {
+        copy_sqlite_database(legacy, target).map_err(|e| e.to_string())?;
+        return Ok(MigrationOutcome::Copied);
+    }
+
+    let conn = rusqlite::Connection::open(target).map_err(|e| e.to_string())?;
+    let has_schema: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sessions'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if has_schema == 0 {
+        drop(conn);
+        copy_sqlite_database(legacy, target).map_err(|e| e.to_string())?;
+        return Ok(MigrationOutcome::Copied);
+    }
+
+    // Fold any current WAL pages into the main file so the backup below is
+    // complete. A busy checkpoint is harmless: the merge still sees them.
+    let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+
+    // ATTACH makes SQLite replay the legacy WAL, so no row can be stranded
+    // outside its main file.
+    conn.execute(
+        "ATTACH DATABASE ?1 AS legacy",
+        [legacy.to_string_lossy().as_ref()],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let legacy_sessions: i64 = conn
+        .query_row("SELECT COUNT(*) FROM legacy.sessions", [], |row| row.get(0))
+        .unwrap_or(0);
+    let legacy_messages: i64 = conn
+        .query_row("SELECT COUNT(*) FROM legacy.messages", [], |row| row.get(0))
+        .unwrap_or(0);
+    if legacy_sessions == 0 && legacy_messages == 0 {
+        let _ = conn.execute_batch("DETACH DATABASE legacy");
+        return Ok(MigrationOutcome::Skipped);
+    }
+
+    let before_sessions: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))
+        .unwrap_or(0);
+    let before_messages: i64 = conn
+        .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
+        .unwrap_or(0);
+
+    let backup = sqlite_sidecar(target, ".pre-migration.bak");
+    let _ = std::fs::copy(target, &backup);
+
+    conn.execute_batch(
+        "BEGIN IMMEDIATE;
+         INSERT OR IGNORE INTO sessions (id, title, model, pi_id, created_at, updated_at)
+           SELECT id, title, model, pi_id, created_at, updated_at FROM legacy.sessions;
+         INSERT OR IGNORE INTO messages (id, session_id, role, parts, info, created_at)
+           SELECT id, session_id, role, parts, info, created_at FROM legacy.messages;
+         INSERT OR IGNORE INTO app_settings (key, value)
+           SELECT key, value FROM legacy.app_settings;
+         COMMIT;",
+    )
+    .map_err(|e| format!("merge failed: {e}"))?;
+
+    let after_sessions: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))
+        .unwrap_or(0);
+    let after_messages: i64 = conn
+        .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
+        .unwrap_or(0);
+    let _ = conn.execute_batch("DETACH DATABASE legacy");
+
+    let sessions = (after_sessions - before_sessions).max(0);
+    let messages = (after_messages - before_messages).max(0);
+    if sessions == 0 && messages == 0 {
+        return Ok(MigrationOutcome::Skipped);
+    }
+    Ok(MigrationOutcome::Merged { sessions, messages })
 }
 
 fn show_main_window(app: &tauri::AppHandle) {
@@ -693,5 +844,157 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         drop(listener);
         assert!(!check_server_healthy(port));
+    }
+
+    fn migration_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "s-loop-db-migrate-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn create_test_database(path: &std::path::Path) -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA wal_autocheckpoint=0;
+             CREATE TABLE sessions (
+               id TEXT PRIMARY KEY,
+               title TEXT NOT NULL DEFAULT '',
+               model TEXT NOT NULL DEFAULT '',
+               pi_id TEXT,
+               created_at INTEGER NOT NULL,
+               updated_at INTEGER NOT NULL
+             );
+             CREATE TABLE messages (
+               id TEXT PRIMARY KEY,
+               session_id TEXT NOT NULL,
+               role TEXT NOT NULL,
+               parts TEXT NOT NULL DEFAULT '[]',
+               info TEXT NOT NULL DEFAULT '{}',
+               created_at INTEGER NOT NULL
+             );
+             CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             INSERT INTO app_settings (key, value) VALUES ('theme', 'dark');",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn migrates_rows_that_only_exist_in_the_wal() {
+        let dir = migration_dir("wal");
+        let legacy = dir.join("snotra.db");
+        let target = dir.join("sloop.db");
+
+        let legacy_conn = create_test_database(&legacy);
+        legacy_conn
+            .execute_batch(
+                "INSERT INTO sessions VALUES ('s1','one','m',NULL,1,1), ('s2','two','m',NULL,2,2);
+                 INSERT INTO messages VALUES
+                   ('m1','s1','user','[]','{}',1),
+                   ('m2','s1','assistant','[]','{}',2),
+                   ('m3','s2','user','[]','{}',3);",
+            )
+            .unwrap();
+
+        // The connection stays open and autocheckpoint is off, so these rows
+        // live only in snotra.db-wal while the migration copies the files.
+        let outcome = migrate_legacy_database_file(&legacy, &target).unwrap();
+        assert_eq!(outcome, MigrationOutcome::Copied);
+
+        let migrated = rusqlite::Connection::open(&target).unwrap();
+        let count = |sql: &str| -> i64 { migrated.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(count("SELECT COUNT(*) FROM sessions"), 2);
+        assert_eq!(count("SELECT COUNT(*) FROM messages"), 3);
+        assert_eq!(
+            migrated
+                .query_row(
+                    "SELECT value FROM app_settings WHERE key='theme'",
+                    [],
+                    |row| { row.get::<_, String>(0) }
+                )
+                .unwrap(),
+            "dark"
+        );
+
+        drop(migrated);
+        drop(legacy_conn);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn merges_legacy_rows_into_an_existing_database_idempotently() {
+        let dir = migration_dir("merge");
+        let legacy = dir.join("snotra.db");
+        let target = dir.join("sloop.db");
+
+        let legacy_conn = create_test_database(&legacy);
+        legacy_conn
+            .execute_batch(
+                "INSERT INTO app_settings (key, value) VALUES ('lang', 'zh');
+                 INSERT INTO sessions VALUES ('old-1','old one','m',NULL,1,1), ('old-2','old two','m',NULL,2,2);
+                 INSERT INTO messages VALUES ('old-m1','old-1','user','[]','{}',1);",
+            )
+            .unwrap();
+
+        let target_conn = create_test_database(&target);
+        target_conn
+            .execute_batch(
+                "INSERT INTO sessions VALUES ('new-1','new one','m',NULL,10,10), ('old-2','duplicate id','m',NULL,2,2);
+                 INSERT INTO messages VALUES
+                   ('new-m1','new-1','user','[]','{}',10),
+                   ('old-m1','old-1','user','[]','{}',1);",
+            )
+            .unwrap();
+        drop(target_conn);
+
+        let outcome = migrate_legacy_database_file(&legacy, &target).unwrap();
+        assert_eq!(
+            outcome,
+            MigrationOutcome::Merged {
+                sessions: 1,
+                messages: 0
+            }
+        );
+
+        let migrated = rusqlite::Connection::open(&target).unwrap();
+        let count = |sql: &str| -> i64 { migrated.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(count("SELECT COUNT(*) FROM sessions"), 3);
+        assert_eq!(count("SELECT COUNT(*) FROM messages"), 2);
+        assert_eq!(
+            migrated
+                .query_row(
+                    "SELECT value FROM app_settings WHERE key='lang'",
+                    [],
+                    |row| { row.get::<_, String>(0) }
+                )
+                .unwrap(),
+            "zh"
+        );
+        assert_eq!(
+            migrated
+                .query_row("SELECT title FROM sessions WHERE id='old-2'", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap(),
+            "duplicate id"
+        );
+        drop(migrated);
+
+        assert!(dir.join("sloop.db.pre-migration.bak").exists());
+
+        // Running again must not duplicate rows.
+        let second = migrate_legacy_database_file(&legacy, &target).unwrap();
+        assert_eq!(second, MigrationOutcome::Skipped);
+
+        drop(legacy_conn);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,4 +1,5 @@
 import type { PermissionAction, PermissionRule, WorkspaceRoot } from '../types/agent'
+import type { FilesystemAccess } from '../types'
 
 const DEFAULT_BASE = 'http://127.0.0.1:4096'
 let _base = DEFAULT_BASE
@@ -218,6 +219,7 @@ export async function syncRuntimeConfig(config: {
   apiKey?: string
   providerApiKeys?: Record<string, string>
   workspaceDir?: string
+  filesystemAccess?: FilesystemAccess
   workspaceRoots?: WorkspaceRoot[]
   agentMcpServers?: string[]
   agentMcpTools?: Array<{ serverName: string; toolName: string }>
@@ -274,6 +276,7 @@ export async function prompt(
     allowedSseMcpToolNames?: string[]
     apiKey?: string
     workspaceDir?: string
+    filesystemAccess?: FilesystemAccess
     workspaceRoots?: WorkspaceRoot[]
     webSearchConfig?: {
       provider?: string
@@ -311,6 +314,7 @@ export async function prompt(
       body.allowedSseMcpToolNames = options.allowedSseMcpToolNames
     }
     if (options?.workspaceDir) body.workspaceDir = options.workspaceDir
+    if (options?.filesystemAccess) body.filesystemAccess = options.filesystemAccess
     if (options?.workspaceRoots) body.workspaceRoots = options.workspaceRoots
     if (options?.webSearchConfig) body.webSearchConfig = options.webSearchConfig
     if (options?.permissionMode) body.permissionMode = options.permissionMode

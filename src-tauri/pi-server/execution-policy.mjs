@@ -116,7 +116,15 @@ export function evaluateToolCall(toolCall, config = {}) {
     metadata.pathArguments,
     metadata.pathDefault,
   )
+  // Full access is an explicit user choice: skip the workspace-root gate but
+  // keep the hardline-command and sensitive-write protections below.
+  const fullAccess = config.filesystemAccess === 'full'
   for (const filePath of pathArguments) {
+    if (fullAccess) {
+      const resolved = resolveSandboxPath(filePath, config.workspaceDir || process.cwd())
+      if (resolved) resolvedTargets.push(resolved)
+      continue
+    }
     const workspace = checkWorkspacePath(
       filePath,
       config.workspaceDir || process.cwd(),

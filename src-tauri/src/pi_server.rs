@@ -151,6 +151,20 @@ pub struct PiServerState(pub Arc<Mutex<Option<PiServerProcess>>>);
 /// a crash mid-extract leaves an incomplete directory that we will rebuild.
 const EXTRACT_OK_MARKER: &str = ".extract-ok";
 
+/// Identity of the archive used to detect a replaced runtime after an app
+/// upgrade. Size plus modification time changes whenever the installer writes
+/// a new pi-server.zip, without hashing the (large) archive on every launch.
+fn archive_fingerprint(path: &Path) -> Option<String> {
+    let metadata = std::fs::metadata(path).ok()?;
+    let modified = metadata
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+    Some(format!("{}:{}", metadata.len(), modified))
+}
+
 /// Ensure the pi-server directory exists under `target_base`, extracting the
 /// bundled archive on first launch. Returns true when the runtime is usable.
 ///
@@ -164,13 +178,28 @@ pub fn ensure_pi_server_extracted_to(
     let index_mjs = pi_server_dir.join("index.mjs");
     let marker = pi_server_dir.join(EXTRACT_OK_MARKER);
 
-    // A marker is written only after a complete extraction. The index-only
+    // A marker is written only after a complete extraction. It records the
+    // archive it came from, so installing a newer pi-server.zip re-extracts
+    // instead of silently reusing the previous runtime. The index-only
     // fallback keeps development mode working when no archive is present.
-    if index_mjs.exists() && (marker.exists() || !archive_path.exists()) {
-        return Ok(true);
+    let archive_exists = archive_path.exists();
+    if index_mjs.exists() {
+        if !archive_exists {
+            return Ok(true);
+        }
+        if marker.exists() {
+            let recorded = std::fs::read_to_string(&marker).unwrap_or_default();
+            let current = archive_fingerprint(archive_path);
+            if current
+                .as_deref()
+                .is_some_and(|value| value == recorded.trim())
+            {
+                return Ok(true);
+            }
+        }
     }
 
-    if !archive_path.exists() {
+    if !archive_exists {
         eprintln!(
             "[s-loop] pi-server archive not found at {}",
             archive_path.display()
@@ -263,9 +292,15 @@ pub fn ensure_pi_server_extracted_to(
         ));
     }
 
-    // Write the completion marker last so a partial extract is detectable.
-    std::fs::write(staging_pi_server_dir.join(EXTRACT_OK_MARKER), b"ok")
-        .map_err(|e| format!("failed to write marker: {e}"))?;
+    // Write the completion marker last so a partial extract is detectable. Its
+    // content identifies the archive, so replacing pi-server.zip re-extracts
+    // instead of silently reusing the previous runtime.
+    let marker_value = archive_fingerprint(archive_path).unwrap_or_default();
+    std::fs::write(
+        staging_pi_server_dir.join(EXTRACT_OK_MARKER),
+        marker_value.as_bytes(),
+    )
+    .map_err(|e| format!("failed to write marker: {e}"))?;
 
     if pi_server_dir.exists() {
         std::fs::remove_dir_all(&pi_server_dir)
@@ -697,6 +732,64 @@ mod tests {
         assert!(dir.join(node).exists());
         assert!(dir.join(EXTRACT_OK_MARKER).exists());
         assert!(!base.join(".pi-server.extracting").exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn reextracts_when_the_archive_changes() {
+        let base = temp_base("reextract-changed");
+        let archive = base.join("pi-server.zip");
+        let node = node_binary_name();
+        let target = base.join("runtime");
+        write_zip(
+            &archive,
+            &[("index.mjs", b"console.log('v1')"), (&node, b"binary")],
+        );
+        assert!(ensure_pi_server_extracted_to(&archive, &target).unwrap());
+        let index = target.join("pi-server").join("index.mjs");
+        assert_eq!(
+            std::fs::read_to_string(&index).unwrap(),
+            "console.log('v1')"
+        );
+
+        write_zip(
+            &archive,
+            &[
+                ("index.mjs", b"console.log('v2 with a new runtime')"),
+                (&node, b"binary"),
+            ],
+        );
+        assert!(ensure_pi_server_extracted_to(&archive, &target).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(&index).unwrap(),
+            "console.log('v2 with a new runtime')"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn legacy_marker_triggers_one_reextract() {
+        let base = temp_base("reextract-legacy-marker");
+        let archive = base.join("pi-server.zip");
+        let node = node_binary_name();
+        let target = base.join("runtime");
+        write_zip(
+            &archive,
+            &[("index.mjs", b"console.log('same')"), (&node, b"binary")],
+        );
+        assert!(ensure_pi_server_extracted_to(&archive, &target).unwrap());
+
+        // Older builds wrote a literal "ok"; it must not mask the runtime that
+        // ships with a newer installer.
+        let marker = target.join("pi-server").join(EXTRACT_OK_MARKER);
+        std::fs::write(&marker, b"ok").unwrap();
+        assert!(ensure_pi_server_extracted_to(&archive, &target).unwrap());
+        let recorded = std::fs::read_to_string(&marker).unwrap();
+        assert_ne!(recorded.trim(), "ok", "legacy marker was not refreshed");
+        assert!(
+            recorded.contains(':'),
+            "marker is not an archive fingerprint"
+        );
         let _ = std::fs::remove_dir_all(&base);
     }
 

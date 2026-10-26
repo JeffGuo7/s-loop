@@ -18,7 +18,7 @@ const SAFE_CHILD_ENV_KEYS = new Set([
   'pythonutf8', 'pythonioencoding', 'npm_config_registry',
 ])
 
-export function sanitizeChildEnvironment(env = process.env, workspaceDir) {
+export function sanitizeChildEnvironment(env = process.env, workspaceDir, options = {}) {
   const safe = {}
   for (const [key, value] of Object.entries(env || {})) {
     if (value !== undefined && SAFE_CHILD_ENV_KEYS.has(key.toLowerCase())) {
@@ -29,8 +29,9 @@ export function sanitizeChildEnvironment(env = process.env, workspaceDir) {
   safe.LC_ALL = safe.LC_ALL || 'en_US.UTF-8'
   safe.PYTHONUTF8 = '1'
   safe.PYTHONIOENCODING = 'utf-8'
-  safe.S_LOOP_SANDBOX = 'workspace'
-  if (workspaceDir) safe.S_LOOP_ALLOWED_ROOT = path.resolve(workspaceDir)
+  const fullAccess = options.fullAccess === true
+  safe.S_LOOP_SANDBOX = fullAccess ? 'full' : 'workspace'
+  if (!fullAccess && workspaceDir) safe.S_LOOP_ALLOWED_ROOT = path.resolve(workspaceDir)
   return safe
 }
 

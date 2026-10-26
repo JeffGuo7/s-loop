@@ -13,6 +13,7 @@ import { createCodingTools, createReadOnlyTools } from '@earendil-works/pi-codin
 // process (chat, cron, platform, subagents).
 setDefaultStreamFn(streamSimple)
 import { webSearch, fetchUrl, resetBrowser } from './searchProviders.mjs'
+import { setAgentSystemPrompt } from './agent-state.mjs'
 import { createDefaultEngine, calculateContextTokens, truncateContent } from './context-engine/index.mjs'
 import {
   createContextSnapshot,
@@ -141,6 +142,7 @@ const runtimeConfig = {
   agentMcpServers: undefined,
   agentMcpTools: undefined,
   workspaceDir: undefined,
+  filesystemAccess: 'workspace',
   workspaceRoots: [],
   providerConfig: {},
   // OS-level sandbox for bash: every command starts in a zero-capability
@@ -162,20 +164,25 @@ function createSSE(event, data) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
-function getTools(dir, webSearchConfig, remoteMcpScope) {
+function getTools(dir, webSearchConfig, remoteMcpScope, options = {}) {
   const toolRoot = dir || process.cwd()
+  const fullAccess = options.fullAccess === true
+    || (options.fullAccess === undefined && runtimeConfig.filesystemAccess === 'full')
   const bashOptions = {
     spawnHook: ({ command, env }) => ({
       command,
       cwd: toolRoot,
-      env: sanitizeChildEnvironment(env, toolRoot),
+      env: sanitizeChildEnvironment(env, toolRoot, { fullAccess }),
     }),
   }
   // OS-level containment for approved shell commands: read-write workspace
   // roots and the primary workspace are writable inside the AppContainer,
-  // read-only roots are mounted read/execute. Falls back to policy-only exec
-  // when the helper is unavailable (documented in docs/security-model.md).
-  if (runtimeConfig.execSandbox !== false) {
+  // read-only roots are mounted read/execute. Full access is an explicit
+  // opt-in: the shell then runs outside the AppContainer, while hardline
+  // commands and sensitive writes remain blocked by the execution policy.
+  if (fullAccess) {
+    console.warn('[pi-server] filesystem access FULL: bash runs without the AppContainer sandbox')
+  } else if (runtimeConfig.execSandbox !== false) {
     const roots = Array.isArray(runtimeConfig.workspaceRoots) ? runtimeConfig.workspaceRoots : []
     const sandboxed = createSandboxedBashOperations({
       workspaceDir: toolRoot,
@@ -601,16 +608,19 @@ function createChatToolBundle({
   thinkingLevel,
   providerConfig,
   workspaceDir,
+  filesystemAccess,
   webSearchConfig,
   allowedSseMcpToolNames,
 }) {
   const cwd = workspaceDir || process.cwd()
+  const fullAccess = filesystemAccess === 'full'
   const baseTools = getTools(
     cwd,
     webSearchConfig,
     allowedSseMcpToolNames === undefined
       ? undefined
       : { toolNames: allowedSseMcpToolNames },
+    { fullAccess },
   )
   const delegateRuntimeConfig = {
     ...runtimeConfig,
@@ -619,6 +629,7 @@ function createChatToolBundle({
     apiKey,
     thinkingLevel,
     providerConfig,
+    filesystemAccess: fullAccess ? 'full' : 'workspace',
   }
   const delegateOptions = {
     runtimeConfig: delegateRuntimeConfig,
@@ -872,12 +883,10 @@ async function promptPlatformConversation(sessionId, content, platformRun, resum
       runtimeRemoteMcpScope(runtimeConfig),
     )
     wrapper.agent.state.tools = tools
+    setAgentSystemPrompt(wrapper.agent, systemPrompt, tools)
     wrapper.config = {
       ...runtimeConfig,
       toolSecurity: buildToolSecurityIndex(tools),
-    }
-    if (wrapper.agent.state.systemPrompt !== systemPrompt) {
-      wrapper.agent.state.systemPrompt = systemPrompt
     }
   }
 
@@ -1900,9 +1909,12 @@ createServer((req, res) => {
   let body = ''
   req.on('data', chunk => body += chunk)
   req.on('end', async () => {
-    const wrapper = await getOrCreateWrapper(sessionId)
+    // A session file is only written once the first message is appended. If
+    // the first turn failed before that (or the app kept a pi id from an older
+    // workspace), a restart would otherwise turn every prompt into a 404.
+    const wrapper = await getOrCreateWrapper(sessionId, true)
     if (!wrapper) { res.writeHead(404); res.end('Session not found'); return }
-    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, workspaceRoots, accessiblePaths, webSearchConfig, allowedSseMcpToolNames, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
+    const { content, images, providerID, modelID, apiKey, systemPrompt, thinkingLevel, workspaceDir, filesystemAccess, workspaceRoots, accessiblePaths, webSearchConfig, allowedSseMcpToolNames, permissionMode, permissionRules, providerAPI, providerConfig: promptProviderConfig } = JSON.parse(body)
     console.log('[pi-server] session message — permissionMode:', permissionMode, 'permissionRules:', JSON.stringify(permissionRules))
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' })
@@ -1914,6 +1926,9 @@ createServer((req, res) => {
       console.log('[pi-server] Received prompt:', { provider, modelId, contentLen: content?.length })
 
       const effectiveProviderConfig = promptProviderConfig || (providerAPI ? { api: providerAPI } : {}) || runtimeConfig.providerConfig || {}
+      const effectiveFilesystemAccess = filesystemAccess === 'full' || filesystemAccess === 'workspace'
+        ? filesystemAccess
+        : (runtimeConfig.filesystemAccess || 'workspace')
       const model = resolveModel(provider, modelId, effectiveProviderConfig)
       if (!model) {
         emit('error', { message: `Unknown model "${modelId}" for provider "${provider}". Click Settings → Fetch Models to see available models.` })
@@ -1925,7 +1940,7 @@ createServer((req, res) => {
       const initialMessages = restoreContextFromSnapshot(fullInitialMessages, wrapper.contextSnapshot)
       wrapper.persistedMessageCount = fullInitialMessages.length
       if (!wrapper.agent) {
-        const { tools } = createChatToolBundle({
+        const { baseTools, tools } = createChatToolBundle({
           wrapper,
           sessionId,
           provider,
@@ -1934,13 +1949,14 @@ createServer((req, res) => {
           thinkingLevel,
           providerConfig: effectiveProviderConfig,
           workspaceDir,
+          filesystemAccess: effectiveFilesystemAccess,
           webSearchConfig,
           allowedSseMcpToolNames,
         })
         const sysPrompt = systemPrompt || 'You are a helpful assistant. Use the available tools when needed.'
         const fullPrompt = workspaceDir ? `${sysPrompt}\n\nWorkspace: ${workspaceDir}` : sysPrompt
         const contextEngine = createDefaultEngine(model, {
-          contextLength: model?.contextLength,
+          contextLength: model?.contextWindow ?? model?.contextLength,
           compressionCount: wrapper.contextSnapshot?.compressionCount || 0,
           lastTotalTokens: wrapper.contextSnapshot?.tokensAfter || 0,
         })
@@ -2061,6 +2077,7 @@ createServer((req, res) => {
           workspaceRoots: Array.isArray(workspaceRoots) ? workspaceRoots : [],
           accessiblePaths: Array.isArray(accessiblePaths) ? accessiblePaths : [],
           webSearchConfig,
+          filesystemAccess: effectiveFilesystemAccess,
           permissionMode,
           permissionRules,
           providerConfig: effectiveProviderConfig,
@@ -2076,7 +2093,7 @@ createServer((req, res) => {
           wrapper.agent.state.model = model
           applyThinkingLevel(wrapper.agent, model, thinkingLevel || 'medium')
           wrapper.contextEngine = createDefaultEngine(model, {
-            contextLength: model?.contextLength,
+            contextLength: model?.contextWindow ?? model?.contextLength,
             compressionCount: wrapper.contextEngine?.compressionCount || wrapper.contextSnapshot?.compressionCount || 0,
             lastTotalTokens: wrapper.contextEngine?.lastTotalTokens || wrapper.contextSnapshot?.tokensAfter || 0,
           })
@@ -2090,17 +2107,19 @@ createServer((req, res) => {
           thinkingLevel,
           providerConfig: effectiveProviderConfig,
           workspaceDir,
+          filesystemAccess: effectiveFilesystemAccess,
           webSearchConfig,
           allowedSseMcpToolNames,
         })
         wrapper.agent.state.tools = tools
-        if (wrapper.agent.state.systemPrompt !== fullPrompt) wrapper.agent.state.systemPrompt = fullPrompt
+        setAgentSystemPrompt(wrapper.agent, fullPrompt, tools)
         if (apiKey) wrapper.apiKey = apiKey
         wrapper.config = {
           workspaceDir,
           workspaceRoots: Array.isArray(workspaceRoots) ? workspaceRoots : [],
           accessiblePaths: Array.isArray(accessiblePaths) ? accessiblePaths : [],
           webSearchConfig,
+          filesystemAccess: effectiveFilesystemAccess,
           permissionMode,
           permissionRules,
           providerConfig: effectiveProviderConfig,
